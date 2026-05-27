@@ -1,7 +1,7 @@
 import pygame
 
 
-def main():
+def main() -> None:
     pygame.init()
 
     screen = pygame.display.set_mode((800, 600))
