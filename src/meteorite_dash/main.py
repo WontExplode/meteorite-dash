@@ -20,14 +20,14 @@ def main() -> None:
 
         keys = pygame.key.get_pressed()
         speed = 300
-
-        if keys[pygame.K_UP]:
+        
+        if keys[pygame.K_UP] and player.y > 0:
             player.y -= speed * dt
-        if keys[pygame.K_DOWN]:
+        if keys[pygame.K_DOWN] and player.y < 568:
             player.y += speed * dt
 
         screen.fill((10, 10, 20))
-        pygame.draw.rect(screen, (255, 0, 0), player)
+        pygame.draw.rect(surface=screen, color=(255, 0, 0), rect=player)
         pygame.display.flip()
 
     pygame.quit()
