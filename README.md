@@ -20,7 +20,8 @@ uv run mypy
 
 # Dev Setup
 
-pre-commit einrichten: 
-´´´
-git config core.hooksPath .githooks` 
-´´´
+pre-commit einrichten:
+
+```terminal
+git config core.hooksPath .githooks
+```
