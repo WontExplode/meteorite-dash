@@ -12,7 +12,7 @@
 .venv/
 __pycache__/
 *.py[cod]
-.egg.info/
+*.egg.info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -61,4 +61,3 @@ docker-compose.override.yml
 # misc caches
 .turbo
 .cache
-
