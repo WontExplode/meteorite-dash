@@ -1,0 +1,1 @@
+"""Meteorite Dash game package."""

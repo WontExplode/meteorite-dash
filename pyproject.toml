@@ -1,7 +1,7 @@
 [project]
 name = "meteorite-dash"
 version = "0.1.0"
-description = "A small PyGame-CE based game about dodging incoming meteorites, shooting debries and attacking enemies."
+description = "A small PyGame-CE based game about dodging incoming meteorites, shooting debris and attacking enemies."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -9,7 +9,11 @@ dependencies = [
 ]
 
 [project.scripts]
-meteorite-dash = "main:main"
+meteorite-dash = "meteorite_dash.main:main"
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 dev = [
@@ -41,3 +45,4 @@ testpaths = ["tests"]
 [tool.mypy]
 python_version = "3.13"
 strict = true
+files = ["src", "tests"]
