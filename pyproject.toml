@@ -15,6 +15,12 @@ meteorite-dash = "meteorite_dash.main:main"
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.package-data]
+meteorite_dash = [
+    "assets/images/*.png",
+    "assets/sounds/*.mp3",
+]
+
 [dependency-groups]
 dev = [
     "mypy>=2.1.0",
