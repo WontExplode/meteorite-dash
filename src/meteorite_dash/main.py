@@ -2,7 +2,7 @@ from typing import Literal
 
 import pygame
 
-from meteorite_dash.assets import SHIP_IMAGES, image_path
+from meteorite_dash.assets import SHIP_IMAGES, image_path, sound_path
 from meteorite_dash.game import Game
 
 WindowSize = tuple[int, int]
@@ -17,6 +17,7 @@ MENU_ITEMS: tuple[tuple[str, MenuAction], ...] = (
     ("Raumschiff auswählen", "ship"),
     ("Beenden", "quit"),
 )
+MENU_MUSIC = "menumusic.mp3"
 
 
 def main() -> None:
@@ -31,9 +32,14 @@ def main() -> None:
 
         selected_menu_index = 0
         selected_ship_index = 0
+        menu_music_playing = False
         running = True
 
         while running:
+            if not menu_music_playing:
+                play_menu_music()
+                menu_music_playing = True
+
             action, selected_menu_index = run_main_menu(
                 screen=screen,
                 clock=clock,
@@ -44,6 +50,7 @@ def main() -> None:
             )
 
             if action == "start":
+                menu_music_playing = False
                 game = Game(
                     screen=screen,
                     clock=clock,
@@ -64,7 +71,13 @@ def main() -> None:
             else:
                 running = False
     finally:
+        pygame.mixer.music.stop()
         pygame.quit()
+
+
+def play_menu_music() -> None:
+    pygame.mixer.music.load(sound_path(MENU_MUSIC))
+    pygame.mixer.music.play(loops=-1)
 
 
 def run_main_menu(
