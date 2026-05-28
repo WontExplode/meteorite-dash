@@ -1,5 +1,8 @@
+from pathlib import Path
+
 import pygame
 
+ASSET_DIR = Path(__file__).parent / "assets" / "images"
 
 def main() -> None:
     pygame.init()
@@ -8,7 +11,10 @@ def main() -> None:
     pygame.display.set_caption("Meteorite Dash")
     clock = pygame.time.Clock()
 
-    player = pygame.Rect(50, 100, 32, 32)
+    player_image = pygame.image.load(ASSET_DIR / "CopperShip1.png").convert_alpha()
+    player_image = pygame.transform.scale(player_image, (64, 64))
+    player_image = pygame.transform.rotate(player_image, -90)
+    player = player_image.get_rect(topleft=(50, 100))
 
     running = True
     while running:
@@ -23,11 +29,11 @@ def main() -> None:
         
         if keys[pygame.K_UP] and player.y > 0:
             player.y -= speed * dt
-        if keys[pygame.K_DOWN] and player.y < 568:
+        if keys[pygame.K_DOWN] and player.y < screen.get_height() - player.height:
             player.y += speed * dt
 
         screen.fill((10, 10, 20))
-        pygame.draw.rect(surface=screen, color=(255, 0, 0), rect=player)
+        screen.blit(player_image, player)
         pygame.display.flip()
 
     pygame.quit()
