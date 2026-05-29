@@ -44,7 +44,8 @@ class Entity(ABC):
         """Standard: keine vertikale Bewegung; Subklassen überschreiben dies."""
 
     @abstractmethod
-    def draw(self, surface: pygame.Surface) -> None: ...
+    def draw(self, surface: pygame.Surface) -> None:
+        raise NotImplementedError
 
 
 class Meteorite(Entity):
