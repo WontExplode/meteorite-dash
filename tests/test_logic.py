@@ -1,3 +1,5 @@
+import random
+
 import pygame
 import pytest
 
@@ -5,10 +7,18 @@ from meteorite_dash.assets import SHIP_IMAGES
 from meteorite_dash.audio import MusicPlayer
 from meteorite_dash.config import GAME_MUSIC_TRACKS, MENU_ITEMS
 from meteorite_dash.context import GameContext, GameState
+from meteorite_dash.entities import (
+    HunterEnemy,
+    Meteorite,
+    WaveEnemy,
+    collides_with_any,
+)
 from meteorite_dash.player import Player
 from meteorite_dash.scenes.base import Transition
+from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.scenes.main_menu import MainMenu
 from meteorite_dash.scenes.ship_selection import ShipSelection
+from meteorite_dash.spawner import SpawnEntry, Spawner
 
 
 class FakeKeys:
@@ -97,3 +107,80 @@ def test_player_stops_at_bottom() -> None:
 
     player.update(0.1, FakeKeys({pygame.K_DOWN}), max_height=600)
     assert player.rect.y == 600 - 64
+
+
+def test_meteorite_moves_left_without_vertical_change() -> None:
+    met = Meteorite(pygame.Rect(800, 100, 44, 44), speed_x=200.0)
+    met.update(0.1, player_y=300)
+    assert met.rect.x == 800 - round(200.0 * 0.1)
+    assert met.rect.y == 100
+
+
+def test_meteorite_is_off_screen() -> None:
+    assert Meteorite(pygame.Rect(-50, 100, 44, 44), 200.0).is_off_screen is True
+    assert Meteorite(pygame.Rect(0, 100, 44, 44), 200.0).is_off_screen is False
+
+
+def test_wave_enemy_moves_left_and_oscillates() -> None:
+    enemy = WaveEnemy(pygame.Rect(800, 200, 44, 44), speed_x=180.0)
+    enemy.update(0.05, player_y=0)
+    assert enemy.rect.x < 800
+    assert enemy.rect.y > 200  # erste Halbwelle: sin>0 -> y waechst nach unten
+
+
+def test_hunter_enemy_moves_toward_player() -> None:
+    enemy = HunterEnemy(pygame.Rect(800, 0, 44, 44), speed_x=160.0)
+    enemy.update(0.1, player_y=400)
+    assert enemy.rect.x < 800
+    assert enemy.rect.y > 0  # bewegt sich nach unten Richtung Spieler
+
+
+def test_hunter_enemy_does_not_overshoot() -> None:
+    enemy = HunterEnemy(pygame.Rect(800, 300, 44, 44), speed_x=160.0)  # center y = 322
+    enemy.update(1.0, player_y=330)  # nahes Ziel, grosser dt
+    assert enemy.rect.centery == 330
+
+
+def test_collides_with_any() -> None:
+    player = pygame.Rect(50, 100, 64, 64)
+    hit = Meteorite(pygame.Rect(80, 120, 44, 44), 200.0)
+    miss = Meteorite(pygame.Rect(700, 500, 44, 44), 200.0)
+    assert collides_with_any(player, [miss, hit]) is True
+    assert collides_with_any(player, [miss]) is False
+    assert collides_with_any(player, []) is False
+
+
+def _fake_factory(rng: random.Random, screen_size: tuple[int, int]) -> Meteorite:
+    return Meteorite(pygame.Rect(screen_size[0], 0, 10, 10), 100.0)
+
+
+def test_spawner_no_spawn_before_interval() -> None:
+    spawner = Spawner([SpawnEntry(1.0, _fake_factory)], (800, 600), random.Random(0), (1.0, 1.0))
+    assert spawner.update(0.5) == []
+
+
+def test_spawner_spawns_after_interval() -> None:
+    spawner = Spawner([SpawnEntry(1.0, _fake_factory)], (800, 600), random.Random(0), (1.0, 1.0))
+    spawner.update(0.5)
+    spawned = spawner.update(0.6)
+    assert len(spawned) == 1
+    assert isinstance(spawned[0], Meteorite)
+
+
+def test_spawner_multiple_spawns_in_one_update() -> None:
+    spawner = Spawner([SpawnEntry(1.0, _fake_factory)], (800, 600), random.Random(0), (1.0, 1.0))
+    assert len(spawner.update(3.5)) == 3
+
+
+def test_game_scene_collision_returns_to_menu(context: GameContext) -> None:
+    scene = GameScene(context)
+    scene.entities.append(Meteorite(pygame.Rect(50, 100, 44, 44), speed_x=0.0))
+    scene.update(0.016)
+    assert scene._transition is Transition.MAIN_MENU
+
+
+def test_game_scene_removes_off_screen_entities(context: GameContext) -> None:
+    scene = GameScene(context)
+    scene.entities.append(Meteorite(pygame.Rect(-100, 300, 44, 44), speed_x=0.0))
+    scene.update(0.016)
+    assert scene.entities == []
