@@ -57,7 +57,8 @@ class Scene(ABC):
         pass
 
     @abstractmethod
-    def handle_event(self, event: pygame.event.Event) -> None: ...
+    def handle_event(self, event: pygame.event.Event) -> None:
+        pass
 
     def update(self, dt: float) -> None:  # noqa: B027  (optional hook)
         pass
