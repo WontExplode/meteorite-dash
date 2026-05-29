@@ -3,6 +3,7 @@ from typing import Literal
 import pygame
 
 from meteorite_dash.assets import image_path, sound_path
+from meteorite_dash.starfield import StarField
 
 GameResult = Literal["menu", "quit"]
 GAME_MUSIC_ENDED = pygame.USEREVENT + 1
@@ -19,6 +20,7 @@ class Game:
         self.player_image = pygame.transform.scale(self.player_image, (64, 64))
         self.player_image = pygame.transform.rotate(self.player_image, -90)
         self.player = self.player_image.get_rect(topleft=(50, 100))
+        self.starfield = StarField(screen.get_width(), screen.get_height())
         self.current_music_index = 0
 
     def run(self) -> GameResult:
@@ -36,6 +38,7 @@ class Game:
                         return "menu"
 
                 self._update_player(dt)
+                self.starfield.update(dt)
                 self._draw()
         finally:
             self._stop_music()
@@ -52,6 +55,7 @@ class Game:
 
     def _draw(self) -> None:
         self.screen.fill((10, 10, 20))
+        self.starfield.draw(self.screen)
         self.screen.blit(self.player_image, self.player)
         pygame.display.flip()
 
