@@ -4,6 +4,7 @@ import pygame
 
 from meteorite_dash.assets import SHIP_IMAGES, AssetLoader
 from meteorite_dash.audio import MusicPlayer
+from meteorite_dash.starfield import StarField
 
 
 @dataclass
@@ -24,3 +25,4 @@ class GameContext:
     music: MusicPlayer
     assets: AssetLoader
     state: GameState
+    starfield: StarField
