@@ -64,4 +64,5 @@ class Scene(ABC):
         pass
 
     @abstractmethod
-    def draw(self) -> None: ...
+    def draw(self) -> None:
+        raise NotImplementedError
