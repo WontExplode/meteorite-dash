@@ -14,6 +14,7 @@ from meteorite_dash.scenes.base import Scene, Transition
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.scenes.main_menu import MainMenu
 from meteorite_dash.scenes.ship_selection import ShipSelection
+from meteorite_dash.starfield import StarField
 
 _MENU_TRANSITIONS = (Transition.MAIN_MENU, Transition.SHIP_SELECTION)
 
@@ -31,6 +32,7 @@ class App:
             music=MusicPlayer(),
             assets=AssetLoader(),
             state=GameState(),
+            starfield=StarField(screen.get_width(), screen.get_height()),
         )
 
     def run(self) -> None:

@@ -28,6 +28,7 @@ from meteorite_dash.spawner import SpawnEntry, Spawner
 class GameScene(Scene):
     def __init__(self, context: GameContext) -> None:
         super().__init__(context)
+
         image = context.assets.load_ship(context.state.selected_ship_filename, PLAYER_SIZE)
         self.player = Player(image, PLAYER_START_POSITION)
         self.entities: list[Entity] = []
@@ -55,6 +56,7 @@ class GameScene(Scene):
     def update(self, dt: float) -> None:
         keys = pygame.key.get_pressed()
         self.player.update(dt, keys, self.context.screen.get_height())
+        self.context.starfield.update(dt)
 
         self.entities.extend(self.spawner.update(dt))
         player_y = self.player.rect.centery
@@ -69,5 +71,6 @@ class GameScene(Scene):
         self.context.screen.fill(BACKGROUND_COLOR)
         for entity in self.entities:
             entity.draw(self.context.screen)
+        self.context.starfield.draw(self.context.screen)
         self.player.draw(self.context.screen)
         pygame.display.flip()
