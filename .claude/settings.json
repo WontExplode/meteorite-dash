@@ -12,7 +12,6 @@
       "Bash(git log:*)",
       "Bash(git show:*)",
       "mcp__github_inline_comment__create_inline_comment"
-    ],
-    "deny": ["Bash(rm:*)", "Bash(git push:*)", "Edit", "Write"]
+    ]
   }
 }
