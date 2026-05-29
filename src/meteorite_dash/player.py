@@ -6,7 +6,8 @@ from meteorite_dash.config import PLAYER_SPEED
 
 
 class KeyStates(Protocol):
-    def __getitem__(self, key: int) -> bool: ...
+    def __getitem__(self, key: int) -> bool:
+        pass
 
 
 class Player:
