@@ -61,3 +61,5 @@ docker-compose.override.yml
 # misc caches
 .turbo
 .cache
+
+/docs/superpowers/*
