@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pygame
+
 PACKAGE_DIR = Path(__file__).parent
 ASSET_DIR = PACKAGE_DIR / "assets"
 IMAGE_DIR = ASSET_DIR / "images"
@@ -14,3 +16,22 @@ def image_path(filename: str) -> Path:
 
 def sound_path(filename: str) -> Path:
     return SOUND_DIR / filename
+
+
+class AssetLoader:
+    """Loads ship images (scaled and rotated -90°) with a small cache."""
+
+    def __init__(self) -> None:
+        self._cache: dict[tuple[str, tuple[int, int]], pygame.Surface] = {}
+
+    def load_ship(self, filename: str, size: tuple[int, int]) -> pygame.Surface:
+        key = (filename, size)
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        image = pygame.image.load(image_path(filename)).convert_alpha()
+        image = pygame.transform.scale(image, size)
+        image = pygame.transform.rotate(image, -90)
+        self._cache[key] = image
+        return image
