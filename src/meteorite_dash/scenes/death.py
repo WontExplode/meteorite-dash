@@ -1,8 +1,8 @@
-from meteorite_dash.scenes.base import Scene
-from meteorite_dash.context import GameContext
-from meteorite_dash.scenes.base import Transition
 import pygame
+
 from meteorite_dash.config import DEATH_SOUND
+from meteorite_dash.context import GameContext
+from meteorite_dash.scenes.base import Scene, Transition
 
 
 class DeathScene(Scene):
