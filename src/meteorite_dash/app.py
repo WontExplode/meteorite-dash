@@ -11,6 +11,7 @@ from meteorite_dash.config import (
 )
 from meteorite_dash.context import GameContext, GameState
 from meteorite_dash.scenes.base import Scene, Transition
+from meteorite_dash.scenes.death import DeathScene
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.scenes.main_menu import MainMenu
 from meteorite_dash.scenes.ship_selection import ShipSelection
@@ -59,4 +60,6 @@ class App:
             return ShipSelection(self.context)
         if transition is Transition.START_GAME:
             return GameScene(self.context)
+        if transition is Transition.DEATH_SCREEN:
+            return DeathScene(self.context)
         raise ValueError(f"No scene for transition {transition}")

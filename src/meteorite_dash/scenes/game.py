@@ -65,7 +65,7 @@ class GameScene(Scene):
         self.entities = [entity for entity in self.entities if not entity.is_off_screen]
 
         if collides_with_any(self.player.rect, self.entities):
-            self.finish(Transition.MAIN_MENU)
+            self.finish(Transition.DEATH_SCREEN)
 
     def draw(self) -> None:
         self.context.screen.fill(BACKGROUND_COLOR)

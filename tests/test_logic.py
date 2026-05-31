@@ -172,11 +172,11 @@ def test_spawner_multiple_spawns_in_one_update() -> None:
     assert len(spawner.update(3.5)) == 3
 
 
-def test_game_scene_collision_returns_to_menu(context: GameContext) -> None:
+def test_game_scene_collision_opens_death_screen(context: GameContext) -> None:
     scene = GameScene(context)
     scene.entities.append(Meteorite(pygame.Rect(50, 100, 44, 44), speed_x=0.0))
     scene.update(0.016)
-    assert scene._transition is Transition.MAIN_MENU
+    assert scene._transition is Transition.DEATH_SCREEN
 
 
 def test_game_scene_removes_off_screen_entities(context: GameContext) -> None:
