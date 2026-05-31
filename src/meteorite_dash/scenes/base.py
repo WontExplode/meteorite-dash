@@ -34,6 +34,15 @@ class Scene(ABC):
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         self.finish(Transition.QUIT)
+                    elif event.type == pygame.VIDEORESIZE:
+                        self.context.apply_resize(event.size)
+                        self.on_resize(self.context.screen.get_size())
+                    elif event.type == pygame.KEYDOWN and event.key in (
+                        pygame.K_F11,
+                        pygame.K_f,
+                    ):
+                        self.context.toggle_fullscreen()
+                        self.on_resize(self.context.screen.get_size())
                     else:
                         self.handle_event(event)
                     if self._transition is not None:
@@ -54,6 +63,9 @@ class Scene(ABC):
         pass
 
     def on_exit(self) -> None:  # noqa: B027  (optional hook)
+        pass
+
+    def on_resize(self, size: tuple[int, int]) -> None:  # noqa: B027  (optional hook)
         pass
 
     @abstractmethod

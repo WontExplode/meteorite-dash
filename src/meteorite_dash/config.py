@@ -5,6 +5,11 @@ Color = tuple[int, int, int]
 MenuAction = Literal["start", "ship", "quit"]
 
 WINDOW_SIZE: WindowSize = (800, 600)
+# Design reference: every scale factor is relative to this. At this size all
+# factors are exactly 1.0, so layout/gameplay are byte-identical to the original.
+REFERENCE_SIZE: WindowSize = WINDOW_SIZE
+# Smallest window we allow; guards against degenerate sizes / division by zero.
+MIN_WINDOW_SIZE: WindowSize = (320, 240)
 CAPTION = "Meteorite Dash"
 FPS = 60
 

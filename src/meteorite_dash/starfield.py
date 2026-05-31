@@ -27,6 +27,15 @@ class StarField:
             if star.x < -star.radius:
                 self._reset_star(star)
 
+    def resize(self, width: int, height: int) -> None:
+        scale_x = width / self.width if self.width else 1.0
+        scale_y = height / self.height if self.height else 1.0
+        self.width = width
+        self.height = height
+        for star in self.stars:
+            star.x *= scale_x
+            star.y *= scale_y
+
     def draw(self, screen: pygame.Surface) -> None:
         for star in self.stars:
             pygame.draw.circle(

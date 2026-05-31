@@ -25,11 +25,15 @@ class Spawner:
     ) -> None:
         self._table = list(table)
         self._weights = [entry.weight for entry in self._table]
-        self._screen_size = screen_size
+        self.screen_size = screen_size
         self._rng = rng
         self._interval_range = interval_range
         self._elapsed = 0.0
         self._next_at = self._roll_interval()
+
+    def set_table(self, table: Sequence[SpawnEntry]) -> None:
+        self._table = list(table)
+        self._weights = [entry.weight for entry in self._table]
 
     def _roll_interval(self) -> float:
         low, high = self._interval_range
@@ -41,6 +45,6 @@ class Spawner:
         while self._elapsed >= self._next_at:
             self._elapsed -= self._next_at
             entry = self._rng.choices(self._table, weights=self._weights, k=1)[0]
-            spawned.append(entry.factory(self._rng, self._screen_size))
+            spawned.append(entry.factory(self._rng, self.screen_size))
             self._next_at = self._roll_interval()
         return spawned

@@ -2,19 +2,14 @@ import pygame
 
 from meteorite_dash.assets import AssetLoader
 from meteorite_dash.audio import MusicPlayer
-from meteorite_dash.config import (
-    CAPTION,
-    HINT_FONT_SIZE,
-    MENU_FONT_NAME,
-    MENU_FONT_SIZE,
-    WINDOW_SIZE,
-)
+from meteorite_dash.config import CAPTION, WINDOW_SIZE
 from meteorite_dash.context import GameContext, GameState
 from meteorite_dash.scenes.base import Scene, Transition
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.scenes.main_menu import MainMenu
 from meteorite_dash.scenes.ship_selection import ShipSelection
 from meteorite_dash.starfield import StarField
+from meteorite_dash.viewport import Viewport
 
 _MENU_TRANSITIONS = (Transition.MAIN_MENU, Transition.SHIP_SELECTION)
 
@@ -22,17 +17,16 @@ _MENU_TRANSITIONS = (Transition.MAIN_MENU, Transition.SHIP_SELECTION)
 class App:
     def __init__(self) -> None:
         pygame.init()
-        screen = pygame.display.set_mode(WINDOW_SIZE)
+        screen = pygame.display.set_mode(WINDOW_SIZE, pygame.RESIZABLE)
         pygame.display.set_caption(CAPTION)
         self.context = GameContext(
             screen=screen,
             clock=pygame.time.Clock(),
-            menu_font=pygame.font.SysFont(MENU_FONT_NAME, MENU_FONT_SIZE),
-            hint_font=pygame.font.SysFont(MENU_FONT_NAME, HINT_FONT_SIZE),
             music=MusicPlayer(),
             assets=AssetLoader(),
             state=GameState(),
             starfield=StarField(screen.get_width(), screen.get_height()),
+            viewport=Viewport(screen.get_width(), screen.get_height()),
         )
 
     def run(self) -> None:

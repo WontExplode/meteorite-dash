@@ -2,6 +2,8 @@ import pygame
 
 from meteorite_dash.config import (
     BACKGROUND_COLOR,
+    HINT_FONT_SIZE,
+    MENU_FONT_SIZE,
     MENU_ITEMS,
     SELECTED_TEXT_COLOR,
     TEXT_COLOR,
@@ -35,29 +37,30 @@ class MainMenu(Scene):
 
     def draw(self) -> None:
         screen = self.context.screen
+        vp = self.context.viewport
         screen.fill(BACKGROUND_COLOR)
-        center_x = screen.get_width() // 2
+        center_x = vp.center_x
+        menu_font = vp.font(MENU_FONT_SIZE)
+        hint_font = vp.font(HINT_FONT_SIZE)
 
-        title = self.context.menu_font.render("Meteorite Dash", True, TEXT_COLOR)
-        title_rect = title.get_rect(center=(center_x, 120))
+        title = menu_font.render("Meteorite Dash", True, TEXT_COLOR)
+        title_rect = title.get_rect(center=(center_x, vp.py(120)))
         screen.blit(title, title_rect)
 
         for index, (label, _) in enumerate(MENU_ITEMS):
             color = SELECTED_TEXT_COLOR if index == self.selected_index else TEXT_COLOR
-            text = self.context.menu_font.render(label, True, color)
-            text_rect = text.get_rect(center=(center_x, 240 + index * 70))
+            text = menu_font.render(label, True, color)
+            text_rect = text.get_rect(center=(center_x, vp.py(240 + index * 70)))
             screen.blit(text, text_rect)
 
-        selected_ship = self.context.hint_font.render(
+        selected_ship = hint_font.render(
             f"Ausgewählt: {self.context.state.selected_ship_filename}", True, TEXT_COLOR
         )
-        selected_ship_rect = selected_ship.get_rect(center=(center_x, 500))
+        selected_ship_rect = selected_ship.get_rect(center=(center_x, vp.py(500)))
         screen.blit(selected_ship, selected_ship_rect)
 
-        hint = self.context.hint_font.render(
-            "Pfeiltasten: wählen  Enter: bestätigen", True, TEXT_COLOR
-        )
-        hint_rect = hint.get_rect(center=(center_x, 535))
+        hint = hint_font.render("Pfeiltasten: wählen  Enter: bestätigen", True, TEXT_COLOR)
+        hint_rect = hint.get_rect(center=(center_x, vp.py(535)))
         screen.blit(hint, hint_rect)
 
         pygame.display.flip()
