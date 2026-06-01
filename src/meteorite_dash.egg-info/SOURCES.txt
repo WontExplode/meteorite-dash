@@ -1,9 +1,13 @@
 README.md
 pyproject.toml
 src/meteorite_dash/__init__.py
+src/meteorite_dash/app.py
 src/meteorite_dash/assets.py
 src/meteorite_dash/game.py
 src/meteorite_dash/main.py
+src/meteorite_dash/player.py
+src/meteorite_dash/spawner.py
+src/meteorite_dash/starfield.py
 src/meteorite_dash.egg-info/PKG-INFO
 src/meteorite_dash.egg-info/SOURCES.txt
 src/meteorite_dash.egg-info/dependency_links.txt
@@ -16,4 +20,10 @@ src/meteorite_dash/assets/sounds/gamemusic1.mp3
 src/meteorite_dash/assets/sounds/gamemusic2.mp3
 src/meteorite_dash/assets/sounds/gamemusic3.mp3
 src/meteorite_dash/assets/sounds/menumusic.mp3
+src/meteorite_dash/scenes/__init__.py
+src/meteorite_dash/scenes/base.py
+src/meteorite_dash/scenes/game.py
+src/meteorite_dash/scenes/main_menu.py
+src/meteorite_dash/scenes/ship_selection.py
+tests/test_logic.py
 tests/test_package.py

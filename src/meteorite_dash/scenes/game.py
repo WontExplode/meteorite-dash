@@ -1,3 +1,4 @@
+import functools
 import random
 
 import pygame
@@ -28,18 +29,56 @@ from meteorite_dash.spawner import SpawnEntry, Spawner
 class GameScene(Scene):
     def __init__(self, context: GameContext) -> None:
         super().__init__(context)
-
-        image = context.assets.load_ship(context.state.selected_ship_filename, PLAYER_SIZE)
-        self.player = Player(image, PLAYER_START_POSITION)
         self.entities: list[Entity] = []
-        table = [
-            SpawnEntry(METEORITE_WEIGHT, spawn_meteorite),
-            SpawnEntry(WAVE_ENEMY_WEIGHT, spawn_wave_enemy),
-            SpawnEntry(HUNTER_ENEMY_WEIGHT, spawn_hunter_enemy),
+        self._build()
+
+    def _scales(self) -> tuple[float, float, float]:
+        vp = self.context.viewport
+        return vp.scale_x, vp.scale_y, vp.scale
+
+    def _scaled_player_size(self, su: float) -> tuple[int, int]:
+        return (round(PLAYER_SIZE[0] * su), round(PLAYER_SIZE[1] * su))
+
+    def _spawn_table(self, sx: float, sy: float, su: float) -> list[SpawnEntry]:
+        return [
+            SpawnEntry(METEORITE_WEIGHT, functools.partial(spawn_meteorite, sx=sx, su=su)),
+            SpawnEntry(
+                WAVE_ENEMY_WEIGHT,
+                functools.partial(spawn_wave_enemy, sx=sx, sy=sy, su=su),
+            ),
+            SpawnEntry(
+                HUNTER_ENEMY_WEIGHT,
+                functools.partial(spawn_hunter_enemy, sx=sx, sy=sy, su=su),
+            ),
         ]
-        self.spawner = Spawner(
-            table, context.screen.get_size(), random.Random(), SPAWN_INTERVAL_RANGE
+
+    def _build(self) -> None:
+        sx, sy, su = self._scales()
+        size = self.context.screen.get_size()
+        image = self.context.assets.load_ship(
+            self.context.state.selected_ship_filename, self._scaled_player_size(su)
         )
+        start = (round(PLAYER_START_POSITION[0] * sx), round(PLAYER_START_POSITION[1] * sy))
+        self.player = Player(image, start)
+        self.spawner = Spawner(
+            self._spawn_table(sx, sy, su), size, random.Random(), SPAWN_INTERVAL_RANGE
+        )
+
+    def on_resize(self, size: tuple[int, int]) -> None:
+        sx, sy, su = self._scales()
+        image = self.context.assets.load_ship(
+            self.context.state.selected_ship_filename, self._scaled_player_size(su)
+        )
+        centery = self.player.rect.centery
+        self.player.image = image
+        self.player.rect = image.get_rect()
+        self.player.rect.x = round(PLAYER_START_POSITION[0] * sx)
+        self.player.rect.centery = centery
+        # Re-clamp into the (possibly smaller) window; Player.update only blocks
+        # further out-of-bounds movement, it never pulls a stranded ship back in.
+        self.player.rect.y = max(0, min(self.player.rect.y, size[1] - self.player.rect.height))
+        self.spawner.screen_size = size
+        self.spawner.set_table(self._spawn_table(sx, sy, su))
 
     def on_enter(self) -> None:
         self.context.music.start_game_playlist()

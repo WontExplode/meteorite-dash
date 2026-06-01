@@ -2,7 +2,7 @@ from typing import Protocol
 
 import pygame
 
-from meteorite_dash.config import PLAYER_SPEED
+from meteorite_dash.config import PLAYER_SPEED, REFERENCE_SIZE
 
 
 class KeyStates(Protocol):
@@ -16,7 +16,10 @@ class Player:
         self.rect = image.get_rect(topleft=position)
 
     def update(self, dt: float, keys: KeyStates, max_height: int) -> None:
-        movement = int(PLAYER_SPEED * dt)
+        # Speed scales with the window height so vertical traversal time stays
+        # constant; at the reference height this is exactly PLAYER_SPEED.
+        speed = PLAYER_SPEED * (max_height / REFERENCE_SIZE[1])
+        movement = int(speed * dt)
 
         if keys[pygame.K_UP] and self.rect.y > 0:
             self.rect.y -= movement
