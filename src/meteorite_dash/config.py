@@ -28,6 +28,7 @@ MENU_ITEMS: tuple[tuple[str, MenuAction], ...] = (
 )
 
 MENU_MUSIC = "menumusic.mp3"
+DEATH_SOUND = "gameovermusic.mp3"
 GAME_MUSIC_TRACKS: tuple[str, ...] = (
     "gamemusic1.mp3",
     "gamemusic2.mp3",

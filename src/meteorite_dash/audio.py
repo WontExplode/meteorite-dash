@@ -22,6 +22,9 @@ class MusicPlayer:
         pygame.mixer.music.set_endevent(GAME_MUSIC_ENDED)
         self._load_and_play(GAME_MUSIC_TRACKS[self.track_index])
 
+    def play_sound_effect(self, filename: str) -> None:
+        pygame.mixer.Sound(sound_path(filename)).play()
+
     def advance_track(self) -> None:
         self.track_index = (self.track_index + 1) % len(GAME_MUSIC_TRACKS)
         self._load_and_play(GAME_MUSIC_TRACKS[self.track_index])
