@@ -49,15 +49,15 @@ class DeathScene(Scene):
         title_rect = title.get_rect(center=(center_x, 170))
         screen.blit(title, title_rect)
 
-        subtitle = subtitle_font.render("SHIP DESTROYED", True, highlight_color)
+        subtitle = subtitle_font.render("SCHIFF ZERSTÖRT", True, highlight_color)
         subtitle_rect = subtitle.get_rect(center=(center_x, 260))
         screen.blit(subtitle, subtitle_rect)
 
-        message = message_font.render("YOUR RUN ENDS HERE", True, muted_color)
+        message = message_font.render("DEIN LAUF ENDET HIER", True, muted_color)
         message_rect = message.get_rect(center=(center_x, 330))
         screen.blit(message, message_rect)
 
-        hint = hint_font.render("PRESS ANY KEY TO RETURN TO MENU", True, TEXT_COLOR)
+        hint = hint_font.render("DRÜCKE EINE BELIEBIGE TASTE", True, TEXT_COLOR)
         hint_rect = hint.get_rect(center=(center_x, 500))
         screen.blit(hint, hint_rect)
 
