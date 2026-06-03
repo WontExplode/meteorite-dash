@@ -13,7 +13,7 @@ class DeathScene(Scene):
         self.context.music.play_sound_effect(DEATH_SOUND)
 
     def on_exit(self) -> None:
-        self.context.music.stop()
+        pygame.mixer.stop()
 
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type == pygame.KEYDOWN:
