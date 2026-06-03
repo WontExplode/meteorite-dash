@@ -5,14 +5,15 @@ from collections.abc import Iterable
 
 import pygame
 
+from meteorite_dash.assets import AssetLoader
 from meteorite_dash.config import (
     ENEMY_SIZE,
     HUNTER_ENEMY_COLOR,
     HUNTER_ENEMY_SPEED,
     HUNTER_VERTICAL_SPEED,
     METEORITE_COLOR,
-    METEORITE_RADIUS,
     METEORITE_SPEED,
+    METEORITE_VARIANTS,
     WAVE_AMPLITUDE,
     WAVE_ENEMY_COLOR,
     WAVE_ENEMY_SPEED,
@@ -49,7 +50,20 @@ class Entity(ABC):
 
 
 class Meteorite(Entity):
+    def __init__(
+        self,
+        rect: pygame.Rect,
+        speed_x: float,
+        image: pygame.Surface | None = None,
+    ) -> None:
+        super().__init__(rect, speed_x)
+        self.image = image
+
     def draw(self, surface: pygame.Surface) -> None:
+        if self.image is not None:
+            surface.blit(self.image, self.rect)
+            return
+
         radius = max(1, self.rect.width // 2)
         pygame.draw.circle(surface, METEORITE_COLOR, self.rect.center, radius)
 
@@ -119,11 +133,15 @@ def spawn_meteorite(
     *,
     sx: float = 1.0,
     su: float = 1.0,
+    assets: AssetLoader | None = None,
 ) -> Meteorite:
     width, height = screen_size
-    diameter = max(1, round(METEORITE_RADIUS * 2 * su))
-    y = rng.randint(0, height - diameter)
-    return Meteorite(pygame.Rect(width, y, diameter, diameter), METEORITE_SPEED * sx)
+    variant = rng.choice(METEORITE_VARIANTS)
+    diameter = max(1, round(variant.radius * 2 * su))
+    image_filename = rng.choice(variant.images)
+    image = assets.load_image(image_filename, (diameter, diameter)) if assets is not None else None
+    y = rng.randint(0, max(0, height - diameter))
+    return Meteorite(pygame.Rect(width, y, diameter, diameter), METEORITE_SPEED * sx, image)
 
 
 def spawn_wave_enemy(

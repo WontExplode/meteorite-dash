@@ -48,7 +48,10 @@ class GameScene(Scene):
 
     def _spawn_table(self, sx: float, sy: float, su: float) -> list[SpawnEntry]:
         return [
-            SpawnEntry(METEORITE_WEIGHT, functools.partial(spawn_meteorite, sx=sx, su=su)),
+            SpawnEntry(
+                METEORITE_WEIGHT,
+                functools.partial(spawn_meteorite, sx=sx, su=su, assets=self.context.assets),
+            ),
             SpawnEntry(
                 WAVE_ENEMY_WEIGHT,
                 functools.partial(spawn_wave_enemy, sx=sx, sy=sy, su=su),
