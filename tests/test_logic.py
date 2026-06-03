@@ -18,6 +18,7 @@ from meteorite_dash.scenes.base import Transition
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.scenes.main_menu import MainMenu
 from meteorite_dash.scenes.ship_selection import ShipSelection
+from meteorite_dash.score import DistanceScore, format_light_years
 from meteorite_dash.spawner import SpawnEntry, Spawner
 
 
@@ -83,6 +84,24 @@ def test_music_player_track_cycle(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_game_state_selected_ship_filename() -> None:
     state = GameState(selected_ship_index=1)
     assert state.selected_ship_filename == SHIP_IMAGES[1]
+
+
+def test_distance_score_tracks_light_years() -> None:
+    score = DistanceScore(light_years_per_second=12.0)
+    score.update(2.5)
+    assert score.light_years == 30.0
+    assert score.formatted() == "000030"
+
+
+def test_format_light_years() -> None:
+    assert format_light_years(123.9) == "000123"
+
+
+def test_distance_score_uses_rate_multiplier() -> None:
+    score = DistanceScore(light_years_per_second=10.0)
+    score.set_rate_multiplier(2.5)
+    score.update(2.0)
+    assert score.light_years == 50.0
 
 
 def test_player_moves_up_within_bounds() -> None:
@@ -174,9 +193,11 @@ def test_spawner_multiple_spawns_in_one_update() -> None:
 
 def test_game_scene_collision_opens_death_screen(context: GameContext) -> None:
     scene = GameScene(context)
+    scene.score.light_years = 42.0
     scene.entities.append(Meteorite(pygame.Rect(50, 100, 44, 44), speed_x=0.0))
     scene.update(0.016)
     assert scene._transition is Transition.DEATH_SCREEN
+    assert context.state.final_light_years > 42.0
 
 
 def test_game_scene_removes_off_screen_entities(context: GameContext) -> None:
@@ -184,3 +205,9 @@ def test_game_scene_removes_off_screen_entities(context: GameContext) -> None:
     scene.entities.append(Meteorite(pygame.Rect(-100, 300, 44, 44), speed_x=0.0))
     scene.update(0.016)
     assert scene.entities == []
+
+
+def test_game_scene_updates_score(context: GameContext) -> None:
+    scene = GameScene(context)
+    scene.update(0.5)
+    assert scene.score.light_years > 0

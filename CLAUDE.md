@@ -31,33 +31,32 @@ Die Vision (Designvorlage):
 
 ## 2. Aktueller Stand (wichtig!)
 
-Das Repo hat ein **solides Fundament**, aber der **Kern-Gameplay-Loop ist noch
-nicht gebaut**. Vor dem Implementieren neuer Features: prüfen, ob ein Baustein
-schon existiert.
+Das Repo hat ein **solides Fundament** und einen spielbaren Kern-Loop. Vor dem
+Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 
 **Vorhanden:**
 
 - Szenen-Framework (`scenes/base.py`) mit Template-Method-Loop bei 60 FPS.
-- Szenen: Hauptmenü, Schiffsauswahl, Spiel-Szene.
+- Szenen: Hauptmenü, Schiffsauswahl, Spiel-Szene, Death-/Game-Over-Screen.
 - `GameContext` als zentraler Zustands-/Ressourcen-Container.
 - Dynamische Fenstergröße + Vollbild (`Viewport`, Referenz-Raum 800×600).
 - Entities: `Meteorite`, `WaveEnemy` (Sinus-Bahn), `HunterEnemy` (verfolgt den
   Spieler vertikal). Gemeinsame Basis `Entity`.
 - Datengetriebener `Spawner` (gewichtete Tabelle, timergesteuert).
 - Scrollendes Sternenfeld als Hintergrund (`StarField`).
-- Musik (Menü-Loop + Spiel-Playlist), Asset-/Font-Caching.
-- Spieler-Bewegung (vertikal), Kollision → zurück ins Menü.
+- Musik (Menü-Loop + Spiel-Playlist), Soundeffekte, Asset-/Font-Caching.
+- Spieler-Bewegung (vertikal), Kollision → Death-Screen.
+- Lightyears-Score im HUD; finaler Score wird im Death-Screen angezeigt.
 - Strikte Typprüfung, Linting, Tests, CI.
 
 **Noch NICHT vorhanden** (aus dem Spec — meist als GitHub-Issue getrackt):
 
 - **Schießen / Projektile** und **begrenzte Munition** sowie Munitions-Extras.
 - **Sammelbare Sterne** für Punkte (`StarField` ist nur Deko, nicht einsammelbar).
-- **Score / Punkte**, Leben-Zähler (aktuell beendet **eine** Kollision das Spiel).
+- Leben-Zähler (aktuell beendet **eine** Kollision das Spiel).
 - **Zerstörbare vs. unzerstörbare Meteoriten**, Trefferpunkte (HP), große
   Meteoriten mit mehreren Treffern.
 - **Steigende Schwierigkeit** über die Zeit (Speed ist momentan konstant).
-- **Game-Over-/Todesscreen** (Issue #15), Score-/Lichtjahre-Anzeige (Issue #16).
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), mehr Schiffe
   (Issue #11), Endbosse/Level (Issue #10), Münzen/Währung (Issue #14),
   Spieler-Stats (Issue #13), iOS/Android-Port (Issue #5).
@@ -115,7 +114,8 @@ main.main()                 Entry-Point, ruft App().run()
    └─ Scene (scenes/base)   Template-Method-Loop; gibt beim Verlassen ein
       ├─ MainMenu            Transition zurück → App wählt nächste Szene
       ├─ ShipSelection
-      └─ GameScene          eigentlicher Spiel-Loop (Spieler, Spawner, Entities)
+      ├─ GameScene          eigentlicher Spiel-Loop (Spieler, Spawner, Entities)
+      └─ DeathScene         Game-Over-Screen mit finalem Lightyears-Score
 ```
 
 ### Szenen & Transitions
@@ -136,9 +136,9 @@ main.main()                 Entry-Point, ruft App().run()
 Ein `@dataclass`, der alle geteilten Ressourcen hält und **Fenster-Resize +
 Vollbild** besitzt (`apply_resize`, `toggle_fullscreen`). Beim Resize aktualisiert
 er Screen, `Viewport` und `StarField` gemeinsam — Größenlogik lebt hier, nicht in
-den Szenen. `GameState` hält den eigentlichen Spielzustand (aktuell nur
-`selected_ship_index`); neue persistente Felder (Score, Leben, Munition …) kommen
-hierher.
+den Szenen. `GameState` hält den eigentlichen Spielzustand (aktuell
+`selected_ship_index` und `final_light_years`); neue persistente Felder (Leben,
+Munition, Highscore …) kommen hierher.
 
 ### Viewport — Referenz-Raum (zentrales Konzept)
 
@@ -179,6 +179,17 @@ fenster-unabhängig bleibt.
 - `MusicPlayer` kapselt `pygame.mixer.music`; die Spiel-Playlist nutzt das
   `GAME_MUSIC_ENDED`-Userevent, um Tracks weiterzuschalten.
 
+### Score / Lightyears
+
+- `DistanceScore` in `score.py` zählt die zurückgelegte Strecke in Lightyears
+  dt-basiert hoch.
+- `rate_multiplier` ist der Erweiterungspunkt für spätere Speed-Phasen,
+  Meilensteine oder Boss-Abschnitte.
+- `GameScene` rendert den Score als transparentes HUD (`LIGHTYRS ...`) über den
+  `Viewport` und schreibt bei Kollision `state.final_light_years`.
+- `DeathScene` liest `state.final_light_years` und zeigt den finalen Wert auf dem
+  Game-Over-Screen.
+
 ---
 
 ## 6. Konventionen & Best Practices
@@ -210,8 +221,8 @@ fenster-unabhängig bleibt.
   Gewicht in `GameScene._spawn_table` → Logik-Test mit gesetztem Seed.
 - **Szene/Screen** (z. B. Game-Over, Issue #15): `Scene`-Subklasse +
   `Transition` + Verdrahtung in `App._create_scene`.
-- **Spielzustand** (Score/Leben/Munition, Issues #13/#16): Felder in `GameState`,
-  in `GameScene` fortschreiben, über `Viewport`-Schrift im HUD rendern.
+- **Spielzustand** (Leben/Munition/Highscore): Felder in `GameState`, in
+  `GameScene` fortschreiben, über `Viewport`-Schrift im HUD rendern.
 
 ---
 
@@ -270,7 +281,8 @@ nutzergelieferte Inhalte dazukommen.
 - **Vollbild** merkt sich die Fenstergröße (`_windowed_size`); OS-`VIDEORESIZE`
   wird im Vollbild ignoriert. Resize-Logik nur in `GameContext` ändern, beide
   Pfade (windowed/fullscreen) bedenken.
-- **Kollision = sofort Menü.** Es gibt noch keine Leben/Game-Over — wer Leben
-  einbaut, ersetzt das `finish(Transition.MAIN_MENU)` in `GameScene.update`.
+- **Kollision = sofort Death-Screen.** Es gibt noch keine Leben. Wer Leben
+  einbaut, ersetzt den direkten `finish(Transition.DEATH_SCREEN)`-Pfad in
+  `GameScene.update`.
 - **`Player.update` clampt nur Bewegung**, holt das Schiff aber nicht aus dem Bild
   zurück — `GameScene.on_resize` re-klemmt es nach einem Resize aktiv.
