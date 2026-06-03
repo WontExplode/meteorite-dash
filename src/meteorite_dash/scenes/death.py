@@ -2,7 +2,13 @@ import pygame
 
 from meteorite_dash.config import (
     BACKGROUND_COLOR,
+    DEATH_BORDER_COLOR,
+    DEATH_HIGHLIGHT_COLOR,
+    DEATH_MESSAGE_FONT_SIZE,
+    DEATH_MUTED_COLOR,
     DEATH_SOUND,
+    DEATH_SUBTITLE_FONT_SIZE,
+    DEATH_TITLE_FONT_SIZE,
     HINT_FONT_SIZE,
     SCORE_FONT_SIZE,
     TEXT_COLOR,
@@ -10,10 +16,6 @@ from meteorite_dash.config import (
 from meteorite_dash.context import GameContext
 from meteorite_dash.scenes.base import Scene, Transition
 from meteorite_dash.score import format_light_years
-
-TITLE_FONT_SIZE = 84
-SUBTITLE_FONT_SIZE = 28
-MESSAGE_FONT_SIZE = 24
 
 
 class DeathScene(Scene):
@@ -38,9 +40,9 @@ class DeathScene(Scene):
         screen.fill(BACKGROUND_COLOR)
         center_x = vp.center_x
 
-        border_color = (255, 80, 80)
-        highlight_color = (255, 210, 80)
-        muted_color = (120, 120, 150)
+        border_color = DEATH_BORDER_COLOR
+        highlight_color = DEATH_HIGHLIGHT_COLOR
+        muted_color = DEATH_MUTED_COLOR
 
         scanline_gap = max(1, vp.s(8))
         for y in range(0, vp.height, scanline_gap):
@@ -61,9 +63,9 @@ class DeathScene(Scene):
         pygame.draw.rect(screen, border_color, border_rect, max(1, vp.s(4)))
         pygame.draw.rect(screen, muted_color, inner_rect, max(1, vp.s(2)))
 
-        title_font = vp.font(TITLE_FONT_SIZE)
-        subtitle_font = vp.font(SUBTITLE_FONT_SIZE)
-        message_font = vp.font(MESSAGE_FONT_SIZE)
+        title_font = vp.font(DEATH_TITLE_FONT_SIZE)
+        subtitle_font = vp.font(DEATH_SUBTITLE_FONT_SIZE)
+        message_font = vp.font(DEATH_MESSAGE_FONT_SIZE)
         score_font = vp.font(SCORE_FONT_SIZE)
         hint_font = vp.font(HINT_FONT_SIZE)
 
