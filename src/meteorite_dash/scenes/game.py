@@ -10,7 +10,12 @@ from meteorite_dash.config import (
     METEORITE_WEIGHT,
     PLAYER_SIZE,
     PLAYER_START_POSITION,
+    SCORE_ALPHA,
+    SCORE_FONT_SIZE,
+    SCORE_LIGHT_YEARS_PER_SECOND,
+    SCORE_TOP_RIGHT,
     SPAWN_INTERVAL_RANGE,
+    TEXT_COLOR,
     WAVE_ENEMY_WEIGHT,
 )
 from meteorite_dash.context import GameContext
@@ -23,6 +28,7 @@ from meteorite_dash.entities import (
 )
 from meteorite_dash.player import Player
 from meteorite_dash.scenes.base import Scene, Transition
+from meteorite_dash.score import DistanceScore
 from meteorite_dash.spawner import SpawnEntry, Spawner
 
 
@@ -30,6 +36,7 @@ class GameScene(Scene):
     def __init__(self, context: GameContext) -> None:
         super().__init__(context)
         self.entities: list[Entity] = []
+        self.score = DistanceScore(SCORE_LIGHT_YEARS_PER_SECOND)
         self._build()
 
     def _scales(self) -> tuple[float, float, float]:
@@ -96,6 +103,7 @@ class GameScene(Scene):
         keys = pygame.key.get_pressed()
         self.player.update(dt, keys, self.context.screen.get_height())
         self.context.starfield.update(dt)
+        self.score.update(dt)
 
         self.entities.extend(self.spawner.update(dt))
         player_y = self.player.rect.centery
@@ -104,6 +112,7 @@ class GameScene(Scene):
         self.entities = [entity for entity in self.entities if not entity.is_off_screen]
 
         if collides_with_any(self.player.rect, self.entities):
+            self.context.state.final_light_years = self.score.light_years
             self.finish(Transition.DEATH_SCREEN)
 
     def draw(self) -> None:
@@ -112,4 +121,13 @@ class GameScene(Scene):
             entity.draw(self.context.screen)
         self.context.starfield.draw(self.context.screen)
         self.player.draw(self.context.screen)
+        self._draw_score()
         pygame.display.flip()
+
+    def _draw_score(self) -> None:
+        vp = self.context.viewport
+        font = vp.font(SCORE_FONT_SIZE)
+        score_text = font.render(f"LIGHTYRS {self.score.formatted()}", True, TEXT_COLOR)
+        score_text.set_alpha(SCORE_ALPHA)
+        score_rect = score_text.get_rect(topright=vp.point(*SCORE_TOP_RIGHT))
+        self.context.screen.blit(score_text, score_rect)

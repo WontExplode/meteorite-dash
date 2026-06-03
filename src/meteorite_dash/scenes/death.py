@@ -1,8 +1,15 @@
 import pygame
 
-from meteorite_dash.config import BACKGROUND_COLOR, DEATH_SOUND, HINT_FONT_SIZE, TEXT_COLOR
+from meteorite_dash.config import (
+    BACKGROUND_COLOR,
+    DEATH_SOUND,
+    HINT_FONT_SIZE,
+    SCORE_FONT_SIZE,
+    TEXT_COLOR,
+)
 from meteorite_dash.context import GameContext
 from meteorite_dash.scenes.base import Scene, Transition
+from meteorite_dash.score import format_light_years
 
 TITLE_FONT_SIZE = 84
 SUBTITLE_FONT_SIZE = 28
@@ -57,6 +64,7 @@ class DeathScene(Scene):
         title_font = vp.font(TITLE_FONT_SIZE)
         subtitle_font = vp.font(SUBTITLE_FONT_SIZE)
         message_font = vp.font(MESSAGE_FONT_SIZE)
+        score_font = vp.font(SCORE_FONT_SIZE)
         hint_font = vp.font(HINT_FONT_SIZE)
 
         shadow = title_font.render("GAME OVER", True, (80, 0, 0))
@@ -74,6 +82,14 @@ class DeathScene(Scene):
         message = message_font.render("DEIN LAUF ENDET HIER", True, muted_color)
         message_rect = message.get_rect(center=(center_x, vp.py(330)))
         screen.blit(message, message_rect)
+
+        final_score = score_font.render(
+            f"DISTANZ: {format_light_years(self.context.state.final_light_years)} LICHTJAHRE",
+            True,
+            highlight_color,
+        )
+        final_score_rect = final_score.get_rect(center=(center_x, vp.py(390)))
+        screen.blit(final_score, final_score_rect)
 
         hint = hint_font.render("DRÜCKE EINE BELIEBIGE TASTE", True, TEXT_COLOR)
         hint_rect = hint.get_rect(center=(center_x, vp.py(500)))

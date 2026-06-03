@@ -12,6 +12,7 @@ from meteorite_dash.viewport import Viewport
 @dataclass
 class GameState:
     selected_ship_index: int = 0
+    final_light_years: float = 0.0
 
     @property
     def selected_ship_filename(self) -> str:
