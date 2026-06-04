@@ -120,9 +120,9 @@ class GameScene(Scene):
 
     def draw(self) -> None:
         self.context.screen.fill(BACKGROUND_COLOR)
+        self.context.starfield.draw(self.context.screen)
         for entity in self.entities:
             entity.draw(self.context.screen)
-        self.context.starfield.draw(self.context.screen)
         self.player.draw(self.context.screen)
         self._draw_score()
         pygame.display.flip()
