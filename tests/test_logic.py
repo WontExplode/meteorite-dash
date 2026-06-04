@@ -3,7 +3,7 @@ import random
 import pygame
 import pytest
 
-from meteorite_dash.assets import SHIP_IMAGES, AssetLoader
+from meteorite_dash.assets import SHIP_IMAGES, AssetLoader, ship_image_path
 from meteorite_dash.audio import MusicPlayer
 from meteorite_dash.config import GAME_MUSIC_TRACKS, MENU_ITEMS, METEORITE_VARIANTS
 from meteorite_dash.context import GameContext, GameState
@@ -100,6 +100,24 @@ def test_music_player_track_cycle(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_game_state_selected_ship_filename() -> None:
     state = GameState(selected_ship_index=1)
     assert state.selected_ship_filename == SHIP_IMAGES[1]
+
+
+def test_all_ship_variants_are_available() -> None:
+    expected = {
+        f"{color}Ship{variant}.png"
+        for color in ("Copper", "Emerald", "Gold")
+        for variant in range(1, 8)
+    }
+    assert set(SHIP_IMAGES) == expected
+    assert len(SHIP_IMAGES) == 21
+
+
+def test_ship_images_use_ship_subfolder() -> None:
+    assert ship_image_path("CopperShip1.png").parts[-3:] == (
+        "images",
+        "ships",
+        "CopperShip1.png",
+    )
 
 
 def test_distance_score_tracks_light_years() -> None:

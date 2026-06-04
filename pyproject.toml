@@ -18,6 +18,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.package-data]
 meteorite_dash = [
     "assets/images/*.png",
+    "assets/images/ships/*.png",
     "assets/sounds/*.mp3",
 ]
 
