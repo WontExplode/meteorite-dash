@@ -1,6 +1,7 @@
 import random
 
 import pygame
+import pytest
 
 from meteorite_dash.config import (
     ENEMY_SIZE,
@@ -15,6 +16,7 @@ from meteorite_dash.context import GameContext
 from meteorite_dash.entities import spawn_hunter_enemy, spawn_meteorite, spawn_wave_enemy
 from meteorite_dash.player import Player
 from meteorite_dash.scenes.game import GameScene
+from meteorite_dash.ships import SHIPS
 from meteorite_dash.starfield import StarField
 from meteorite_dash.viewport import Viewport
 
@@ -72,11 +74,17 @@ def test_viewport_font_is_cached_and_rebuilt_on_size_change(context: GameContext
 
 
 def test_player_speed_scales_with_height() -> None:
+    # Gleicher Schub, doppelte Fensterhöhe: Geschwindigkeit und zurückgelegte
+    # Strecke verdoppeln sich, damit die Durchquerungszeit konstant bleibt.
     image = pygame.Surface((64, 64))
-    player = Player(image, (50, 100))
-    player.update(0.1, FakeKeys({pygame.K_DOWN}), max_height=1200)
-    # movement = int(300 * (1200/600) * 0.1) = int(60.0) = 60
-    assert player.rect.y == 100 + 60
+    reference = Player(image, (50, 100), SHIPS[0])
+    doubled = Player(image, (50, 100), SHIPS[0])
+
+    reference.update(0.1, FakeKeys({pygame.K_DOWN}), max_height=600)
+    doubled.update(0.1, FakeKeys({pygame.K_DOWN}), max_height=1200)
+
+    assert doubled.velocity == pytest.approx(2 * reference.velocity)
+    assert doubled.rect.y - 100 == pytest.approx(2 * (reference.rect.y - 100))
 
 
 def test_spawn_meteorite_scales_size_and_speed() -> None:

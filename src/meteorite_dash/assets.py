@@ -2,12 +2,12 @@ from pathlib import Path
 
 import pygame
 
+from meteorite_dash.config import Color
+
 PACKAGE_DIR = Path(__file__).parent
 ASSET_DIR = PACKAGE_DIR / "assets"
 IMAGE_DIR = ASSET_DIR / "images"
 SOUND_DIR = ASSET_DIR / "sounds"
-
-SHIP_IMAGES = ("CopperShip1.png", "CopperShip3.png")
 
 
 def image_path(filename: str) -> Path:
@@ -19,13 +19,15 @@ def sound_path(filename: str) -> Path:
 
 
 class AssetLoader:
-    """Loads ship images (scaled and rotated -90°) with a small cache."""
+    """Loads ship images (scaled, rotated -90° and optionally tinted) with a small cache."""
 
     def __init__(self) -> None:
-        self._cache: dict[tuple[str, tuple[int, int]], pygame.Surface] = {}
+        self._cache: dict[tuple[str, tuple[int, int], Color | None], pygame.Surface] = {}
 
-    def load_ship(self, filename: str, size: tuple[int, int]) -> pygame.Surface:
-        key = (filename, size)
+    def load_ship(
+        self, filename: str, size: tuple[int, int], tint: Color | None = None
+    ) -> pygame.Surface:
+        key = (filename, size, tint)
         cached = self._cache.get(key)
         if cached is not None:
             return cached
@@ -33,5 +35,7 @@ class AssetLoader:
         image = pygame.image.load(image_path(filename)).convert_alpha()
         image = pygame.transform.scale(image, size)
         image = pygame.transform.rotate(image, -90)
+        if tint is not None:
+            image.fill((*tint, 255), special_flags=pygame.BLEND_RGBA_MULT)
         self._cache[key] = image
         return image

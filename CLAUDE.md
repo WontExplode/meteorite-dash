@@ -45,7 +45,10 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - Datengetriebener `Spawner` (gewichtete Tabelle, timergesteuert).
 - Scrollendes Sternenfeld als Hintergrund (`StarField`).
 - Musik (Menü-Loop + Spiel-Playlist), Soundeffekte, Asset-/Font-Caching.
-- Spieler-Bewegung (vertikal), Kollision → Death-Screen.
+- Spieler-Bewegung (vertikal) mit Trägheitsphysik, Kollision → Death-Screen.
+- Schiffssystem (`ships.py`, Issue #11): `ShipSpec`-Datenblätter mit
+  physikalischen Grundwerten (mass/thrust/hull, Slot-Zahlen) und abgeleiteten
+  Spielwerten; 4 Schiffe mit Tint-Farbvarianten und Stat-Balken in der Auswahl.
 - Lightyears-Score im HUD; finaler Score wird im Death-Screen angezeigt.
 - Strikte Typprüfung, Linting, Tests, CI.
 
@@ -57,9 +60,10 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Zerstörbare vs. unzerstörbare Meteoriten**, Trefferpunkte (HP), große
   Meteoriten mit mehreren Treffern.
 - **Steigende Schwierigkeit** über die Zeit (Speed ist momentan konstant).
-- Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), mehr Schiffe
-  (Issue #11), Endbosse/Level (Issue #10), Münzen/Währung (Issue #14),
-  Spieler-Stats (Issue #13), iOS/Android-Port (Issue #5).
+- Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
+  (Issue #10), Münzen/Währung (Issue #14), Spieler-Stats (Issue #13),
+  iOS/Android-Port (Issue #5). Waffen-/Zubehör-Slots sind in `ShipSpec` als
+  Zahlen vorbereitet, aber noch ohne Funktion.
 
 Issues sind die Feature-Quelle der Wahrheit: `gh issue list`.
 
@@ -173,8 +177,9 @@ fenster-unabhängig bleibt.
 
 ### Assets & Audio
 
-- `AssetLoader.load_ship` lädt/skaliert/rotiert Schiffsbilder und **cacht** nach
-  `(filename, size)`. Bilder/Schriften nie pro Frame laden.
+- `AssetLoader.load_ship` lädt/skaliert/rotiert Schiffsbilder, tönt sie optional
+  ein und **cacht** nach `(filename, size, tint)`. Bilder/Schriften nie pro
+  Frame laden.
 - Pfade nur über `image_path` / `sound_path` (relativ zum Paket).
 - `MusicPlayer` kapselt `pygame.mixer.music`; die Spiel-Playlist nutzt das
   `GAME_MUSIC_ENDED`-Userevent, um Tracks weiterzuschalten.

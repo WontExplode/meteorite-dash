@@ -3,9 +3,9 @@ import random
 import pygame
 import pytest
 
-from meteorite_dash.assets import SHIP_IMAGES
+from meteorite_dash.assets import image_path
 from meteorite_dash.audio import MusicPlayer
-from meteorite_dash.config import GAME_MUSIC_TRACKS, MENU_ITEMS
+from meteorite_dash.config import DRAG, GAME_MUSIC_TRACKS, MENU_ITEMS
 from meteorite_dash.context import GameContext, GameState
 from meteorite_dash.entities import (
     HunterEnemy,
@@ -19,6 +19,7 @@ from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.scenes.main_menu import MainMenu
 from meteorite_dash.scenes.ship_selection import ShipSelection
 from meteorite_dash.score import DistanceScore, format_light_years
+from meteorite_dash.ships import SHIPS, ShipSpec
 from meteorite_dash.spawner import SpawnEntry, Spawner
 
 
@@ -32,6 +33,24 @@ class FakeKeys:
 
 def _keydown(key: int) -> pygame.event.Event:
     return pygame.event.Event(pygame.KEYDOWN, key=key)
+
+
+def _spec(mass: float = 1.0, thrust: float = 1200.0, hull: float = 100.0) -> ShipSpec:
+    return ShipSpec(
+        name="Testschiff",
+        sprite="CopperShip1.png",
+        tint=None,
+        mass=mass,
+        thrust=thrust,
+        hull=hull,
+        weapon_slots=1,
+        accessory_slots=1,
+    )
+
+
+def _player(y: int, spec: ShipSpec | None = None) -> Player:
+    image = pygame.Surface((64, 64))
+    return Player(image, (50, y), spec or _spec())
 
 
 def test_main_menu_navigation_wraps(context: GameContext) -> None:
@@ -56,7 +75,7 @@ def test_ship_selection_navigation_wraps(context: GameContext) -> None:
     assert context.state.selected_ship_index == 0
 
     selection.handle_event(_keydown(pygame.K_LEFT))
-    assert context.state.selected_ship_index == len(SHIP_IMAGES) - 1
+    assert context.state.selected_ship_index == len(SHIPS) - 1
 
     selection.handle_event(_keydown(pygame.K_RIGHT))
     assert context.state.selected_ship_index == 0
@@ -81,9 +100,9 @@ def test_music_player_track_cycle(monkeypatch: pytest.MonkeyPatch) -> None:
     assert indices == expected
 
 
-def test_game_state_selected_ship_filename() -> None:
+def test_game_state_selected_ship() -> None:
     state = GameState(selected_ship_index=1)
-    assert state.selected_ship_filename == SHIP_IMAGES[1]
+    assert state.selected_ship is SHIPS[1]
 
 
 def test_distance_score_tracks_light_years() -> None:
@@ -104,28 +123,78 @@ def test_distance_score_uses_rate_multiplier() -> None:
     assert score.light_years == 50.0
 
 
-def test_player_moves_up_within_bounds() -> None:
-    image = pygame.Surface((64, 64))
-    player = Player(image, (50, 100))
+def test_all_ship_sprites_exist() -> None:
+    for spec in SHIPS:
+        assert image_path(spec.sprite).exists(), spec.sprite
+
+
+def test_ship_spec_derived_values() -> None:
+    spec = _spec(mass=2.0, thrust=800.0, hull=99.6)
+    assert spec.acceleration == 400.0
+    assert spec.max_speed == 800.0 / DRAG
+    assert spec.agility == DRAG / 2.0
+    assert spec.hp == 100
+
+
+def test_ship_spec_rejects_invalid_values() -> None:
+    with pytest.raises(ValueError):
+        _spec(mass=0.0)
+    with pytest.raises(ValueError):
+        _spec(thrust=-1.0)
+    with pytest.raises(ValueError):
+        ShipSpec(
+            name="Bad",
+            sprite="CopperShip1.png",
+            tint=None,
+            mass=1.0,
+            thrust=100.0,
+            hull=100.0,
+            weapon_slots=-1,
+            accessory_slots=0,
+        )
+
+
+def test_player_accelerates_under_thrust() -> None:
+    player = _player(300)
 
     player.update(0.1, FakeKeys({pygame.K_UP}), max_height=600)
-    assert player.rect.y == 100 - int(300 * 0.1)
+    assert player.velocity < 0
+    assert player.rect.y < 300
+
+
+def test_player_drifts_after_release() -> None:
+    player = _player(300)
+    player.update(0.1, FakeKeys({pygame.K_UP}), max_height=600)
+    y_after_thrust = player.rect.y
+
+    player.update(0.1, FakeKeys(set()), max_height=600)
+    assert player.velocity < 0  # Trägheit: ohne Schub noch in Bewegung
+    assert player.rect.y < y_after_thrust
+
+
+def test_heavier_ship_accelerates_slower() -> None:
+    light = _player(300, _spec(mass=0.5))
+    heavy = _player(300, _spec(mass=2.5))
+
+    light.update(0.1, FakeKeys({pygame.K_DOWN}), max_height=600)
+    heavy.update(0.1, FakeKeys({pygame.K_DOWN}), max_height=600)
+    assert light.velocity > heavy.velocity > 0
 
 
 def test_player_stops_at_top() -> None:
-    image = pygame.Surface((64, 64))
-    player = Player(image, (50, 0))
+    player = _player(5)
 
-    player.update(0.1, FakeKeys({pygame.K_UP}), max_height=600)
+    player.update(0.5, FakeKeys({pygame.K_UP}), max_height=600)
     assert player.rect.y == 0
+    assert player.velocity == 0
 
 
 def test_player_stops_at_bottom() -> None:
-    image = pygame.Surface((64, 64))
-    player = Player(image, (50, 600 - 64))
+    player = _player(600 - 64 - 5)
 
-    player.update(0.1, FakeKeys({pygame.K_DOWN}), max_height=600)
+    player.update(0.5, FakeKeys({pygame.K_DOWN}), max_height=600)
     assert player.rect.y == 600 - 64
+    assert player.velocity == 0
 
 
 def test_meteorite_moves_left_without_vertical_change() -> None:

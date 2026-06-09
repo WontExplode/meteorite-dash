@@ -2,9 +2,10 @@ from dataclasses import dataclass, field
 
 import pygame
 
-from meteorite_dash.assets import SHIP_IMAGES, AssetLoader
+from meteorite_dash.assets import AssetLoader
 from meteorite_dash.audio import MusicPlayer
 from meteorite_dash.config import MIN_WINDOW_SIZE, REFERENCE_SIZE
+from meteorite_dash.ships import SHIPS, ShipSpec
 from meteorite_dash.starfield import StarField
 from meteorite_dash.viewport import Viewport
 
@@ -15,8 +16,8 @@ class GameState:
     final_light_years: float = 0.0
 
     @property
-    def selected_ship_filename(self) -> str:
-        return SHIP_IMAGES[self.selected_ship_index]
+    def selected_ship(self) -> ShipSpec:
+        return SHIPS[self.selected_ship_index]
 
 
 @dataclass

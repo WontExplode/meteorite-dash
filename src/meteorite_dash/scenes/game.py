@@ -62,20 +62,18 @@ class GameScene(Scene):
     def _build(self) -> None:
         sx, sy, su = self._scales()
         size = self.context.screen.get_size()
-        image = self.context.assets.load_ship(
-            self.context.state.selected_ship_filename, self._scaled_player_size(su)
-        )
+        spec = self.context.state.selected_ship
+        image = self.context.assets.load_ship(spec.sprite, self._scaled_player_size(su), spec.tint)
         start = (round(PLAYER_START_POSITION[0] * sx), round(PLAYER_START_POSITION[1] * sy))
-        self.player = Player(image, start)
+        self.player = Player(image, start, spec)
         self.spawner = Spawner(
             self._spawn_table(sx, sy, su), size, random.Random(), SPAWN_INTERVAL_RANGE
         )
 
     def on_resize(self, size: tuple[int, int]) -> None:
         sx, sy, su = self._scales()
-        image = self.context.assets.load_ship(
-            self.context.state.selected_ship_filename, self._scaled_player_size(su)
-        )
+        spec = self.context.state.selected_ship
+        image = self.context.assets.load_ship(spec.sprite, self._scaled_player_size(su), spec.tint)
         centery = self.player.rect.centery
         self.player.image = image
         self.player.rect = image.get_rect()
@@ -83,7 +81,9 @@ class GameScene(Scene):
         self.player.rect.centery = centery
         # Re-clamp into the (possibly smaller) window; Player.update only blocks
         # further out-of-bounds movement, it never pulls a stranded ship back in.
-        self.player.rect.y = max(0, min(self.player.rect.y, size[1] - self.player.rect.height))
+        self.player.set_vertical_position(
+            max(0, min(self.player.rect.y, size[1] - self.player.rect.height))
+        )
         self.spawner.screen_size = size
         self.spawner.set_table(self._spawn_table(sx, sy, su))
 
