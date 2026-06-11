@@ -8,7 +8,8 @@ immer mehr zurückgelegte Lichtjahre.
 
 - Hauptmenü mit Schiffsauswahl
 - vertikale Raumschiffsteuerung
-- Meteoriten und Gegner mit unterschiedlichen Bewegungsmustern
+- Meteoriten in vier Größen mit zufälligen Farbvarianten
+- Gegner mit unterschiedlichen Bewegungsmustern
 - scrollendes Sternenfeld als Hintergrund
 - Lightyears-Score als HUD-Anzeige
 - Game-Over-Screen mit finalem Score
