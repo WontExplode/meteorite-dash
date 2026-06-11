@@ -42,6 +42,8 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - Dynamische Fenstergröße + Vollbild (`Viewport`, Referenz-Raum 800×600).
 - Entities: `Meteorite`, `WaveEnemy` (Sinus-Bahn), `HunterEnemy` (verfolgt den
   Spieler vertikal). Gemeinsame Basis `Entity`.
+- Meteoriten-Varianten in vier Größen (`Tiny`, `Small`, `Medium`, `Large`) mit
+  je zwei zufällig gewählten Farb-Assets pro Instanz.
 - Datengetriebener `Spawner` (gewichtete Tabelle, timergesteuert).
 - Scrollendes Sternenfeld als Hintergrund (`StarField`).
 - Musik (Menü-Loop + Spiel-Playlist), Soundeffekte, Asset-/Font-Caching.
@@ -167,14 +169,17 @@ fenster-unabhängig bleibt.
   `spawn_hunter_enemy` mit Skalierungs-Parametern `sx` (Speed-x), `sy` (vertikale
   Bewegungs-Parameter) und `su` (Größe). Sie nehmen ein injiziertes
   `random.Random` → deterministisch testbar.
+- Meteoriten-Größen und Bildvarianten liegen zentral in `METEORITE_VARIANTS`;
+  neue Varianten dort ergänzen und weiter über `spawn_meteorite` erzeugen.
 - `Spawner` zieht timergesteuert aus einer **gewichteten Tabelle** (`SpawnEntry`).
   Neuer Gegnertyp = neue `Entity`-Subklasse + `spawn_*`-Fabrik + Eintrag in
   `GameScene._spawn_table`.
 
 ### Assets & Audio
 
-- `AssetLoader.load_ship` lädt/skaliert/rotiert Schiffsbilder und **cacht** nach
-  `(filename, size)`. Bilder/Schriften nie pro Frame laden.
+- `AssetLoader.load_ship` lädt/skaliert/rotiert Schiffsbilder; `load_image` lädt
+  generische Sprites wie Meteoriten. Beide Wege **cachen** nach
+  `(filename, size, rotate_left)`. Bilder/Schriften nie pro Frame laden.
 - Pfade nur über `image_path` / `sound_path` (relativ zum Paket).
 - `MusicPlayer` kapselt `pygame.mixer.music`; die Spiel-Playlist nutzt das
   `GAME_MUSIC_ENDED`-Userevent, um Tracks weiterzuschalten.
@@ -212,7 +217,11 @@ fenster-unabhängig bleibt.
    Verantwortung pro Datei). Render-Code von reiner Logik trennen.
 8. **Sprache:** Prosa/Kommentare/UI auf Deutsch, **Bezeichner auf Englisch** —
    wie im bestehenden Code.
-9. **Issues sind der Plan.** Features gegen das passende GitHub-Issue bauen; bei
+9. **Dokumentation aktuell halten.** Bei jeder Änderung prüfen, ob `CLAUDE.md`
+   und/oder `README.md` angepasst werden müssen. Architektur-, Workflow- und
+   Projektstand-Änderungen gehören in `CLAUDE.md`; nutzer- oder
+   entwicklerrelevante Projektbeschreibung in `README.md`.
+10. **Issues sind der Plan.** Features gegen das passende GitHub-Issue bauen; bei
    neuem Feature ggf. Issue verlinken/ergänzen.
 
 ### Neues Feature — typische Schritte

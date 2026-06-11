@@ -7,6 +7,7 @@ from meteorite_dash.config import (
     MENU_FONT_SIZE,
     SELECTED_TEXT_COLOR,
     SHIP_PREVIEW_SIZE,
+    SHIP_SLOT_OFFSETS,
     TEXT_COLOR,
 )
 from meteorite_dash.scenes.base import Scene, Transition
@@ -38,10 +39,15 @@ class ShipSelection(Scene):
         screen.blit(title, title_rect)
 
         preview_size = (vp.s(SHIP_PREVIEW_SIZE[0]), vp.s(SHIP_PREVIEW_SIZE[1]))
-        start_x = center_x - vp.px(120)
-        for index, filename in enumerate(SHIP_IMAGES):
+        visible_slots = (
+            (selected_index - 1) % len(SHIP_IMAGES),
+            selected_index,
+            (selected_index + 1) % len(SHIP_IMAGES),
+        )
+        for slot_index, index in enumerate(visible_slots):
+            filename = SHIP_IMAGES[index]
             preview = self.context.assets.load_ship(filename, preview_size)
-            x = start_x + index * vp.px(240)
+            x = center_x + vp.px(SHIP_SLOT_OFFSETS[slot_index])
             ship_rect = preview.get_rect(center=(x, vp.py(280)))
             screen.blit(preview, ship_rect)
 
@@ -53,6 +59,10 @@ class ShipSelection(Scene):
             if index == selected_index:
                 box = ship_rect.inflate(vp.s(24), vp.s(24))
                 pygame.draw.rect(screen, SELECTED_TEXT_COLOR, box, 3)
+
+        counter = hint_font.render(f"{selected_index + 1} / {len(SHIP_IMAGES)}", True, TEXT_COLOR)
+        counter_rect = counter.get_rect(center=(center_x, vp.py(425)))
+        screen.blit(counter, counter_rect)
 
         hint = hint_font.render("Links/Rechts: wählen  Enter/Escape: zurück", True, TEXT_COLOR)
         hint_rect = hint.get_rect(center=(center_x, vp.py(500)))

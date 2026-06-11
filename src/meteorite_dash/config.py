@@ -1,8 +1,14 @@
-from typing import Literal
+from typing import Literal, NamedTuple
 
 WindowSize = tuple[int, int]
 Color = tuple[int, int, int]
 MenuAction = Literal["start", "ship", "quit"]
+
+
+class MeteoriteVariant(NamedTuple):
+    radius: int
+    images: tuple[str, str]
+
 
 WINDOW_SIZE: WindowSize = (800, 600)
 # Design reference: every scale factor is relative to this. At this size all
@@ -45,13 +51,19 @@ PLAYER_SPEED = 300
 PLAYER_SIZE: WindowSize = (64, 64)
 PLAYER_START_POSITION: WindowSize = (50, 100)
 SHIP_PREVIEW_SIZE: WindowSize = (96, 96)
+SHIP_SLOT_OFFSETS: tuple[int, int, int] = (-180, 0, 180)
 
 # --- Hindernisse & Gegner ---
 METEORITE_COLOR: Color = (120, 120, 130)
 WAVE_ENEMY_COLOR: Color = (220, 90, 90)
 HUNTER_ENEMY_COLOR: Color = (90, 200, 130)
 
-METEORITE_RADIUS = 22
+METEORITE_VARIANTS: tuple[MeteoriteVariant, ...] = (
+    MeteoriteVariant(20, ("AsteroidTiny.png", "AsteroidTiny2.png")),
+    MeteoriteVariant(30, ("AsteroidSmall.png", "AsteroidSmall2.png")),
+    MeteoriteVariant(42, ("AsteroidMedium.png", "AsteroidMedium2.png")),
+    MeteoriteVariant(60, ("AsteroidLarge.png", "AsteroidLarge2.png")),
+)
 ENEMY_SIZE: WindowSize = (44, 44)
 
 METEORITE_SPEED = 220.0

@@ -6,8 +6,8 @@ from meteorite_dash.config import (
     ENEMY_SIZE,
     HUNTER_ENEMY_SPEED,
     HUNTER_VERTICAL_SPEED,
-    METEORITE_RADIUS,
     METEORITE_SPEED,
+    METEORITE_VARIANTS,
     WAVE_AMPLITUDE,
     WAVE_ENEMY_SPEED,
 )
@@ -81,7 +81,8 @@ def test_player_speed_scales_with_height() -> None:
 
 def test_spawn_meteorite_scales_size_and_speed() -> None:
     met = spawn_meteorite(random.Random(0), (1600, 1200), sx=2.0, su=2.0)
-    assert met.rect.width == round(METEORITE_RADIUS * 2 * 2.0)
+    expected_sizes = {round(variant.radius * 2 * 2.0) for variant in METEORITE_VARIANTS}
+    assert met.rect.width in expected_sizes
     assert met.speed_x == METEORITE_SPEED * 2.0
 
 

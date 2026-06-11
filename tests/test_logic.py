@@ -3,15 +3,16 @@ import random
 import pygame
 import pytest
 
-from meteorite_dash.assets import SHIP_IMAGES
+from meteorite_dash.assets import SHIP_IMAGES, AssetLoader, ship_image_path
 from meteorite_dash.audio import MusicPlayer
-from meteorite_dash.config import GAME_MUSIC_TRACKS, MENU_ITEMS
+from meteorite_dash.config import GAME_MUSIC_TRACKS, MENU_ITEMS, METEORITE_VARIANTS
 from meteorite_dash.context import GameContext, GameState
 from meteorite_dash.entities import (
     HunterEnemy,
     Meteorite,
     WaveEnemy,
     collides_with_any,
+    spawn_meteorite,
 )
 from meteorite_dash.player import Player
 from meteorite_dash.scenes.base import Transition
@@ -28,6 +29,22 @@ class FakeKeys:
 
     def __getitem__(self, key: int) -> bool:
         return key in self._pressed
+
+
+class DummyAssets(AssetLoader):
+    def __init__(self) -> None:
+        super().__init__()
+        self.loaded: list[tuple[str, tuple[int, int]]] = []
+
+    def load_image(
+        self,
+        filename: str,
+        size: tuple[int, int],
+        *,
+        rotate_left: bool = False,
+    ) -> pygame.Surface:
+        self.loaded.append((filename, size))
+        return pygame.Surface(size)
 
 
 def _keydown(key: int) -> pygame.event.Event:
@@ -86,6 +103,24 @@ def test_game_state_selected_ship_filename() -> None:
     assert state.selected_ship_filename == SHIP_IMAGES[1]
 
 
+def test_all_ship_variants_are_available() -> None:
+    expected = {
+        f"{color}Ship{variant}.png"
+        for color in ("Copper", "Emerald", "Gold")
+        for variant in range(1, 8)
+    }
+    assert set(SHIP_IMAGES) == expected
+    assert len(SHIP_IMAGES) == 21
+
+
+def test_ship_images_use_ship_subfolder() -> None:
+    assert ship_image_path("CopperShip1.png").parts[-3:] == (
+        "images",
+        "ships",
+        "CopperShip1.png",
+    )
+
+
 def test_distance_score_tracks_light_years() -> None:
     score = DistanceScore(light_years_per_second=12.0)
     score.update(2.5)
@@ -138,6 +173,30 @@ def test_meteorite_moves_left_without_vertical_change() -> None:
 def test_meteorite_is_off_screen() -> None:
     assert Meteorite(pygame.Rect(-50, 100, 44, 44), 200.0).is_off_screen is True
     assert Meteorite(pygame.Rect(0, 100, 44, 44), 200.0).is_off_screen is False
+
+
+def test_spawn_meteorite_uses_configured_sizes_and_images(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for variant in METEORITE_VARIANTS:
+        monkeypatch.setattr("meteorite_dash.entities.METEORITE_VARIANTS", (variant,))
+        assets = DummyAssets()
+        meteorite = spawn_meteorite(random.Random(0), (800, 600), assets=assets)
+        expected_size = variant.radius * 2
+
+        assert meteorite.rect.size == (expected_size, expected_size)
+        assert meteorite.image is not None
+        assert len(assets.loaded) == 1
+        assert assets.loaded[0][0] in variant.images
+        assert assets.loaded[0][1] == (expected_size, expected_size)
+
+
+def test_spawn_meteorite_scales_variant_radius(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("meteorite_dash.entities.METEORITE_VARIANTS", (METEORITE_VARIANTS[0],))
+    meteorite = spawn_meteorite(random.Random(0), (800, 600), su=2.0)
+
+    expected_size = METEORITE_VARIANTS[0].radius * 4
+    assert meteorite.rect.size == (expected_size, expected_size)
 
 
 def test_wave_enemy_moves_left_and_oscillates() -> None:
