@@ -197,6 +197,13 @@ def test_player_stops_at_bottom() -> None:
     assert player.velocity == 0
 
 
+def test_set_vertical_position_syncs_float_and_rect() -> None:
+    player = _player(300)
+    player.set_vertical_position(123.7)
+    assert player._y == 123.7
+    assert player.rect.y == 124
+
+
 def test_meteorite_moves_left_without_vertical_change() -> None:
     met = Meteorite(pygame.Rect(800, 100, 44, 44), speed_x=200.0)
     met.update(0.1, player_y=300)
