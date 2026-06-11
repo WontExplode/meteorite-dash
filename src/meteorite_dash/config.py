@@ -57,7 +57,6 @@ METEORITE_COLOR: Color = (120, 120, 130)
 WAVE_ENEMY_COLOR: Color = (220, 90, 90)
 HUNTER_ENEMY_COLOR: Color = (90, 200, 130)
 
-METEORITE_RADIUS = 22
 METEORITE_VARIANTS: tuple[MeteoriteVariant, ...] = (
     MeteoriteVariant(20, ("AsteroidTiny.png", "AsteroidTiny2.png")),
     MeteoriteVariant(30, ("AsteroidSmall.png", "AsteroidSmall2.png")),
