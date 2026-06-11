@@ -7,6 +7,7 @@ from meteorite_dash.config import (
     MENU_FONT_SIZE,
     SELECTED_TEXT_COLOR,
     SHIP_PREVIEW_SIZE,
+    SHIP_SLOT_OFFSETS,
     TEXT_COLOR,
 )
 from meteorite_dash.scenes.base import Scene, Transition
@@ -43,11 +44,10 @@ class ShipSelection(Scene):
             selected_index,
             (selected_index + 1) % len(SHIP_IMAGES),
         )
-        slot_offsets = (-180, 0, 180)
         for slot_index, index in enumerate(visible_slots):
             filename = SHIP_IMAGES[index]
             preview = self.context.assets.load_ship(filename, preview_size)
-            x = center_x + vp.px(slot_offsets[slot_index])
+            x = center_x + vp.px(SHIP_SLOT_OFFSETS[slot_index])
             ship_rect = preview.get_rect(center=(x, vp.py(280)))
             screen.blit(preview, ship_rect)
 

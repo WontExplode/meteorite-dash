@@ -51,6 +51,7 @@ PLAYER_SPEED = 300
 PLAYER_SIZE: WindowSize = (64, 64)
 PLAYER_START_POSITION: WindowSize = (50, 100)
 SHIP_PREVIEW_SIZE: WindowSize = (96, 96)
+SHIP_SLOT_OFFSETS: tuple[int, int, int] = (-180, 0, 180)
 
 # --- Hindernisse & Gegner ---
 METEORITE_COLOR: Color = (120, 120, 130)
