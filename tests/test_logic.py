@@ -33,6 +33,7 @@ class FakeKeys:
 
 class DummyAssets(AssetLoader):
     def __init__(self) -> None:
+        super().__init__()
         self.loaded: list[tuple[str, tuple[int, int]]] = []
 
     def load_image(
