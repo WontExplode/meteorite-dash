@@ -9,6 +9,7 @@ immer mehr zurückgelegte Lichtjahre.
 - Hauptmenü mit Schiffsauswahl
 - vertikale Raumschiffsteuerung
 - Standardwaffe mit 7 Schüssen und Munitions-Pickups
+- zerstörbare Meteoriten und Gegner mit HP; Spieler-HP aus Schiffsrumpf
 - Meteoriten in vier Größen mit zufälligen Farbvarianten
 - Gegner mit unterschiedlichen Bewegungsmustern
 - scrollendes Sternenfeld als Hintergrund
@@ -49,6 +50,7 @@ src/meteorite_dash/
   entities.py          Gegner, Hindernisse und Munitions-Pickups
   projectiles.py       Spieler-Projektile
   weapons.py           Waffen-Loadout und Munitionslogik
+  combat.py            Projektil- und Kollisionsschaden
   ships.py             Schiffsdatenblätter und Slot-Limits
   spawner.py           Timergesteuertes Spawning
   starfield.py         Bewegter Sternenhintergrund

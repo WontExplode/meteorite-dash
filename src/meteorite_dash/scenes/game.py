@@ -4,9 +4,11 @@ import random
 import pygame
 
 from meteorite_dash.audio import GAME_MUSIC_ENDED
+from meteorite_dash.combat import apply_contact_damage, resolve_projectile_hits
 from meteorite_dash.config import (
     AMMO_PICKUP_WEIGHT,
     BACKGROUND_COLOR,
+    HP_HUD_TOP_LEFT,
     HUNTER_ENEMY_WEIGHT,
     METEORITE_WEIGHT,
     PLAYER_SIZE,
@@ -15,7 +17,6 @@ from meteorite_dash.config import (
     SCORE_FONT_SIZE,
     SCORE_LIGHT_YEARS_PER_SECOND,
     SCORE_TOP_RIGHT,
-    SHOOT_COOLDOWN,
     SPAWN_INTERVAL_RANGE,
     TEXT_COLOR,
     WAVE_ENEMY_WEIGHT,
@@ -26,7 +27,6 @@ from meteorite_dash.context import GameContext
 from meteorite_dash.entities import (
     Entity,
     collect_pickups,
-    collides_with_any,
     spawn_ammo_pickup,
     spawn_hunter_enemy,
     spawn_meteorite,
@@ -148,7 +148,10 @@ class GameScene(Scene):
         if collect_pickups(self.player.rect, self.entities):
             self.loadout.refill_standard()
 
-        if collides_with_any(self.player.rect, self.entities):
+        resolve_projectile_hits(self.projectiles, self.entities)
+
+        self.player.hp = apply_contact_damage(self.player.rect, self.player.hp, self.entities)
+        if self.player.hp <= 0:
             self.context.state.final_light_years = self.score.light_years
             self.finish(Transition.DEATH_SCREEN)
 
@@ -159,8 +162,9 @@ class GameScene(Scene):
         if not self.loadout.fire():
             return
         sx, _, su = self._scales()
-        self.projectiles.append(spawn_projectile(self.player, sx=sx, su=su))
-        self._shoot_cooldown = SHOOT_COOLDOWN
+        damage = self.loadout.active.spec.damage
+        self.projectiles.append(spawn_projectile(self.player, damage=damage, sx=sx, su=su))
+        self._shoot_cooldown = self.loadout.active.spec.fire_cooldown
 
     def draw(self) -> None:
         self.context.screen.fill(BACKGROUND_COLOR)
@@ -171,8 +175,17 @@ class GameScene(Scene):
             projectile.draw(self.context.screen)
         self.player.draw(self.context.screen)
         self._draw_weapon_hud()
+        self._draw_hp_hud()
         self._draw_score()
         pygame.display.flip()
+
+    def _draw_hp_hud(self) -> None:
+        vp = self.context.viewport
+        font = vp.font(WEAPON_HUD_FONT_SIZE)
+        hp_text = font.render(f"HP {self.player.hp}/{self.player.max_hp}", True, TEXT_COLOR)
+        hp_text.set_alpha(SCORE_ALPHA)
+        hp_rect = hp_text.get_rect(topleft=vp.point(*HP_HUD_TOP_LEFT))
+        self.context.screen.blit(hp_text, hp_rect)
 
     def _draw_weapon_hud(self) -> None:
         vp = self.context.viewport

@@ -44,7 +44,7 @@ class ShipSpec:
 
     @property
     def hp(self) -> int:
-        """Lebenspunkte; Schadenslogik folgt mit den Meteoriten."""
+        """Lebenspunkte aus dem Rumpf-Wert."""
         return round(self.hull)
 
 

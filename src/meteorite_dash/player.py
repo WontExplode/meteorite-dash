@@ -16,6 +16,8 @@ class Player:
         self.image = image
         self.rect = image.get_rect(topleft=position)
         self.spec = spec
+        self.max_hp = spec.hp
+        self.hp = spec.hp
         self.velocity = 0.0  # px/s, vertikal; negativ = aufwärts
         self._y = float(position[1])  # Float-Position für verlustfreies Integrieren
 

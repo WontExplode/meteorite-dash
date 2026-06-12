@@ -5,7 +5,15 @@ import pytest
 
 from meteorite_dash.assets import SHIP_IMAGES, AssetLoader, ship_image_path
 from meteorite_dash.audio import MusicPlayer
-from meteorite_dash.config import DRAG, GAME_MUSIC_TRACKS, MENU_ITEMS, METEORITE_VARIANTS
+from meteorite_dash.combat import apply_contact_damage, resolve_projectile_hits
+from meteorite_dash.config import (
+    DRAG,
+    GAME_MUSIC_TRACKS,
+    MENU_ITEMS,
+    METEORITE_VARIANTS,
+    SHOOT_COOLDOWN,
+    STANDARD_WEAPON_DAMAGE,
+)
 from meteorite_dash.context import GameContext, GameState
 from meteorite_dash.entities import (
     AmmoPickup,
@@ -74,6 +82,27 @@ def _spec(mass: float = 1.0, thrust: float = 1200.0, hull: float = 100.0) -> Shi
 def _player(y: int, spec: ShipSpec | None = None) -> Player:
     image = pygame.Surface((64, 64))
     return Player(image, (50, y), spec or _spec())
+
+
+def _meteorite(
+    rect: pygame.Rect,
+    speed_x: float = 200.0,
+    *,
+    hp: int = 10,
+    contact_damage: int = 15,
+) -> Meteorite:
+    return Meteorite(rect, speed_x, hp=hp, contact_damage=contact_damage)
+
+
+def _bonus_weapon(max_ammo: int = 3) -> WeaponSpec:
+    return WeaponSpec(
+        WeaponKind.STANDARD,
+        "Bonus",
+        max_ammo,
+        permanent=False,
+        damage=20,
+        fire_cooldown=0.15,
+    )
 
 
 def test_main_menu_navigation_wraps(context: GameContext) -> None:
@@ -246,15 +275,15 @@ def test_set_vertical_position_syncs_float_and_rect() -> None:
 
 
 def test_meteorite_moves_left_without_vertical_change() -> None:
-    met = Meteorite(pygame.Rect(800, 100, 44, 44), speed_x=200.0)
+    met = _meteorite(pygame.Rect(800, 100, 44, 44))
     met.update(0.1, player_y=300)
     assert met.rect.x == 800 - round(200.0 * 0.1)
     assert met.rect.y == 100
 
 
 def test_meteorite_is_off_screen() -> None:
-    assert Meteorite(pygame.Rect(-50, 100, 44, 44), 200.0).is_off_screen is True
-    assert Meteorite(pygame.Rect(0, 100, 44, 44), 200.0).is_off_screen is False
+    assert _meteorite(pygame.Rect(-50, 100, 44, 44)).is_off_screen is True
+    assert _meteorite(pygame.Rect(0, 100, 44, 44)).is_off_screen is False
 
 
 def test_spawn_meteorite_uses_configured_sizes_and_images(
@@ -271,6 +300,8 @@ def test_spawn_meteorite_uses_configured_sizes_and_images(
         assert len(assets.loaded) == 1
         assert assets.loaded[0][0] in variant.images
         assert assets.loaded[0][1] == (expected_size, expected_size)
+        assert meteorite.hp == variant.hp
+        assert meteorite.contact_damage == variant.contact_damage
 
 
 def test_spawn_meteorite_scales_variant_radius(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -303,15 +334,15 @@ def test_hunter_enemy_does_not_overshoot() -> None:
 
 def test_collides_with_any() -> None:
     player = pygame.Rect(50, 100, 64, 64)
-    hit = Meteorite(pygame.Rect(80, 120, 44, 44), 200.0)
-    miss = Meteorite(pygame.Rect(700, 500, 44, 44), 200.0)
+    hit = _meteorite(pygame.Rect(80, 120, 44, 44))
+    miss = _meteorite(pygame.Rect(700, 500, 44, 44))
     assert collides_with_any(player, [miss, hit]) is True
     assert collides_with_any(player, [miss]) is False
     assert collides_with_any(player, []) is False
 
 
 def _fake_factory(rng: random.Random, screen_size: tuple[int, int]) -> Meteorite:
-    return Meteorite(pygame.Rect(screen_size[0], 0, 10, 10), 100.0)
+    return _meteorite(pygame.Rect(screen_size[0], 0, 10, 10), speed_x=100.0)
 
 
 def test_spawner_no_spawn_before_interval() -> None:
@@ -335,15 +366,27 @@ def test_spawner_multiple_spawns_in_one_update() -> None:
 def test_game_scene_collision_opens_death_screen(context: GameContext) -> None:
     scene = GameScene(context)
     scene.score.light_years = 42.0
-    scene.entities.append(Meteorite(pygame.Rect(50, 100, 44, 44), speed_x=0.0))
+    scene.entities.append(_meteorite(scene.player.rect.copy(), speed_x=0.0, contact_damage=999))
     scene.update(0.016)
     assert scene._transition is Transition.DEATH_SCREEN
     assert context.state.final_light_years > 42.0
 
 
+def test_game_scene_collision_reduces_hp_before_death(
+    context: GameContext,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys(set()))
+    scene = GameScene(context)
+    scene.entities.append(_meteorite(scene.player.rect.copy(), speed_x=0.0, contact_damage=30))
+    scene.update(0.016)
+    assert scene._transition is None
+    assert scene.player.hp == scene.player.max_hp - 30
+
+
 def test_game_scene_removes_off_screen_entities(context: GameContext) -> None:
     scene = GameScene(context)
-    scene.entities.append(Meteorite(pygame.Rect(-100, 300, 44, 44), speed_x=0.0))
+    scene.entities.append(_meteorite(pygame.Rect(-100, 300, 44, 44), speed_x=0.0))
     scene.update(0.016)
     assert scene.entities == []
 
@@ -391,7 +434,7 @@ def test_weapon_loadout_cycle_requires_multiple_weapons() -> None:
 
 def test_weapon_loadout_adds_and_cycles_bonus_weapon() -> None:
     loadout = WeaponLoadout(2)
-    bonus = WeaponSpec(WeaponKind.STANDARD, "Bonus", 3, permanent=False)
+    bonus = _bonus_weapon()
     assert loadout.add_weapon(bonus) is True
     loadout.cycle_weapon()
     assert loadout.active.spec.name == "Bonus"
@@ -401,7 +444,7 @@ def test_weapon_loadout_adds_and_cycles_bonus_weapon() -> None:
 
 def test_weapon_loadout_removes_empty_bonus_weapon() -> None:
     loadout = WeaponLoadout(2)
-    bonus = WeaponSpec(WeaponKind.STANDARD, "Bonus", 1, permanent=False)
+    bonus = _bonus_weapon(max_ammo=1)
     loadout.add_weapon(bonus)
     loadout.active_index = 1
     loadout.fire()
@@ -411,20 +454,20 @@ def test_weapon_loadout_removes_empty_bonus_weapon() -> None:
 
 def test_weapon_loadout_respects_slot_limit() -> None:
     loadout = WeaponLoadout(2)
-    bonus = WeaponSpec(WeaponKind.STANDARD, "Bonus", 3, permanent=False)
+    bonus = _bonus_weapon()
     assert loadout.add_weapon(bonus) is True
     assert loadout.add_weapon(bonus) is False
 
 
 def test_projectile_moves_right() -> None:
-    projectile = Projectile(pygame.Rect(10, 10, 8, 4), speed_x=100.0)
+    projectile = Projectile(pygame.Rect(10, 10, 8, 4), speed_x=100.0, damage=10)
     projectile.update(0.1)
     assert projectile.rect.x == 10 + round(100.0 * 0.1)
 
 
 def test_spawn_projectile_starts_at_player_front() -> None:
     player = _player(300)
-    projectile = spawn_projectile(player, sx=1.0, su=1.0)
+    projectile = spawn_projectile(player, damage=STANDARD_WEAPON_DAMAGE, sx=1.0, su=1.0)
     assert projectile.rect.left == player.rect.right
     assert projectile.rect.centery == player.rect.centery
 
@@ -443,7 +486,7 @@ def test_collides_with_any_ignores_ammo_pickups() -> None:
 def test_collect_pickups() -> None:
     player = pygame.Rect(50, 100, 64, 64)
     pickup = AmmoPickup(pygame.Rect(60, 120, 24, 24), speed_x=100.0)
-    meteorite = Meteorite(pygame.Rect(700, 500, 44, 44), speed_x=200.0)
+    meteorite = _meteorite(pygame.Rect(700, 500, 44, 44))
     entities: list[Entity] = [pickup, meteorite]
     collected = collect_pickups(player, entities)
     assert collected == [pickup]
@@ -477,3 +520,78 @@ def test_game_scene_ammo_pickup_refills_standard(
     scene.entities.append(AmmoPickup(scene.player.rect.copy(), speed_x=0.0))
     scene.update(0.016)
     assert scene.loadout.active.ammo == STANDARD_WEAPON.max_ammo
+
+
+def test_player_starts_with_ship_hp() -> None:
+    player = _player(300, _spec(hull=60.0))
+    assert player.hp == 60
+    assert player.max_hp == 60
+
+
+def test_meteorite_take_damage() -> None:
+    meteorite = _meteorite(pygame.Rect(0, 0, 44, 44), hp=40)
+    assert meteorite.take_damage(10) is False
+    assert meteorite.hp == 30
+    assert meteorite.take_damage(30) is True
+    assert meteorite.hp == 0
+
+
+def test_large_meteorite_needs_seven_standard_shots() -> None:
+    large = METEORITE_VARIANTS[-1]
+    meteorite = _meteorite(pygame.Rect(0, 0, 120, 120), hp=large.hp)
+    for _shot in range(6):
+        assert meteorite.take_damage(STANDARD_WEAPON_DAMAGE) is False
+    assert meteorite.hp == large.hp - 6 * STANDARD_WEAPON_DAMAGE
+    assert meteorite.take_damage(STANDARD_WEAPON_DAMAGE) is True
+
+
+def test_resolve_projectile_hits() -> None:
+    meteorite = _meteorite(pygame.Rect(100, 100, 44, 44), hp=20)
+    projectile = Projectile(pygame.Rect(90, 110, 16, 8), speed_x=100.0, damage=10)
+    projectiles = [projectile]
+    entities: list[Entity] = [meteorite]
+    resolve_projectile_hits(projectiles, entities)
+    assert projectiles == []
+    assert len(entities) == 1
+    assert meteorite.hp == 10
+
+    projectiles.append(Projectile(pygame.Rect(90, 110, 16, 8), speed_x=100.0, damage=10))
+    resolve_projectile_hits(projectiles, entities)
+    assert projectiles == []
+    assert entities == []
+
+
+def test_resolve_projectile_hits_destroy_enemy() -> None:
+    enemy = WaveEnemy(pygame.Rect(100, 100, 44, 44), speed_x=100.0)
+    projectile = Projectile(pygame.Rect(90, 110, 16, 8), speed_x=100.0, damage=20)
+    projectiles = [projectile]
+    entities: list[Entity] = [enemy]
+    resolve_projectile_hits(projectiles, entities)
+    assert projectiles == []
+    assert entities == []
+
+
+def test_apply_contact_damage() -> None:
+    player_rect = pygame.Rect(50, 100, 64, 64)
+    meteorite = _meteorite(player_rect.copy(), contact_damage=25)
+    entities: list[Entity] = [meteorite]
+    hp = apply_contact_damage(player_rect, 100, entities)
+    assert hp == 75
+    assert entities == []
+
+
+def test_standard_weapon_spec_values() -> None:
+    assert STANDARD_WEAPON.damage == STANDARD_WEAPON_DAMAGE
+    assert STANDARD_WEAPON.fire_cooldown == SHOOT_COOLDOWN
+
+
+def test_game_scene_projectile_destroys_meteorite(
+    context: GameContext,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys({pygame.K_SPACE}))
+    scene = GameScene(context)
+    scene.entities.append(_meteorite(pygame.Rect(110, 120, 44, 44), hp=10))
+    scene.update(0.016)
+    assert scene.entities == []
+    assert scene.projectiles == []
