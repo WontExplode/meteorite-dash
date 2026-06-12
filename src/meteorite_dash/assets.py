@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pygame
 
+from meteorite_dash.config import Color
+
 PACKAGE_DIR = Path(__file__).parent
 ASSET_DIR = PACKAGE_DIR / "assets"
 IMAGE_DIR = ASSET_DIR / "images"
@@ -46,13 +48,21 @@ def sound_path(filename: str) -> Path:
 
 
 class AssetLoader:
-    """Lädt skalierte Bilder mit kleinem Cache."""
+    """Lädt skalierte Bilder (optional rotiert und getönt) mit kleinem Cache.
+
+    `load_ship` lädt Schiffe aus dem ships-Ordner (rotiert, optional getönt),
+    `load_image` generische Sprites wie Meteoriten.
+    """
 
     def __init__(self) -> None:
-        self._cache: dict[tuple[str, tuple[int, int], bool], pygame.Surface] = {}
+        self._cache: dict[tuple[str, tuple[int, int], bool, Color | None], pygame.Surface] = {}
 
-    def load_ship(self, filename: str, size: tuple[int, int]) -> pygame.Surface:
-        return self._load_image_from_path(ship_image_path(filename), size, rotate_left=True)
+    def load_ship(
+        self, filename: str, size: tuple[int, int], tint: Color | None = None
+    ) -> pygame.Surface:
+        return self._load_image_from_path(
+            ship_image_path(filename), size, rotate_left=True, tint=tint
+        )
 
     def load_image(
         self,
@@ -69,8 +79,9 @@ class AssetLoader:
         size: tuple[int, int],
         *,
         rotate_left: bool = False,
+        tint: Color | None = None,
     ) -> pygame.Surface:
-        key = (str(path), size, rotate_left)
+        key = (str(path), size, rotate_left, tint)
         cached = self._cache.get(key)
         if cached is not None:
             return cached
@@ -79,5 +90,7 @@ class AssetLoader:
         image = pygame.transform.scale(image, size)
         if rotate_left:
             image = pygame.transform.rotate(image, -90)
+        if tint is not None:
+            image.fill((*tint, 255), special_flags=pygame.BLEND_RGBA_MULT)
         self._cache[key] = image
         return image

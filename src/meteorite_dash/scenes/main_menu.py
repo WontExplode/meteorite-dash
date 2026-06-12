@@ -54,7 +54,7 @@ class MainMenu(Scene):
             screen.blit(text, text_rect)
 
         selected_ship = hint_font.render(
-            f"Ausgewählt: {self.context.state.selected_ship_filename}", True, TEXT_COLOR
+            f"Ausgewählt: {self.context.state.selected_ship.name}", True, TEXT_COLOR
         )
         selected_ship_rect = selected_ship.get_rect(center=(center_x, vp.py(500)))
         screen.blit(selected_ship, selected_ship_rect)

@@ -2,7 +2,8 @@ from typing import Protocol
 
 import pygame
 
-from meteorite_dash.config import PLAYER_SPEED, REFERENCE_SIZE
+from meteorite_dash.config import DRAG, REFERENCE_SIZE
+from meteorite_dash.ships import ShipSpec
 
 
 class KeyStates(Protocol):
@@ -11,20 +12,43 @@ class KeyStates(Protocol):
 
 
 class Player:
-    def __init__(self, image: pygame.Surface, position: tuple[int, int]) -> None:
+    def __init__(self, image: pygame.Surface, position: tuple[int, int], spec: ShipSpec) -> None:
         self.image = image
         self.rect = image.get_rect(topleft=position)
+        self.spec = spec
+        self.velocity = 0.0  # px/s, vertikal; negativ = aufwärts
+        self._y = float(position[1])  # Float-Position für verlustfreies Integrieren
 
     def update(self, dt: float, keys: KeyStates, max_height: int) -> None:
-        # Speed scales with the window height so vertical traversal time stays
-        # constant; at the reference height this is exactly PLAYER_SPEED.
-        speed = PLAYER_SPEED * (max_height / REFERENCE_SIZE[1])
-        movement = int(speed * dt)
+        direction = 0
+        if keys[pygame.K_UP]:
+            direction -= 1
+        if keys[pygame.K_DOWN]:
+            direction += 1
 
-        if keys[pygame.K_UP] and self.rect.y > 0:
-            self.rect.y -= movement
-        if keys[pygame.K_DOWN] and self.rect.y < max_height - self.rect.height:
-            self.rect.y += movement
+        # Schub skaliert mit der Fensterhöhe, damit die vertikale Durchquerungszeit
+        # fenster-unabhängig bleibt; bei Referenzhöhe ist der Faktor exakt 1.0.
+        thrust = self.spec.thrust * (max_height / REFERENCE_SIZE[1])
+        # Linearer Widerstand: F = direction * thrust - DRAG * v, dann a = F / m.
+        force = direction * thrust - DRAG * self.velocity
+        self.velocity += force / self.spec.mass * dt
+        self._y += self.velocity * dt
+
+        bottom = max_height - self.rect.height
+        if self._y < 0:
+            self._y = 0.0
+            self.velocity = 0.0
+        elif self._y > bottom:
+            self._y = float(bottom)
+            self.velocity = 0.0
+
+        self.rect.y = round(self._y)
+
+    def set_vertical_position(self, y: float) -> None:
+        """Setzt die vertikale Position von außen (z. B. nach Resize) und hält
+        Float-Position und Rect synchron."""
+        self._y = float(y)
+        self.rect.y = round(self._y)
 
     def draw(self, surface: pygame.Surface) -> None:
         surface.blit(self.image, self.rect)

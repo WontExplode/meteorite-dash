@@ -22,6 +22,7 @@ FPS = 60
 BACKGROUND_COLOR: Color = (10, 10, 20)
 TEXT_COLOR: Color = (220, 220, 230)
 SELECTED_TEXT_COLOR: Color = (255, 210, 80)
+STAT_BAR_COLOR: Color = (60, 60, 80)
 DEATH_BORDER_COLOR: Color = (255, 80, 80)
 DEATH_HIGHLIGHT_COLOR: Color = (255, 210, 80)
 DEATH_MUTED_COLOR: Color = (120, 120, 150)
@@ -47,7 +48,9 @@ GAME_MUSIC_TRACKS: tuple[str, ...] = (
     "gamemusic3.mp3",
 )
 
-PLAYER_SPEED = 300
+# Globaler Strömungswiderstand: bremst proportional zur Geschwindigkeit und
+# bestimmt zusammen mit thrust/mass der Schiffe das Flugverhalten.
+DRAG = 4.0
 PLAYER_SIZE: WindowSize = (64, 64)
 PLAYER_START_POSITION: WindowSize = (50, 100)
 SHIP_PREVIEW_SIZE: WindowSize = (96, 96)
