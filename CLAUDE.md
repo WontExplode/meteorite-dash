@@ -17,7 +17,7 @@ Die Vision (Designvorlage):
 - Raumschiff bewegt sich nach oben/unten.
 - Meteoriten fliegen von rechts nach links; Geschwindigkeit steigt mit der Zeit.
 - Sterne geben Punkte, wenn man sie einsammelt.
-- Schießen mit **begrenzter Munition**; Munitions-Extras füllen sie wieder auf.
+- Schießen mit **begrenzter Munition**; Munitions-Extras füllen die Standardwaffe wieder auf.
 - Zerstörbare Meteoriten (große brauchen mehrere Treffer) und unzerstörbare, die
   man umfliegen muss.
 - Kollision kostet ein Leben; bei null Leben ist das Spiel vorbei.
@@ -48,6 +48,9 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - Scrollendes Sternenfeld als Hintergrund (`StarField`).
 - Musik (Menü-Loop + Spiel-Playlist), Soundeffekte, Asset-/Font-Caching.
 - Spieler-Bewegung (vertikal) mit Trägheitsphysik, Kollision → Death-Screen.
+- **Waffensystem:** Standard-Schuss (7 Munition, startet voll), Projektile,
+  Munitions-Pickups im Spawner, Waffen-HUD; `WeaponLoadout` respektiert
+  `ShipSpec.weapon_slots` und ist für Spezialwaffen + `R`-Wechsel vorbereitet.
 - Schiffssystem (`ships.py`, Issue #11): `ShipSpec`-Datenblätter mit
   physikalischen Grundwerten (mass/thrust/hull, Slot-Zahlen) und abgeleiteten
   Spielwerten; 4 Schiffe mit Tint-Farbvarianten und Stat-Balken in der Auswahl.
@@ -56,15 +59,15 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 
 **Noch NICHT vorhanden** (aus dem Spec — meist als GitHub-Issue getrackt):
 
-- **Schießen / Projektile** und **begrenzte Munition** sowie Munitions-Extras.
 - **Sammelbare Sterne** für Punkte (`StarField` ist nur Deko, nicht einsammelbar).
+- **Spezialwaffen-Pickups** (Loadout und Slot-Limit sind vorbereitet).
 - Leben-Zähler (aktuell beendet **eine** Kollision das Spiel).
 - **Zerstörbare vs. unzerstörbare Meteoriten**, Trefferpunkte (HP), große
   Meteoriten mit mehreren Treffern.
 - **Steigende Schwierigkeit** über die Zeit (Speed ist momentan konstant).
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
   (Issue #10), Münzen/Währung (Issue #14), Spieler-Stats (Issue #13),
-  iOS/Android-Port (Issue #5). Waffen-/Zubehör-Slots sind in `ShipSpec` als
+  iOS/Android-Port (Issue #5). Zubehör-Slots sind in `ShipSpec` als
   Zahlen vorbereitet, aber noch ohne Funktion.
 
 Issues sind die Feature-Quelle der Wahrheit: `gh issue list`.
@@ -177,7 +180,17 @@ fenster-unabhängig bleibt.
   neue Varianten dort ergänzen und weiter über `spawn_meteorite` erzeugen.
 - `Spawner` zieht timergesteuert aus einer **gewichteten Tabelle** (`SpawnEntry`).
   Neuer Gegnertyp = neue `Entity`-Subklasse + `spawn_*`-Fabrik + Eintrag in
-  `GameScene._spawn_table`.
+  `GameScene._spawn_table`. Munitions-Pickups folgen demselben Muster.
+
+### Waffen & Munition
+
+- `WeaponSpec` / `WeaponLoadout` in `weapons.py`: Slot 0 ist die permanente
+  Standardwaffe; weitere Slots nutzen `ShipSpec.weapon_slots`. Spezialwaffen
+  (später) haben feste Munition und werden bei 0 entfernt.
+- `Projectile` in `projectiles.py` fliegt nach rechts, unabhängig von `Entity`.
+- `AmmoPickup` ist eine harmlose `Entity`-Subklasse (`damages_player = False`);
+  Aufsammeln füllt die Standardwaffe über `WeaponLoadout.refill_standard()`.
+- `GameScene` steuert Feuern (`Space`, Cooldown), Waffenwechsel (`R`) und HUD.
 
 ### Assets & Audio
 
@@ -233,6 +246,8 @@ fenster-unabhängig bleibt.
 
 - **Gegner/Hindernis:** `Entity`-Subklasse → `spawn_*`-Fabrik (mit `sx/sy/su`) →
   Gewicht in `GameScene._spawn_table` → Logik-Test mit gesetztem Seed.
+- **Waffe/Pickup:** Konstanten in `config.py`, Logik in `weapons.py` /
+  `projectiles.py`, Integration in `GameScene`.
 - **Szene/Screen** (z. B. Game-Over, Issue #15): `Scene`-Subklasse +
   `Transition` + Verdrahtung in `App._create_scene`.
 - **Spielzustand** (Leben/Munition/Highscore): Felder in `GameState`, in

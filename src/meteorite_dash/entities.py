@@ -7,6 +7,9 @@ import pygame
 
 from meteorite_dash.assets import AssetLoader
 from meteorite_dash.config import (
+    AMMO_PICKUP_COLOR,
+    AMMO_PICKUP_SIZE,
+    AMMO_PICKUP_SPEED,
     ENEMY_SIZE,
     HUNTER_ENEMY_COLOR,
     HUNTER_ENEMY_SPEED,
@@ -30,6 +33,10 @@ class Entity(ABC):
         self._x = float(rect.x)
         self._y = float(rect.y)
         self.speed_x = speed_x
+
+    @property
+    def damages_player(self) -> bool:
+        return True
 
     @property
     def is_off_screen(self) -> bool:
@@ -118,13 +125,39 @@ class HunterEnemy(Entity):
         _draw_left_triangle(surface, self.rect, HUNTER_ENEMY_COLOR)
 
 
+class AmmoPickup(Entity):
+    @property
+    def damages_player(self) -> bool:
+        return False
+
+    def draw(self, surface: pygame.Surface) -> None:
+        pygame.draw.rect(surface, AMMO_PICKUP_COLOR, self.rect, border_radius=4)
+        inner = self.rect.inflate(-self.rect.width // 3, -self.rect.height // 3)
+        pygame.draw.rect(surface, (255, 240, 180), inner, border_radius=2)
+
+
 def _draw_left_triangle(surface: pygame.Surface, rect: pygame.Rect, color: Color) -> None:
     points = [(rect.left, rect.centery), (rect.right, rect.top), (rect.right, rect.bottom)]
     pygame.draw.polygon(surface, color, points)
 
 
 def collides_with_any(player_rect: pygame.Rect, entities: Iterable[Entity]) -> bool:
-    return any(player_rect.colliderect(entity.rect) for entity in entities)
+    return any(
+        entity.damages_player and player_rect.colliderect(entity.rect) for entity in entities
+    )
+
+
+def collect_pickups(player_rect: pygame.Rect, entities: list[Entity]) -> list[Entity]:
+    """Entfernt eingesammelte Munitions-Pickups und gibt sie zurück."""
+    collected: list[Entity] = []
+    remaining: list[Entity] = []
+    for entity in entities:
+        if isinstance(entity, AmmoPickup) and player_rect.colliderect(entity.rect):
+            collected.append(entity)
+        else:
+            remaining.append(entity)
+    entities[:] = remaining
+    return collected
 
 
 def spawn_meteorite(
@@ -180,3 +213,17 @@ def spawn_hunter_enemy(
         HUNTER_ENEMY_SPEED * sx,
         vertical_speed=HUNTER_VERTICAL_SPEED * sy,
     )
+
+
+def spawn_ammo_pickup(
+    rng: random.Random,
+    screen_size: tuple[int, int],
+    *,
+    sx: float = 1.0,
+    su: float = 1.0,
+) -> AmmoPickup:
+    width, height = screen_size
+    w = max(1, round(AMMO_PICKUP_SIZE[0] * su))
+    h = max(1, round(AMMO_PICKUP_SIZE[1] * su))
+    y = rng.randint(0, max(0, height - h))
+    return AmmoPickup(pygame.Rect(width, y, w, h), AMMO_PICKUP_SPEED * sx)

@@ -8,13 +8,18 @@ from meteorite_dash.audio import MusicPlayer
 from meteorite_dash.config import DRAG, GAME_MUSIC_TRACKS, MENU_ITEMS, METEORITE_VARIANTS
 from meteorite_dash.context import GameContext, GameState
 from meteorite_dash.entities import (
+    AmmoPickup,
+    Entity,
     HunterEnemy,
     Meteorite,
     WaveEnemy,
+    collect_pickups,
     collides_with_any,
+    spawn_ammo_pickup,
     spawn_meteorite,
 )
 from meteorite_dash.player import Player
+from meteorite_dash.projectiles import Projectile, spawn_projectile
 from meteorite_dash.scenes.base import Transition
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.scenes.main_menu import MainMenu
@@ -22,6 +27,7 @@ from meteorite_dash.scenes.ship_selection import ShipSelection
 from meteorite_dash.score import DistanceScore, format_light_years
 from meteorite_dash.ships import SHIPS, ShipSpec
 from meteorite_dash.spawner import SpawnEntry, Spawner
+from meteorite_dash.weapons import STANDARD_WEAPON, WeaponKind, WeaponLoadout, WeaponSpec
 
 
 class FakeKeys:
@@ -346,3 +352,128 @@ def test_game_scene_updates_score(context: GameContext) -> None:
     scene = GameScene(context)
     scene.update(0.5)
     assert scene.score.light_years > 0
+
+
+def test_weapon_loadout_starts_with_full_standard_ammo() -> None:
+    loadout = WeaponLoadout(2)
+    assert loadout.active.spec is STANDARD_WEAPON
+    assert loadout.active.ammo == STANDARD_WEAPON.max_ammo
+
+
+def test_weapon_loadout_fire_consumes_ammo() -> None:
+    loadout = WeaponLoadout(1)
+    assert loadout.fire() is True
+    assert loadout.active.ammo == STANDARD_WEAPON.max_ammo - 1
+    assert loadout.can_fire() is True
+
+
+def test_weapon_loadout_cannot_fire_when_empty() -> None:
+    loadout = WeaponLoadout(1)
+    for _ in range(STANDARD_WEAPON.max_ammo):
+        loadout.fire()
+    assert loadout.can_fire() is False
+    assert loadout.fire() is False
+
+
+def test_weapon_loadout_refill_standard() -> None:
+    loadout = WeaponLoadout(1)
+    loadout.fire()
+    loadout.fire()
+    loadout.refill_standard()
+    assert loadout.active.ammo == STANDARD_WEAPON.max_ammo
+
+
+def test_weapon_loadout_cycle_requires_multiple_weapons() -> None:
+    loadout = WeaponLoadout(1)
+    loadout.cycle_weapon()
+    assert loadout.active_index == 0
+
+
+def test_weapon_loadout_adds_and_cycles_bonus_weapon() -> None:
+    loadout = WeaponLoadout(2)
+    bonus = WeaponSpec(WeaponKind.STANDARD, "Bonus", 3, permanent=False)
+    assert loadout.add_weapon(bonus) is True
+    loadout.cycle_weapon()
+    assert loadout.active.spec.name == "Bonus"
+    loadout.cycle_weapon()
+    assert loadout.active.spec.permanent is True
+
+
+def test_weapon_loadout_removes_empty_bonus_weapon() -> None:
+    loadout = WeaponLoadout(2)
+    bonus = WeaponSpec(WeaponKind.STANDARD, "Bonus", 1, permanent=False)
+    loadout.add_weapon(bonus)
+    loadout.active_index = 1
+    loadout.fire()
+    assert len(loadout.weapons) == 1
+    assert loadout.active.spec.permanent is True
+
+
+def test_weapon_loadout_respects_slot_limit() -> None:
+    loadout = WeaponLoadout(2)
+    bonus = WeaponSpec(WeaponKind.STANDARD, "Bonus", 3, permanent=False)
+    assert loadout.add_weapon(bonus) is True
+    assert loadout.add_weapon(bonus) is False
+
+
+def test_projectile_moves_right() -> None:
+    projectile = Projectile(pygame.Rect(10, 10, 8, 4), speed_x=100.0)
+    projectile.update(0.1)
+    assert projectile.rect.x == 10 + round(100.0 * 0.1)
+
+
+def test_spawn_projectile_starts_at_player_front() -> None:
+    player = _player(300)
+    projectile = spawn_projectile(player, sx=1.0, su=1.0)
+    assert projectile.rect.left == player.rect.right
+    assert projectile.rect.centery == player.rect.centery
+
+
+def test_ammo_pickup_does_not_damage_player() -> None:
+    pickup = AmmoPickup(pygame.Rect(60, 120, 24, 24), speed_x=100.0)
+    assert pickup.damages_player is False
+
+
+def test_collides_with_any_ignores_ammo_pickups() -> None:
+    player = pygame.Rect(50, 100, 64, 64)
+    pickup = AmmoPickup(pygame.Rect(60, 120, 24, 24), speed_x=100.0)
+    assert collides_with_any(player, [pickup]) is False
+
+
+def test_collect_pickups() -> None:
+    player = pygame.Rect(50, 100, 64, 64)
+    pickup = AmmoPickup(pygame.Rect(60, 120, 24, 24), speed_x=100.0)
+    meteorite = Meteorite(pygame.Rect(700, 500, 44, 44), speed_x=200.0)
+    entities: list[Entity] = [pickup, meteorite]
+    collected = collect_pickups(player, entities)
+    assert collected == [pickup]
+    assert entities == [meteorite]
+
+
+def test_spawn_ammo_pickup_scales_size() -> None:
+    pickup = spawn_ammo_pickup(random.Random(0), (800, 600), su=2.0)
+    assert pickup.rect.size == (48, 48)
+
+
+def test_game_scene_fires_projectile(
+    context: GameContext,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys({pygame.K_SPACE}))
+    scene = GameScene(context)
+    scene.update(1.0)
+    assert len(scene.projectiles) == 1
+    assert scene.loadout.active.ammo == STANDARD_WEAPON.max_ammo - 1
+
+
+def test_game_scene_ammo_pickup_refills_standard(
+    context: GameContext,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys(set()))
+    scene = GameScene(context)
+    scene.loadout.fire()
+    scene.loadout.fire()
+    scene.entities.append(AmmoPickup(scene.player.rect.copy(), speed_x=0.0))
+    scene.update(0.016)
+    assert scene.loadout.active.ammo == STANDARD_WEAPON.max_ammo

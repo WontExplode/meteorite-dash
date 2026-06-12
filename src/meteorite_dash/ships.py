@@ -18,8 +18,8 @@ class ShipSpec:
     mass: float
     thrust: float
     hull: float
-    weapon_slots: int  # vorbereitet, noch ohne Funktion
-    accessory_slots: int  # vorbereitet, noch ohne Funktion
+    weapon_slots: int
+    accessory_slots: int
 
     def __post_init__(self) -> None:
         if self.mass <= 0 or self.thrust <= 0 or self.hull <= 0:
