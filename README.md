@@ -16,7 +16,7 @@ immer mehr zurückgelegte Lichtjahre.
 - Lightyears-Score als HUD-Anzeige
 - Game-Over-Screen mit finalem Score
 - dynamische Fenstergröße und Vollbild über einen gemeinsamen `Viewport`
-- Menü-Musik, Game-Playlist und Game-Over-Sound
+- Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
 
 ## Steuerung
 

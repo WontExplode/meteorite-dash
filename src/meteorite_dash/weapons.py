@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from meteorite_dash.config import SHOOT_COOLDOWN, STANDARD_WEAPON_DAMAGE, STANDARD_WEAPON_MAX_AMMO
+from meteorite_dash.config import (
+    SHOOT_COOLDOWN,
+    STANDARD_WEAPON_DAMAGE,
+    STANDARD_WEAPON_MAX_AMMO,
+    STANDARD_WEAPON_SOUND,
+)
 
 
 class WeaponKind(Enum):
@@ -16,6 +21,7 @@ class WeaponSpec:
     permanent: bool
     damage: int
     fire_cooldown: float
+    sound: str | None = None
 
 
 STANDARD_WEAPON = WeaponSpec(
@@ -25,6 +31,7 @@ STANDARD_WEAPON = WeaponSpec(
     permanent=True,
     damage=STANDARD_WEAPON_DAMAGE,
     fire_cooldown=SHOOT_COOLDOWN,
+    sound=STANDARD_WEAPON_SOUND,
 )
 
 

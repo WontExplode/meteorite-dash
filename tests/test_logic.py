@@ -583,6 +583,23 @@ def test_apply_contact_damage() -> None:
 def test_standard_weapon_spec_values() -> None:
     assert STANDARD_WEAPON.damage == STANDARD_WEAPON_DAMAGE
     assert STANDARD_WEAPON.fire_cooldown == SHOOT_COOLDOWN
+    assert STANDARD_WEAPON.sound == "standard-gun.mp3"
+
+
+def test_game_scene_plays_weapon_sound_on_shot(
+    context: GameContext,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    played: list[str] = []
+    monkeypatch.setattr(
+        context.music,
+        "play_sound_effect",
+        lambda filename: played.append(filename),
+    )
+    monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys({pygame.K_SPACE}))
+    scene = GameScene(context)
+    scene.update(1.0)
+    assert played == ["standard-gun.mp3"]
 
 
 def test_game_scene_projectile_destroys_meteorite(

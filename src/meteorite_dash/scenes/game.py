@@ -159,12 +159,16 @@ class GameScene(Scene):
         self._shoot_cooldown = max(0.0, self._shoot_cooldown - dt)
         if not keys[pygame.K_SPACE] or self._shoot_cooldown > 0.0:
             return
+        fired_spec = self.loadout.active.spec
         if not self.loadout.fire():
             return
         sx, _, su = self._scales()
-        damage = self.loadout.active.spec.damage
-        self.projectiles.append(spawn_projectile(self.player, damage=damage, sx=sx, su=su))
-        self._shoot_cooldown = self.loadout.active.spec.fire_cooldown
+        self.projectiles.append(
+            spawn_projectile(self.player, damage=fired_spec.damage, sx=sx, su=su)
+        )
+        self._shoot_cooldown = fired_spec.fire_cooldown
+        if fired_spec.sound is not None:
+            self.context.music.play_sound_effect(fired_spec.sound)
 
     def draw(self) -> None:
         self.context.screen.fill(BACKGROUND_COLOR)
