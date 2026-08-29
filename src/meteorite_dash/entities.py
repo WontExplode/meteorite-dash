@@ -163,7 +163,7 @@ class AmmoPickup(Entity):
     def draw(self, surface: pygame.Surface) -> None:
         pygame.draw.rect(surface, AMMO_PICKUP_COLOR, self.rect, border_radius=4)
         inner = self.rect.inflate(-self.rect.width // 3, -self.rect.height // 3)
-        pygame.draw.rect(surface, (255, 240, 180), inner, border_radius=2)
+        pygame.draw.rect(surface, AMMO_PICKUP_HIGHLIGHT_COLOR, inner, border_radius=2)
 
 
 def _draw_left_triangle(surface: pygame.Surface, rect: pygame.Rect, color: Color) -> None:
