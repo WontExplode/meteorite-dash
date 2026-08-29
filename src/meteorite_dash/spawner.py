@@ -58,14 +58,30 @@ class Spawner[T]:
                 return candidate
         return None
 
-    def update(self, dt: float, accept: Acceptor[T] | None = None) -> list[T]:
-        """Spawnt fällige Objekte; `accept` kann Kandidaten ablehnen (z. B. Überlappung)."""
+    def update(
+        self,
+        dt: float,
+        accept: Acceptor[T] | None = None,
+        *,
+        interval_scale: float = 1.0,
+    ) -> list[T]:
+        """Spawnt fällige Objekte; `accept` kann Kandidaten ablehnen (z. B. Überlappung).
+
+        `interval_scale` streckt (> 1) oder staucht (< 1) das gewürfelte Intervall —
+        die Stellgröße des Schwierigkeits-Directors.
+        """
         self._elapsed += dt
         spawned: list[T] = []
-        while self._elapsed >= self._next_at:
-            self._elapsed -= self._next_at
+        due = self._next_at * interval_scale
+        while self._elapsed >= due:
+            self._elapsed -= due
             candidate = self._roll(accept)
             if candidate is not None:
                 spawned.append(candidate)
             self._next_at = self._roll_interval()
+            due = self._next_at * interval_scale
         return spawned
+
+    def state_key(self) -> tuple[object, ...]:
+        """Timer plus kompletter RNG-Zustand — der Stream gehört zum Spielzustand."""
+        return (self._elapsed.hex(), self._next_at.hex(), self._rng.getstate())

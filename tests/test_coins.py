@@ -24,6 +24,7 @@ from meteorite_dash.config import (
 )
 from meteorite_dash.context import GameContext
 from meteorite_dash.entities import AmmoPickup, Meteorite
+from meteorite_dash.inputs import InputFrame
 from meteorite_dash.render import RenderContext
 from meteorite_dash.scenes.base import Transition
 from meteorite_dash.scenes.game import GameScene
@@ -179,10 +180,10 @@ def test_formation_all_missed_is_finished_without_bonus() -> None:
 
 def test_game_scene_collects_coins_without_dying(context: GameContext) -> None:
     scene = GameScene(context)
-    scene.formations.append(CoinFormation([_coin(50, 100)], bonus=5))
-    scene.update(0.016)
-    assert scene.coins_collected == 1 + 5
-    assert scene.formations == []
+    scene.sim.formations.append(CoinFormation([_coin(50, 100)], bonus=5))
+    scene.step(InputFrame.NONE)
+    assert scene.sim.coins_collected == 1 + 5
+    assert scene.sim.formations == []
     assert scene._transition is None
     assert scene._bonus_notice == "BONUS +5"
     assert 0 < scene._bonus_notice_ttl <= COIN_BONUS_NOTICE_SECONDS
@@ -190,15 +191,15 @@ def test_game_scene_collects_coins_without_dying(context: GameContext) -> None:
 
 def test_game_scene_keeps_unreached_formations(context: GameContext) -> None:
     scene = GameScene(context)
-    scene.formations.append(CoinFormation([_coin(700, 500)], bonus=5))
-    scene.update(0.016)
-    assert scene.coins_collected == 0
-    assert len(scene.formations) == 1
+    scene.sim.formations.append(CoinFormation([_coin(700, 500)], bonus=5))
+    scene.step(InputFrame.NONE)
+    assert scene.sim.coins_collected == 0
+    assert len(scene.sim.formations) == 1
 
 
 def test_game_scene_coin_spawner_yields_formations(context: GameContext) -> None:
     scene = GameScene(context)
-    spawned = scene.coin_spawner.update(COIN_SPAWN_INTERVAL_RANGE[1] + 0.1)
+    spawned = scene.sim.coin_spawner.update(COIN_SPAWN_INTERVAL_RANGE[1] + 0.1)
     assert spawned
     assert all(isinstance(f, CoinFormation) and f.coins for f in spawned)
 
@@ -208,9 +209,11 @@ def test_game_scene_adds_spawned_formations(
 ) -> None:
     scene = GameScene(context)
     formation = CoinFormation([_coin(700, 500)], bonus=5)
-    monkeypatch.setattr(scene.coin_spawner, "update", lambda dt, accept=None: [formation])
-    scene.update(0.016)
-    assert scene.formations == [formation]
+    monkeypatch.setattr(
+        scene.sim.coin_spawner, "update", lambda dt, accept=None, interval_scale=1.0: [formation]
+    )
+    scene.step(InputFrame.NONE)
+    assert scene.sim.formations == [formation]
 
 
 # --- Spawn-Ausschluss Münzen <-> Gefahren -------------------------------------
@@ -233,47 +236,47 @@ def test_is_clear_respects_clearance() -> None:
 
 def test_game_scene_rejects_hazard_spawned_inside_coin_pattern(context: GameContext) -> None:
     scene = GameScene(context)
-    scene.formations.append(CoinFormation([_coin(800, 300)], bonus=5))
-    assert scene._accept_entity(_meteorite(800, 300)) is False
-    assert scene._accept_entity(_meteorite(800, 0)) is True
+    scene.sim.formations.append(CoinFormation([_coin(800, 300)], bonus=5))
+    assert scene.sim._accept_entity(_meteorite(800, 300)) is False
+    assert scene.sim._accept_entity(_meteorite(800, 0)) is True
     # Harmlose Pickups dürfen auf Münzen liegen.
     ammo = AmmoPickup(pygame.Rect(800, 300, 24, 24), speed_x=0.0)
-    assert scene._accept_entity(ammo) is True
+    assert scene.sim._accept_entity(ammo) is True
 
 
 def test_game_scene_rejects_coin_pattern_spawned_inside_hazard(context: GameContext) -> None:
     scene = GameScene(context)
-    scene.entities.append(_meteorite(780, 280))
+    scene.sim.entities.append(_meteorite(780, 280))
     clearance = COIN_HAZARD_CLEARANCE
-    assert scene._accept_formation(CoinFormation([_coin(800, 300)], bonus=5)) is False
-    assert scene._accept_formation(CoinFormation([_coin(800, 300 + 60 + clearance + 1)], 5))
+    assert scene.sim._accept_formation(CoinFormation([_coin(800, 300)], bonus=5)) is False
+    assert scene.sim._accept_formation(CoinFormation([_coin(800, 300 + 60 + clearance + 1)], 5))
 
 
 def test_game_scene_spawn_never_overlaps_coins(context: GameContext) -> None:
     # Volle Münz-Wand am rechten Rand: kein Gefahren-Spawn darf durchkommen.
     scene = GameScene(context)
     wall = [_coin(800, y) for y in range(0, 600, DIAMETER)]
-    scene.formations.append(CoinFormation(wall, bonus=0))
-    scene.entities.clear()
-    spawned = scene.spawner.update(10.0, accept=scene._accept_entity)
+    scene.sim.formations.append(CoinFormation(wall, bonus=0))
+    scene.sim.entities.clear()
+    spawned = scene.sim.spawner.update(10.0, accept=scene.sim._accept_entity)
     assert all(not entity.damages_player for entity in spawned)
 
 
 def test_game_scene_draws_coins_above_hazards(context: GameContext) -> None:
     scene = GameScene(context)
-    scene.entities.append(_meteorite(400 - 30, 300 - 30))
-    scene.formations.append(CoinFormation([_coin(400 - COIN_RADIUS, 300 - COIN_RADIUS)], 1))
+    scene.sim.entities.append(_meteorite(400 - 30, 300 - 30))
+    scene.sim.formations.append(CoinFormation([_coin(400 - COIN_RADIUS, 300 - COIN_RADIUS)], 1))
     scene.draw()
     assert context.screen.get_at((400, 300))[:3] == COIN_COLOR
 
 
 def test_game_scene_death_records_final_coins(context: GameContext) -> None:
     scene = GameScene(context)
-    scene.coins_collected = 7
-    scene.entities.append(
-        Meteorite(scene.player.rect.copy(), speed_x=0.0, hp=10, contact_damage=999)
+    scene.sim.coins_collected = 7
+    scene.sim.entities.append(
+        Meteorite(scene.sim.player.rect.copy(), speed_x=0.0, hp=10, contact_damage=999)
     )
-    scene.update(0.016)
+    scene.step(InputFrame.NONE)
     assert scene._transition is Transition.DEATH_SCREEN
     assert context.state.final_coins == 7
 
@@ -281,7 +284,7 @@ def test_game_scene_death_records_final_coins(context: GameContext) -> None:
 def test_game_scene_credits_wallet_on_exit(context: GameContext) -> None:
     context.state.progress.coins = 10
     scene = GameScene(context)
-    scene.coins_collected = 7
+    scene.sim.coins_collected = 7
     scene.on_exit()
     assert context.state.progress.coins == 17
 

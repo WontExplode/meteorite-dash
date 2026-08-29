@@ -21,6 +21,8 @@ immer mehr zurückgelegte Lichtjahre.
 - Zubehör wird pro Schiff in dessen Zubehörplätze gelegt und wirkt im Lauf
 - Game-Over-Screen mit finalem Score
 - dynamische Fenstergröße und Vollbild über einen gemeinsamen `Viewport`
+- deterministische Simulation: fester Zeitschritt, Seed pro Lauf
+  (`METEORITE_DASH_SEED` erzwingt einen), headless nachspielbar
 - Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
 
 ## Steuerung
@@ -55,6 +57,11 @@ src/meteorite_dash/
   assets.py            Asset-Pfade und Bild-Caching
   audio.py             Musik und Sounds
   score.py             Lightyears-Score
+  simulation.py        Deterministischer Spielkern (fester Tick, Seed-Streams, Events)
+  inputs.py            InputFrame: Eingaben als Bitmaske pro Tick
+  difficulty.py        Director-Vertrag (DifficultyParams) für den Schwierigkeitsgrad
+  headless.py          Simulation ohne Fenster abspielen (Tests, Replay-Prüfung)
+  mathutil.py          Plattformstabiler Sinus/Abstand für die Simulation
   entities.py          Gegner, Hindernisse und Munitions-Pickups
   projectiles.py       Spieler-Projektile
   weapons.py           Waffen-Loadout und Munitionslogik
@@ -108,3 +115,5 @@ git config core.hooksPath .githooks
   (Linux: `~/.local/share/meteorite-dash/`, Windows: `%APPDATA%`, macOS:
   `~/Library/Application Support`). `METEORITE_DASH_SAVE_DIR` überschreibt
   den Ordner.
+- `METEORITE_DASH_SEED=1234` startet jeden Lauf mit demselben Seed — gleiche
+  Eingaben ergeben dann exakt dieselbe Runde.

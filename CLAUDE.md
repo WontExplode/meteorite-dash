@@ -70,6 +70,12 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   (`ShipSpec.price`), Zubehör für die `accessory_slots` (Schild, Magnet,
   Extra-Munition, Panzerung — `accessories.py`) und Farbvarianten (`TINTS` in
   `ships.py`). Schiffsauswahl zeigt gesperrte Schiffe abgedunkelt mit Preis.
+- **Deterministische Simulation** (Issue #34): `Simulation` (`simulation.py`)
+  tickt mit festem `SIM_DT`, Zufall aus Seed-Streams, Eingaben als
+  `InputFrame`; jede Interaktion liefert ein `SimEvent` mit Snapshot
+  (HP/Munition/Score/Münzen). `headless.run` spielt Eingabefolgen ohne Fenster
+  ab, `state_hash()` beweist Gleichheit. Director-Vertrag (`difficulty.py`) für
+  #32/#33 steht.
 - Strikte Typprüfung, Linting, Tests, CI.
 
 **Noch NICHT vorhanden** (aus dem Spec — meist als GitHub-Issue getrackt):
@@ -77,7 +83,10 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Sammelbare Sterne** für Punkte (`StarField` ist nur Deko, nicht einsammelbar).
 - **Spezialwaffen-Pickups** (Loadout und Slot-Limit sind vorbereitet).
 - **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
-- **Steigende Schwierigkeit** über die Zeit (Speed ist momentan konstant).
+- **Steigende Schwierigkeit** über die Zeit (Vertrag in `difficulty.py`,
+  Umsetzung Issues #32/#33 — nicht Teil von #34).
+- Replay-Aufzeichnung, Ghost und Daily Run (Issue #34, Folge-PRs auf dem
+  Simulations-Kern).
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
   (Issue #10), Spieler-Stats (Issue #13), iOS/Android-Port (Issue #5).
 
@@ -135,7 +144,7 @@ main.main()                 Entry-Point, ruft App().run()
       ├─ MainMenu            Transition zurück → App wählt nächste Szene
       ├─ ShipSelection
       ├─ ShopScene          Münzen gegen Schiffe, Zubehör, Farben
-      ├─ GameScene          eigentlicher Spiel-Loop (Spieler, Spawner, Entities)
+      ├─ GameScene          Fixstep-Loop um `Simulation` (simulation.py) + Rendering
       └─ DeathScene         Game-Over-Screen mit finalem Lightyears-Score
 ```
 
@@ -188,10 +197,63 @@ jedes Objekt einen `RenderContext` (`render.py`: Surface, Viewport, optionaler
 das Sprite in genau dieser Größe aus dem Cache. Resize/Vollbild ändern damit nur
 das Bild, nie den Spielzustand — Grundlage für Determinismus und Replays.
 
+### Simulation & Determinismus (Issue #34)
+
+- `simulation.py`: `Simulation(RunConfig)` ist der komplette Lauf-Zustand —
+  Spieler, Loadout, Zubehör-Effekte, Spawner, Entities, Münzen, Projektile,
+  Score. `step(inputs: InputFrame)` rückt genau einen festen Tick `SIM_DT`
+  (`config.py`) vor; nach `DEATH` ist `step` ein No-op. Die Klasse kennt weder
+  Fenster, Wandzeit noch Tastatur.
+- **Seed-Streams:** `seeded(seed, "spawn" | "coins" | "director")` liefert je
+  Konsument einen eigenen `random.Random`. Neue Zufallsquelle = neuer Stream,
+  nie einen bestehenden mitbenutzen (sonst verschieben sich fremde Würfe).
+  `RunConfig(seed, ship, accessories)` beschreibt alles außer den Eingaben;
+  `pick_seed()` würfelt 32 Bit oder liest `METEORITE_DASH_SEED`.
+- **Eingaben:** `inputs.InputFrame` (IntFlag `UP | DOWN | FIRE | SWAP_WEAPON`).
+  `GameScene` baut pro Tick `from_pressed(keys) | pending` — `SWAP_WEAPON` ist
+  eine Flanke aus `KEYDOWN` und gilt genau einen Tick.
+- **Fester Zeitschritt:** `GameScene.update(dt)` akkumuliert Wandzeit und ruft
+  `step` bis zu `MAX_STEPS_PER_FRAME`-mal; Rest verfällt. Sternenfeld und
+  HUD-Fades laufen weiter mit Wandzeit — sie sind Deko.
+- **Events & Beweis:** jede Interaktion (`EventKind`: FIRED, HIT, DESTROYED,
+  AMMO_PICKUP, COIN, COIN_BONUS, SHIELD, CONTACT, DEATH) liefert ein `SimEvent`
+  mit `Snapshot(tick, hp, ammo, light_years, coins, shield)` **direkt nach**
+  der Interaktion plus `value` (Schaden/Münzen/Bonus). `GameScene` reagiert nur
+  darauf (Sound, Bonus-Hinweis, Death-Screen). `headless.run(config, inputs)`
+  spielt eine Eingabefolge ohne Display ab und liefert einen `Trace`;
+  `scripted_inputs(seed, ticks)` erzeugt reproduzierbare Pseudo-Eingaben.
+- **Hash:** `Simulation.state_hash()` = SHA-256 über `state_key()` — jedes
+  Objekt liefert seinen Zustand kanonisch (Floats als `.hex()`, RNG-Zustände
+  inklusive). Neues Zustandsfeld → in `state_key` aufnehmen.
+- **Plattformstabil:** im Sim-Pfad `mathutil.det_sin` / `det_hypot` statt
+  `math.sin` / `math.hypot` (libm darf im letzten Bit abweichen; Polynom und
+  `sqrt` nicht). Render-Code darf `math` weiter nutzen.
+- **`SIM_VERSION`** (`config.py`) bei jeder Regel-/Physik-/Spawn-Änderung
+  erhöhen; Replays tragen die Version.
+
+### Director-Vertrag (Issues #32/#33)
+
+`difficulty.py` legt fest, wie ein Schwierigkeits-Director andocken darf, ohne
+Replays zu brechen:
+
+- `Director.params(sim: SimulationView, rng) -> DifficultyParams` wird **jeden
+  Tick** aus `Simulation.step` gerufen; `rng` ist der Stream `<seed>:director`.
+  Kadenz zählt der Director über `sim.tick`, nie über Sekunden.
+- `DifficultyParams(speed_multiplier, spawn_interval_multiplier)`: die
+  Simulation wendet sie auf `Entity.update(..., speed_scale)` bzw.
+  `Spawner.update(..., interval_scale=)` an. Neue Stellgröße = neues Feld hier
+  + Anwendung in `step`.
+- Erlaubte Eingaben: alles aus `SimulationView` (Tick, Spieler, Loadout,
+  Entities, Münzen, Lightyears) und `rng`. Verboten: Wandzeit, FPS, Fenster,
+  `random` ohne Seed. Dann ist der Director automatisch replay-fähig
+  (Test-Muster: `test_director_keeps_replays_bit_identical`).
+- `ConstantDirector` ist der Platzhalter; Rampe (#32) und adaptiver Teil (#33)
+  ersetzen ihn über `Simulation(director=…)` und erhöhen `SIM_VERSION`.
+
 ### Entities & Spawner
 
 - `Entity` (ABC): hält eine `pygame.Rect`-Hitbox im Referenzraum, bewegt sich
-  pro `update(dt, player_y)` nach links. Subklassen überschreiben
+  pro `update(dt, player_y, speed_scale)` nach links. Subklassen überschreiben
   `_update_vertical` (Standard: keine vertikale Bewegung) und `draw(ctx)`.
   Entities halten **keine Surfaces** — `Meteorite` merkt sich nur den
   Bild-Dateinamen, `ctx.image` holt das Sprite beim Zeichnen.
@@ -204,15 +266,17 @@ das Bild, nie den Spielzustand — Grundlage für Determinismus und Replays.
 - Meteoriten-Größen und Bildvarianten liegen zentral in `METEORITE_VARIANTS`;
   neue Varianten dort ergänzen und weiter über `spawn_meteorite` erzeugen.
 - `Spawner[T]` zieht timergesteuert aus einer **gewichteten Tabelle**
-  (`SpawnEntry[T]`). Generisch über den Spawn-Typ: `GameScene` hält zwei
-  Instanzen mit eigenem Timer — Gegner (`Entity`) und Münz-Formationen
-  (`CoinFormation`) —, damit Münzen die Gegner-Gewichte nicht verwässern.
-  Neuer Gegnertyp = neue `Entity`-Subklasse + `spawn_*`-Fabrik + Eintrag in
-  `scenes/game.SPAWN_TABLE`. Munitions-Pickups folgen demselben Muster.
-- `Spawner.update(dt, accept=...)` nimmt ein optionales Prädikat: abgelehnte
-  Kandidaten werden bis `SPAWN_MAX_ATTEMPTS` neu gewürfelt, danach fällt der
-  Spawn aus. `GameScene` nutzt das für den gegenseitigen Ausschluss von
-  Gefahren und Münz-Mustern (siehe Münzen).
+  (`SpawnEntry[T]`). Generisch über den Spawn-Typ: `Simulation` hält zwei
+  Instanzen mit eigenem Timer und eigenem Seed-Stream — Gegner (`Entity`) und
+  Münz-Formationen (`CoinFormation`) —, damit Münzen die Gegner-Gewichte nicht
+  verwässern. Neuer Gegnertyp = neue `Entity`-Subklasse + `spawn_*`-Fabrik +
+  Eintrag in `simulation.SPAWN_TABLE`. Munitions-Pickups folgen demselben
+  Muster.
+- `Spawner.update(dt, accept=..., interval_scale=...)` nimmt ein optionales
+  Prädikat: abgelehnte Kandidaten werden bis `SPAWN_MAX_ATTEMPTS` neu
+  gewürfelt, danach fällt der Spawn aus. `Simulation` nutzt das für den
+  gegenseitigen Ausschluss von Gefahren und Münz-Mustern (siehe Münzen);
+  `interval_scale` ist die Director-Stellgröße.
 
 ### Waffen & Munition
 
@@ -225,7 +289,8 @@ das Bild, nie den Spielzustand — Grundlage für Determinismus und Replays.
   `is_off_screen` prüft gegen die Referenzbreite.
 - `AmmoPickup` ist eine harmlose `Entity`-Subklasse (`damages_player = False`);
   Aufsammeln füllt die Standardwaffe über `WeaponLoadout.refill_standard()`.
-- `GameScene` steuert Feuern (`Space`, Cooldown), Waffenwechsel (`R`) und HUD.
+- `Simulation` steuert Feuern (`InputFrame.FIRE`, Cooldown) und Waffenwechsel
+  (`SWAP_WEAPON`-Flanke); `GameScene` übersetzt Tasten und zeichnet das HUD.
 
 ### Kampf
 
@@ -247,11 +312,11 @@ das Bild, nie den Spielzustand — Grundlage für Determinismus und Replays.
 - `CoinFormation` bewegt/zeichnet seine Münzen als Einheit, zählt `collected`
   und `missed`; `collect(player_rect)` liefert ein `Pickup(coins, bonus)` — der
   Bonus fällt nur, wenn alle Münzen geholt und keine verpasst wurden.
-- Münzen leben in `GameScene.formations`, **getrennt** von den tödlichen
+- Münzen leben in `Simulation.formations`, **getrennt** von den tödlichen
   `entities`. Muster-Tabelle (`COIN_PATTERNS`: Name, Gewicht, Bonus) und alle
   Abstände/Farben liegen in `config.py`.
 - **Spawn-Ausschluss:** Münzen und Meteoriten sind gleich schnell — eine
-  Überlappung beim Spawn bliebe dauerhaft. `GameScene._accept_entity` /
+  Überlappung beim Spawn bliebe dauerhaft. `Simulation._accept_entity` /
   `_accept_formation` lehnen deshalb Gefahren in laufenden Mustern und Muster
   in Gefahren ab (`is_clear`, Abstand `COIN_HAZARD_CLEARANCE`). Harmlose
   Pickups sind ausgenommen. Zeichenreihenfolge: Gefahren, dann Münzen darüber.
@@ -277,7 +342,8 @@ das Bild, nie den Spielzustand — Grundlage für Determinismus und Replays.
   `ShipSpec.accessory_slots`. Farben ebenso: einmal kaufen, pro Schiff
   wählen; `Progress.ship_tint(spec)` liefert die effektive Färbung (gekaufte
   Farbe oder `ShipSpec.tint`).
-- Effekte wendet `GameScene._build` an: Panzerung → `Player(extra_hp=…)`,
+- Effekte wendet `Simulation.__init__` aus der `RunConfig` an (Zubehör-IDs
+  liefert `GameScene.run_config`): Panzerung → `Player(extra_hp=…)`,
   Extra-Munition → `WeaponLoadout(standard_ammo_bonus=…)`, Schild →
   `shield_charges` + `combat.absorb_contact` (blockt Treffer ohne Schaden,
   HUD `SCHILD xN`), Magnet → `CoinFormation.attract` zieht Münzen im Radius
@@ -306,12 +372,13 @@ das Bild, nie den Spielzustand — Grundlage für Determinismus und Replays.
 - `rate_multiplier` ist der Erweiterungspunkt für spätere Speed-Phasen,
   Meilensteine oder Boss-Abschnitte.
 - `GameScene` rendert den Score als transparentes HUD (`LIGHTYRS ...`) über den
-  `Viewport` und schreibt bei Kollision `state.final_light_years`.
+  `Viewport` und schreibt beim `DEATH`-Event `state.final_light_years`.
 - `DeathScene` liest `state.final_light_years` und `state.final_coins` und zeigt
   beide auf dem Game-Over-Screen.
-- Münzen: `GameScene.coins_collected` (inkl. Boni) → HUD `COINS ...` plus
-  kurzer `BONUS +n`-Hinweis; bei Tod nach `state.final_coins`, in `on_exit`
-  (auch bei Escape) auf `state.progress.coins` addiert und gespeichert.
+- Münzen: `Simulation.coins_collected` (inkl. Boni) → HUD `COINS ...` plus
+  kurzer `BONUS +n`-Hinweis aus dem `COIN_BONUS`-Event; bei Tod nach
+  `state.final_coins`, in `on_exit` (auch bei Escape) auf `state.progress.coins`
+  addiert und gespeichert.
 
 ---
 
@@ -328,10 +395,13 @@ das Bild, nie den Spielzustand — Grundlage für Determinismus und Replays.
 4. **Logik im Referenzraum, Rendering über `RenderContext`/`Viewport`** (siehe
    §5). Fensterpixel gehören nur in `draw`-Methoden und HUD-Code.
    Resize/Vollbild müssen weiter funktionieren.
-5. **Determinismus für Testbarkeit.** Zufall immer über ein injiziertes
-   `random.Random`. Reine Spiel-Logik (Bewegung, Kollision, Spawn) ohne harte
-   Display-Abhängigkeit halten, damit sie headless testbar bleibt.
-6. **dt-basierte Bewegung** beibehalten — nichts an feste FPS koppeln.
+5. **Determinismus ist Pflicht.** Zufall nur aus den Seed-Streams der
+   `Simulation` (`seeded(seed, stream)`), im Sim-Pfad `mathutil.det_sin` /
+   `det_hypot` statt `math`, keine Wandzeit, keine Fensterpixel. Reine
+   Spiel-Logik bleibt ohne Display headless testbar (`headless.run`).
+6. **dt-basierte Bewegung mit festem `SIM_DT`.** Logik bekommt `dt` nur aus
+   `Simulation.step`; nichts an FPS oder Wandzeit koppeln. Render-Deko
+   (Sternenfeld, HUD-Fades) darf Wandzeit nutzen.
 7. **Kleine, fokussierte Module.** Dem bestehenden Schnitt folgen (eine
    Verantwortung pro Datei). Render-Code von reiner Logik trennen.
 8. **Sprache:** Prosa/Kommentare/UI auf Deutsch, **Bezeichner auf Englisch** —
@@ -345,21 +415,29 @@ das Bild, nie den Spielzustand — Grundlage für Determinismus und Replays.
 
 ### Neues Feature — typische Schritte
 
-- **Gegner/Hindernis:** `Entity`-Subklasse mit `draw(ctx)` → `spawn_*`-Fabrik
-  `(rng, area)` → Gewicht in `scenes/game.SPAWN_TABLE` → Logik-Test mit
-  gesetztem Seed.
+- **Gegner/Hindernis:** `Entity`-Subklasse mit `draw(ctx)` und ggf.
+  `state_key()` → `spawn_*`-Fabrik `(rng, area)` → Gewicht in
+  `simulation.SPAWN_TABLE` → Logik-Test mit gesetztem Seed → `SIM_VERSION`
+  erhöhen.
 - **Waffe/Pickup:** Konstanten in `config.py`, Logik in `weapons.py` /
-  `projectiles.py`, Integration in `GameScene`.
+  `projectiles.py`, Integration in `Simulation.step` (+ passender `EventKind`),
+  Sound/HUD in `GameScene._on_event`.
+- **Director (#32/#33):** Klasse mit `params(sim, rng) -> DifficultyParams`
+  (Protokoll in `difficulty.py`), über `Simulation(director=…)` einhängen,
+  `SIM_VERSION` erhöhen, Replay-Test nach dem Muster
+  `test_director_keeps_replays_bit_identical`.
 - **Szene/Screen** (z. B. Game-Over, Issue #15): `Scene`-Subklasse +
   `Transition` + Verdrahtung in `App._create_scene`.
-- **Spielzustand** (Leben/Munition/Highscore): Felder in `GameState`, in
-  `GameScene` fortschreiben, über `Viewport`-Schrift im HUD rendern.
+- **Spielzustand:** Lauf-Zustand in `Simulation` (in `state_key` und ggf.
+  `Snapshot` aufnehmen), Session-Felder in `GameState`, Persistentes in
+  `Progress`; HUD in `GameScene` über `Viewport`-Schrift.
 - **Münz-Muster:** Layout-Funktion in `coins.py` + Eintrag in `LAYOUTS` +
   `CoinPatternSpec` in `COIN_PATTERNS` (`config.py`) → Test in
   `tests/test_coins.py` (Determinismus, passt ins Fenster).
 - **Zubehör:** `AccessoryKind` + `AccessorySpec` in `accessories.py`,
-  Effektstärke in `config.py`, Effekt in `GameScene._build` (oder als reine
-  Funktion in `combat.py` / `coins.py`) → Tests in `tests/test_shop.py`.
+  Effektstärke in `config.py`, Effekt in `Simulation.__init__` / `step` (oder
+  als reine Funktion in `combat.py` / `coins.py`) → Tests in
+  `tests/test_shop.py`.
   `Progress` braucht keine Änderung — IDs kommen aus dem Katalog.
 - **Shop-Artikel / Farbe:** `TintSpec` in `ships.TINTS` bzw. `price` am
   `ShipSpec`; Persistenz übernimmt neue IDs automatisch, alte Speicherstände
@@ -375,9 +453,12 @@ das Bild, nie den Spielzustand — Grundlage für Determinismus und Replays.
   Tests ohne Display/Audio laufen. In CI sind dieselben Variablen für den
   pytest-Schritt gesetzt. Bei neuem display-/audio-berührendem Test denselben
   Weg nutzen.
-- Muster: `FakeKeys` für Tastatur, gesetzter RNG-Seed, `context`-Fixture baut
-  einen vollständigen `GameContext` **ohne** `store` (kein Datei-Zugriff).
-  Logik (`test_logic.py`), Münzen (`test_coins.py`), Fortschritt/Persistenz
+- Muster: Eingaben als `InputFrame` direkt in `sim.step(...)` bzw.
+  `scene.step(...)` (keine Tastatur-Monkeypatches), `GameScene(context, seed=…)`
+  für reproduzierbare Szenen, `headless.run` + `scripted_inputs` für lange
+  Läufe, `context`-Fixture baut einen vollständigen `GameContext` **ohne**
+  `store` (kein Datei-Zugriff). Logik (`test_logic.py`), Simulation/Determinismus
+  (`test_simulation.py`), Münzen (`test_coins.py`), Fortschritt/Persistenz
   (`test_progress.py`, mit `tmp_path`), Shop/Zubehör (`test_shop.py`) und
   Skalierung/Resize (`test_viewport.py`) sind getrennt.
 - Neue Spiel-Logik braucht einen Test. Reine Funktionen bevorzugen, die ohne
@@ -430,3 +511,9 @@ oben); defensiv bleiben, sobald nutzergelieferte Inhalte dazukommen.
 - **Kein Fenstermaß in der Logik.** `Player`, Entities und Spawner kennen nur
   `REFERENCE_SIZE`; wer `screen.get_size()` in Spiellogik zieht, bricht
   Determinismus und Replays. `GameScene` braucht deshalb kein `on_resize`.
+- **Sim-Pfad ist heilig.** `math.sin`/`math.hypot`, `time`, `pygame.key`,
+  ungeseedeter `random` und Set-Iteration haben in `simulation.py`,
+  `entities.py`, `coins.py`, `player.py`, `spawner.py`, `combat.py` nichts
+  verloren — sonst laufen Replays auseinander. Regeländerung → `SIM_VERSION`.
+- **Exakte Tick-Vielfache im Test:** `scene.update(3 * SIM_DT)` liefert dank
+  `_STEP_EPSILON` drei Ticks; ohne den Epsilon frisst Float-Rundung einen.

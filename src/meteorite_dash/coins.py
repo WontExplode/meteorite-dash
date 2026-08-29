@@ -31,6 +31,7 @@ from meteorite_dash.config import (
     CoinPatternSpec,
 )
 from meteorite_dash.entities import Entity
+from meteorite_dash.mathutil import det_hypot, det_sin
 from meteorite_dash.render import RenderContext
 
 Offset = tuple[float, float]
@@ -66,15 +67,18 @@ class Coin(Entity):
     def damages_player(self) -> bool:
         return False
 
-    def update(self, dt: float, player_y: int) -> None:
-        super().update(dt, player_y)
+    def update(self, dt: float, player_y: int, speed_scale: float = 1.0) -> None:
+        super().update(dt, player_y, speed_scale)
         self._elapsed += dt
+
+    def state_key(self) -> tuple[object, ...]:
+        return (*super().state_key(), self.value, self._elapsed.hex())
 
     def pull_toward(self, target: tuple[int, int], step: float) -> None:
         """Zieht die Münze um höchstens `step` px auf `target` zu (Magnet-Zubehör)."""
         dx = target[0] - self.rect.centerx
         dy = target[1] - self.rect.centery
-        distance = math.hypot(dx, dy)
+        distance = det_hypot(dx, dy)
         if distance == 0:
             return
         factor = min(1.0, step / distance)
@@ -107,7 +111,7 @@ def _line(rng: random.Random) -> list[Offset]:
 def _wave(rng: random.Random) -> list[Offset]:
     count = rng.randint(8, 12)
     return [
-        (i * COIN_SPACING, COIN_WAVE_AMPLITUDE * math.sin(2 * math.pi * i / (count - 1)))
+        (i * COIN_SPACING, COIN_WAVE_AMPLITUDE * det_sin(2 * math.pi * i / (count - 1)))
         for i in range(count)
     ]
 
@@ -116,7 +120,7 @@ def _arc(rng: random.Random) -> list[Offset]:
     count = rng.randint(6, 9)
     direction = rng.choice((-1.0, 1.0))
     return [
-        (i * COIN_SPACING, direction * COIN_ARC_HEIGHT * math.sin(math.pi * i / (count - 1)))
+        (i * COIN_SPACING, direction * COIN_ARC_HEIGHT * det_sin(math.pi * i / (count - 1)))
         for i in range(count)
     ]
 
@@ -179,10 +183,10 @@ class CoinFormation:
     def is_finished(self) -> bool:
         return not self.coins
 
-    def update(self, dt: float, player_y: int) -> None:
+    def update(self, dt: float, player_y: int, speed_scale: float = 1.0) -> None:
         remaining: list[Coin] = []
         for coin in self.coins:
-            coin.update(dt, player_y)
+            coin.update(dt, player_y, speed_scale)
             if coin.is_off_screen:
                 self.missed += 1
             else:
@@ -192,7 +196,7 @@ class CoinFormation:
     def attract(self, target: tuple[int, int], radius: float, step: float) -> None:
         """Zieht alle Münzen im Umkreis `radius` um `target` um `step` px heran."""
         for coin in self.coins:
-            if math.hypot(target[0] - coin.rect.centerx, target[1] - coin.rect.centery) <= radius:
+            if det_hypot(target[0] - coin.rect.centerx, target[1] - coin.rect.centery) <= radius:
                 coin.pull_toward(target, step)
 
     def collect(self, player_rect: pygame.Rect) -> Pickup:
@@ -211,6 +215,14 @@ class CoinFormation:
     def draw(self, ctx: RenderContext) -> None:
         for coin in self.coins:
             coin.draw(ctx)
+
+    def state_key(self) -> tuple[object, ...]:
+        return (
+            tuple(coin.state_key() for coin in self.coins),
+            self.bonus,
+            self.collected,
+            self.missed,
+        )
 
 
 def coin_rects(formations: Iterable[CoinFormation]) -> list[pygame.Rect]:

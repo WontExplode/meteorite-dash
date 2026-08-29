@@ -181,3 +181,17 @@ SHIELD_HUD_COLOR: Color = (120, 200, 255)
 SHOP_FEEDBACK_SECONDS = 2.5
 SHOP_TAB_FONT_SIZE = 28
 LOCKED_PREVIEW_ALPHA = 90
+
+# --- Simulation & Determinismus (Issue #34) ---
+# Fester Zeitschritt: jede Runde tickt exakt hiermit, egal wie schnell das
+# Fenster rendert. Wandzeit bestimmt nur, wie viele Ticks pro Frame laufen.
+SIM_TICKS_PER_SECOND = 60
+SIM_DT = 1.0 / SIM_TICKS_PER_SECOND
+# Deckel gegen die Todesspirale nach einem Hänger; überschüssige Zeit verfällt.
+MAX_STEPS_PER_FRAME = 5
+# Bei jeder Änderung an Spielregeln/Physik/Spawn erhöhen: Replays älterer
+# Versionen bleiben lesbar, werden aber nicht mehr als Ghost/Referenz benutzt.
+SIM_VERSION = 1
+# Seeds sind 32-Bit-Zahlen — kurz genug zum Abtippen ("Rennen gegen Freunde").
+SEED_BITS = 32
+SEED_ENV = "METEORITE_DASH_SEED"
