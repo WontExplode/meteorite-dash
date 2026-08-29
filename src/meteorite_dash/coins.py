@@ -8,7 +8,7 @@ Komplettierung einmalig den Bonus auszahlt.
 
 import math
 import random
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Sequence
 from typing import NamedTuple
 
 import pygame
@@ -189,6 +189,24 @@ class CoinFormation:
     def draw(self, surface: pygame.Surface) -> None:
         for coin in self.coins:
             coin.draw(surface)
+
+
+def coin_rects(formations: Iterable[CoinFormation]) -> list[pygame.Rect]:
+    return [coin.rect for formation in formations for coin in formation.coins]
+
+
+def is_clear(
+    rects: Iterable[pygame.Rect],
+    obstacles: Sequence[pygame.Rect],
+    clearance: int,
+) -> bool:
+    """True, wenn keines der `rects` — um `clearance` aufgeblasen — ein Hindernis berührt.
+
+    Spawn-Prüfung in beide Richtungen: Gefahr gegen laufende Münz-Muster und
+    neues Münz-Muster gegen Gefahren am rechten Rand.
+    """
+    grow = 2 * clearance
+    return all(rect.inflate(grow, grow).collidelist(obstacles) == -1 for rect in rects)
 
 
 def spawn_coin_formation(

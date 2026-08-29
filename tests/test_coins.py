@@ -8,19 +8,22 @@ from meteorite_dash.coins import (
     Coin,
     CoinFormation,
     Pickup,
+    coin_rects,
+    is_clear,
     layout_for,
     spawn_coin_formation,
 )
 from meteorite_dash.config import (
     COIN_BONUS_NOTICE_SECONDS,
     COIN_COLOR,
+    COIN_HAZARD_CLEARANCE,
     COIN_PATTERNS,
     COIN_RADIUS,
     COIN_SPAWN_INTERVAL_RANGE,
     CoinPatternSpec,
 )
 from meteorite_dash.context import GameContext
-from meteorite_dash.entities import Meteorite
+from meteorite_dash.entities import AmmoPickup, Meteorite
 from meteorite_dash.scenes.base import Transition
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.score import format_coins
@@ -34,6 +37,10 @@ def _coin(x: int, y: int, speed_x: float = 0.0) -> Coin:
 
 def _pattern(name: str, bonus: int = 5) -> CoinPatternSpec:
     return CoinPatternSpec(name, 1.0, bonus)
+
+
+def _meteorite(x: int, y: int, size: int = 60) -> Meteorite:
+    return Meteorite(pygame.Rect(x, y, size, size), speed_x=0.0, hp=10, contact_damage=15)
 
 
 # --- Layouts ---------------------------------------------------------------
@@ -210,9 +217,63 @@ def test_game_scene_adds_spawned_formations(
 ) -> None:
     scene = GameScene(context)
     formation = CoinFormation([_coin(700, 500)], bonus=5)
-    monkeypatch.setattr(scene.coin_spawner, "update", lambda dt: [formation])
+    monkeypatch.setattr(scene.coin_spawner, "update", lambda dt, accept=None: [formation])
     scene.update(0.016)
     assert scene.formations == [formation]
+
+
+# --- Spawn-Ausschluss Münzen <-> Gefahren -------------------------------------
+
+
+def test_coin_rects_collects_all_remaining_coins() -> None:
+    first = CoinFormation([_coin(0, 0), _coin(40, 0)], bonus=1)
+    second = CoinFormation([_coin(80, 0)], bonus=1)
+    assert coin_rects([first, second]) == [c.rect for c in [*first.coins, *second.coins]]
+    assert coin_rects([]) == []
+
+
+def test_is_clear_respects_clearance() -> None:
+    coin = pygame.Rect(100, 100, DIAMETER, DIAMETER)
+    near = pygame.Rect(coin.right + 5, 100, 60, 60)
+    assert is_clear([coin], [near], clearance=0) is True
+    assert is_clear([coin], [near], clearance=8) is False
+    assert is_clear([coin], [], clearance=50) is True
+
+
+def test_game_scene_rejects_hazard_spawned_inside_coin_pattern(context: GameContext) -> None:
+    scene = GameScene(context)
+    scene.formations.append(CoinFormation([_coin(800, 300)], bonus=5))
+    assert scene._accept_entity(_meteorite(800, 300)) is False
+    assert scene._accept_entity(_meteorite(800, 0)) is True
+    # Harmlose Pickups dürfen auf Münzen liegen.
+    ammo = AmmoPickup(pygame.Rect(800, 300, 24, 24), speed_x=0.0)
+    assert scene._accept_entity(ammo) is True
+
+
+def test_game_scene_rejects_coin_pattern_spawned_inside_hazard(context: GameContext) -> None:
+    scene = GameScene(context)
+    scene.entities.append(_meteorite(780, 280))
+    clearance = COIN_HAZARD_CLEARANCE
+    assert scene._accept_formation(CoinFormation([_coin(800, 300)], bonus=5)) is False
+    assert scene._accept_formation(CoinFormation([_coin(800, 300 + 60 + clearance + 1)], 5))
+
+
+def test_game_scene_spawn_never_overlaps_coins(context: GameContext) -> None:
+    # Volle Münz-Wand am rechten Rand: kein Gefahren-Spawn darf durchkommen.
+    scene = GameScene(context)
+    wall = [_coin(800, y) for y in range(0, 600, DIAMETER)]
+    scene.formations.append(CoinFormation(wall, bonus=0))
+    scene.entities.clear()
+    spawned = scene.spawner.update(10.0, accept=scene._accept_entity)
+    assert all(not entity.damages_player for entity in spawned)
+
+
+def test_game_scene_draws_coins_above_hazards(context: GameContext) -> None:
+    scene = GameScene(context)
+    scene.entities.append(_meteorite(400 - 30, 300 - 30))
+    scene.formations.append(CoinFormation([_coin(400 - COIN_RADIUS, 300 - COIN_RADIUS)], 1))
+    scene.draw()
+    assert context.screen.get_at((400, 300))[:3] == COIN_COLOR
 
 
 def test_game_scene_death_records_final_coins(context: GameContext) -> None:

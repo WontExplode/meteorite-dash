@@ -4,7 +4,7 @@ import random
 import pygame
 
 from meteorite_dash.audio import GAME_MUSIC_ENDED
-from meteorite_dash.coins import CoinFormation, spawn_coin_formation
+from meteorite_dash.coins import CoinFormation, coin_rects, is_clear, spawn_coin_formation
 from meteorite_dash.combat import apply_contact_damage, resolve_projectile_hits
 from meteorite_dash.config import (
     AMMO_PICKUP_WEIGHT,
@@ -12,6 +12,7 @@ from meteorite_dash.config import (
     COIN_BONUS_NOTICE_SECONDS,
     COIN_BONUS_TOP_RIGHT,
     COIN_COLOR,
+    COIN_HAZARD_CLEARANCE,
     COIN_PATTERNS,
     COIN_SPAWN_INTERVAL_RANGE,
     COINS_TOP_RIGHT,
@@ -157,7 +158,7 @@ class GameScene(Scene):
         self.score.update(dt)
         self._update_shooting(dt, keys)
 
-        self.entities.extend(self.spawner.update(dt))
+        self.entities.extend(self.spawner.update(dt, accept=self._accept_entity))
         player_y = self.player.rect.centery
         for entity in self.entities:
             entity.update(dt, player_y)
@@ -200,8 +201,23 @@ class GameScene(Scene):
         if fired_spec.sound is not None:
             self.context.music.play_sound_effect(fired_spec.sound)
 
+    def _clearance(self) -> int:
+        return round(COIN_HAZARD_CLEARANCE * self.context.viewport.scale)
+
+    def _hazard_rects(self) -> list[pygame.Rect]:
+        return [entity.rect for entity in self.entities if entity.damages_player]
+
+    def _accept_entity(self, entity: Entity) -> bool:
+        """Gefahren spawnen nicht in ein Münz-Muster: gleich schnell → sonst dauerhaft verdeckt."""
+        if not entity.damages_player:
+            return True
+        return is_clear([entity.rect], coin_rects(self.formations), self._clearance())
+
+    def _accept_formation(self, formation: CoinFormation) -> bool:
+        return is_clear(coin_rects([formation]), self._hazard_rects(), self._clearance())
+
     def _update_coins(self, dt: float, player_y: int) -> None:
-        self.formations.extend(self.coin_spawner.update(dt))
+        self.formations.extend(self.coin_spawner.update(dt, accept=self._accept_formation))
         for formation in self.formations:
             formation.update(dt, player_y)
             pickup = formation.collect(self.player.rect)
@@ -215,10 +231,12 @@ class GameScene(Scene):
     def draw(self) -> None:
         self.context.screen.fill(BACKGROUND_COLOR)
         self.context.starfield.draw(self.context.screen)
-        for formation in self.formations:
-            formation.draw(self.context.screen)
         for entity in self.entities:
             entity.draw(self.context.screen)
+        # Münzen über den Gefahren: Collectibles bleiben sichtbar, auch wenn ein
+        # langsamerer Gegner kurz überholt wird.
+        for formation in self.formations:
+            formation.draw(self.context.screen)
         for projectile in self.projectiles:
             projectile.draw(self.context.screen)
         self.player.draw(self.context.screen)

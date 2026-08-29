@@ -95,6 +95,9 @@ SPAWN_INTERVAL_RANGE: tuple[float, float] = (0.6, 1.4)
 METEORITE_WEIGHT = 8.0
 WAVE_ENEMY_WEIGHT = 2.0
 HUNTER_ENEMY_WEIGHT = 0.5
+# Spawn-Würfe, die ein `accept`-Prädikat ablehnt, werden so oft wiederholt;
+# danach fällt der Spawn aus.
+SPAWN_MAX_ATTEMPTS = 5
 
 AMMO_PICKUP_WEIGHT = 1.5
 
@@ -140,6 +143,9 @@ COIN_SPIN_HZ = 1.5
 COIN_SPIN_PHASE_STEP = 0.4
 COIN_MIN_SPIN_WIDTH = 0.3  # Anteil des Durchmessers bei Kantenansicht
 COIN_SPAWN_INTERVAL_RANGE: tuple[float, float] = (2.0, 4.5)
+# Mindestabstand (Referenz-px) zwischen Münzen und Gefahren beim Spawn. Münzen
+# und Meteoriten sind gleich schnell — eine Überlappung bliebe sonst dauerhaft.
+COIN_HAZARD_CLEARANCE = 12
 COIN_PATTERNS: tuple[CoinPatternSpec, ...] = (
     CoinPatternSpec("line", 4.0, 3),
     CoinPatternSpec("wave", 3.0, 5),

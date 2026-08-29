@@ -190,6 +190,10 @@ fenster-unabhängig bleibt.
   (`CoinFormation`) —, damit Münzen die Gegner-Gewichte nicht verwässern.
   Neuer Gegnertyp = neue `Entity`-Subklasse + `spawn_*`-Fabrik + Eintrag in
   `GameScene._spawn_table`. Munitions-Pickups folgen demselben Muster.
+- `Spawner.update(dt, accept=...)` nimmt ein optionales Prädikat: abgelehnte
+  Kandidaten werden bis `SPAWN_MAX_ATTEMPTS` neu gewürfelt, danach fällt der
+  Spawn aus. `GameScene` nutzt das für den gegenseitigen Ausschluss von
+  Gefahren und Münz-Mustern (siehe Münzen).
 
 ### Waffen & Munition
 
@@ -225,6 +229,11 @@ fenster-unabhängig bleibt.
 - Münzen leben in `GameScene.formations`, **getrennt** von den tödlichen
   `entities`. Muster-Tabelle (`COIN_PATTERNS`: Name, Gewicht, Bonus) und alle
   Abstände/Farben liegen in `config.py`.
+- **Spawn-Ausschluss:** Münzen und Meteoriten sind gleich schnell — eine
+  Überlappung beim Spawn bliebe dauerhaft. `GameScene._accept_entity` /
+  `_accept_formation` lehnen deshalb Gefahren in laufenden Mustern und Muster
+  in Gefahren ab (`is_clear`, Abstand `COIN_HAZARD_CLEARANCE`). Harmlose
+  Pickups sind ausgenommen. Zeichenreihenfolge: Gefahren, dann Münzen darüber.
 
 ### Assets & Audio
 

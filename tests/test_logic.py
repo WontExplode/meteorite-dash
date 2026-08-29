@@ -363,6 +363,40 @@ def test_spawner_multiple_spawns_in_one_update() -> None:
     assert len(spawner.update(3.5)) == 3
 
 
+def test_spawner_retries_rejected_candidates() -> None:
+    spawner = Spawner([SpawnEntry(1.0, _fake_factory)], (800, 600), random.Random(0), (1.0, 1.0))
+    seen: list[Meteorite] = []
+
+    def accept(candidate: Meteorite) -> bool:
+        seen.append(candidate)
+        return len(seen) == 2
+
+    spawned = spawner.update(1.0, accept=accept)
+    assert len(seen) == 2
+    assert spawned == [seen[1]]
+
+
+def test_spawner_skips_spawn_after_max_attempts() -> None:
+    spawner = Spawner(
+        [SpawnEntry(1.0, _fake_factory)],
+        (800, 600),
+        random.Random(0),
+        (1.0, 1.0),
+        max_attempts=3,
+    )
+    attempts = 0
+
+    def reject(candidate: Meteorite) -> bool:
+        nonlocal attempts
+        attempts += 1
+        return False
+
+    assert spawner.update(1.0, accept=reject) == []
+    assert attempts == 3
+    # Timer läuft normal weiter: der nächste Wurf ist wieder frei.
+    assert len(spawner.update(1.0)) == 1
+
+
 def test_game_scene_collision_opens_death_screen(context: GameContext) -> None:
     scene = GameScene(context)
     scene.score.light_years = 42.0
@@ -505,7 +539,7 @@ def test_game_scene_fires_projectile(
     monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys({pygame.K_SPACE}))
     scene = GameScene(context)
     # Spawner stumm: ein zufällig gespawnter Meteorit könnte das Projektil verbrauchen.
-    monkeypatch.setattr(scene.spawner, "update", lambda dt: [])
+    monkeypatch.setattr(scene.spawner, "update", lambda dt, accept=None: [])
     scene.update(1.0)
     assert len(scene.projectiles) == 1
     assert scene.loadout.active.ammo == STANDARD_WEAPON.max_ammo - 1
