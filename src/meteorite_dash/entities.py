@@ -5,7 +5,6 @@ from collections.abc import Iterable
 
 import pygame
 
-from meteorite_dash.assets import AssetLoader
 from meteorite_dash.config import (
     AMMO_PICKUP_COLOR,
     AMMO_PICKUP_HIGHLIGHT_COLOR,
@@ -28,10 +27,15 @@ from meteorite_dash.config import (
     WAVE_FREQUENCY,
     Color,
 )
+from meteorite_dash.render import RenderContext
 
 
 class Entity(ABC):
-    """Basis für alles, was von rechts nach links fliegt. `rect` ist die Hitbox."""
+    """Basis für alles, was von rechts nach links fliegt. `rect` ist die Hitbox.
+
+    Alle Koordinaten liegen im Referenzraum (`REFERENCE_SIZE`); erst `draw`
+    übersetzt über den `RenderContext` ins Fenster.
+    """
 
     def __init__(self, rect: pygame.Rect, speed_x: float) -> None:
         self.rect = rect
@@ -57,7 +61,7 @@ class Entity(ABC):
         """Standard: keine vertikale Bewegung; Subklassen überschreiben dies."""
 
     @abstractmethod
-    def draw(self, surface: pygame.Surface) -> None:
+    def draw(self, ctx: RenderContext) -> None:
         raise NotImplementedError
 
 
@@ -85,21 +89,24 @@ class Meteorite(DamageableEntity):
         self,
         rect: pygame.Rect,
         speed_x: float,
-        image: pygame.Surface | None = None,
+        image_name: str | None = None,
         *,
         hp: int,
         contact_damage: int,
     ) -> None:
         super().__init__(rect, speed_x, hp=hp, contact_damage=contact_damage)
-        self.image = image
+        # Nur der Dateiname: die Surface holt der RenderContext in Fenstergröße.
+        self.image_name = image_name
 
-    def draw(self, surface: pygame.Surface) -> None:
-        if self.image is not None:
-            surface.blit(self.image, self.rect)
+    def draw(self, ctx: RenderContext) -> None:
+        target = ctx.rect(self.rect)
+        image = ctx.image(self.image_name, target.size) if self.image_name else None
+        if image is not None:
+            ctx.surface.blit(image, target)
             return
 
-        radius = max(1, self.rect.width // 2)
-        pygame.draw.circle(surface, METEORITE_COLOR, self.rect.center, radius)
+        radius = max(1, target.width // 2)
+        pygame.draw.circle(ctx.surface, METEORITE_COLOR, target.center, radius)
 
 
 class WaveEnemy(DamageableEntity):
@@ -125,8 +132,8 @@ class WaveEnemy(DamageableEntity):
             2 * math.pi * self._frequency * self._elapsed
         )
 
-    def draw(self, surface: pygame.Surface) -> None:
-        _draw_left_triangle(surface, self.rect, WAVE_ENEMY_COLOR)
+    def draw(self, ctx: RenderContext) -> None:
+        _draw_left_triangle(ctx.surface, ctx.rect(self.rect), WAVE_ENEMY_COLOR)
 
 
 class HunterEnemy(DamageableEntity):
@@ -152,8 +159,8 @@ class HunterEnemy(DamageableEntity):
         else:
             self._y -= step
 
-    def draw(self, surface: pygame.Surface) -> None:
-        _draw_left_triangle(surface, self.rect, HUNTER_ENEMY_COLOR)
+    def draw(self, ctx: RenderContext) -> None:
+        _draw_left_triangle(ctx.surface, ctx.rect(self.rect), HUNTER_ENEMY_COLOR)
 
 
 class AmmoPickup(Entity):
@@ -161,10 +168,14 @@ class AmmoPickup(Entity):
     def damages_player(self) -> bool:
         return False
 
-    def draw(self, surface: pygame.Surface) -> None:
-        pygame.draw.rect(surface, AMMO_PICKUP_COLOR, self.rect, border_radius=4)
-        inner = self.rect.inflate(-self.rect.width // 3, -self.rect.height // 3)
-        pygame.draw.rect(surface, AMMO_PICKUP_HIGHLIGHT_COLOR, inner, border_radius=2)
+    def draw(self, ctx: RenderContext) -> None:
+        target = ctx.rect(self.rect)
+        radius = max(1, ctx.viewport.s(4))
+        pygame.draw.rect(ctx.surface, AMMO_PICKUP_COLOR, target, border_radius=radius)
+        inner = target.inflate(-target.width // 3, -target.height // 3)
+        pygame.draw.rect(
+            ctx.surface, AMMO_PICKUP_HIGHLIGHT_COLOR, inner, border_radius=max(1, radius // 2)
+        )
 
 
 def _draw_left_triangle(surface: pygame.Surface, rect: pygame.Rect, color: Color) -> None:
@@ -191,76 +202,38 @@ def collect_pickups(player_rect: pygame.Rect, entities: list[Entity]) -> list[En
     return collected
 
 
-def spawn_meteorite(
-    rng: random.Random,
-    screen_size: tuple[int, int],
-    *,
-    sx: float = 1.0,
-    su: float = 1.0,
-    assets: AssetLoader | None = None,
-) -> Meteorite:
-    width, height = screen_size
+def spawn_meteorite(rng: random.Random, area: tuple[int, int]) -> Meteorite:
+    """`area` ist die Spawn-Fläche im Referenzraum (`REFERENCE_SIZE`), nicht das Fenster."""
+    width, height = area
     variant = rng.choice(METEORITE_VARIANTS)
-    diameter = max(1, round(variant.radius * 2 * su))
-    image_filename = rng.choice(variant.images)
-    image = assets.load_image(image_filename, (diameter, diameter)) if assets is not None else None
+    diameter = variant.radius * 2
+    image_name = rng.choice(variant.images)
     y = rng.randint(0, max(0, height - diameter))
     return Meteorite(
         pygame.Rect(width, y, diameter, diameter),
-        METEORITE_SPEED * sx,
-        image,
+        METEORITE_SPEED,
+        image_name,
         hp=variant.hp,
         contact_damage=variant.contact_damage,
     )
 
 
-def spawn_wave_enemy(
-    rng: random.Random,
-    screen_size: tuple[int, int],
-    *,
-    sx: float = 1.0,
-    sy: float = 1.0,
-    su: float = 1.0,
-) -> WaveEnemy:
-    width, height = screen_size
-    w = max(1, round(ENEMY_SIZE[0] * su))
-    h = max(1, round(ENEMY_SIZE[1] * su))
+def spawn_wave_enemy(rng: random.Random, area: tuple[int, int]) -> WaveEnemy:
+    width, height = area
+    w, h = ENEMY_SIZE
     y = rng.randint(0, height - h)
-    return WaveEnemy(
-        pygame.Rect(width, y, w, h),
-        WAVE_ENEMY_SPEED * sx,
-        amplitude=WAVE_AMPLITUDE * sy,
-    )
+    return WaveEnemy(pygame.Rect(width, y, w, h), WAVE_ENEMY_SPEED)
 
 
-def spawn_hunter_enemy(
-    rng: random.Random,
-    screen_size: tuple[int, int],
-    *,
-    sx: float = 1.0,
-    sy: float = 1.0,
-    su: float = 1.0,
-) -> HunterEnemy:
-    width, height = screen_size
-    w = max(1, round(ENEMY_SIZE[0] * su))
-    h = max(1, round(ENEMY_SIZE[1] * su))
+def spawn_hunter_enemy(rng: random.Random, area: tuple[int, int]) -> HunterEnemy:
+    width, height = area
+    w, h = ENEMY_SIZE
     y = rng.randint(0, height - h)
-    return HunterEnemy(
-        pygame.Rect(width, y, w, h),
-        HUNTER_ENEMY_SPEED * sx,
-        vertical_speed=HUNTER_VERTICAL_SPEED * sy,
-    )
+    return HunterEnemy(pygame.Rect(width, y, w, h), HUNTER_ENEMY_SPEED)
 
 
-def spawn_ammo_pickup(
-    rng: random.Random,
-    screen_size: tuple[int, int],
-    *,
-    sx: float = 1.0,
-    su: float = 1.0,
-) -> AmmoPickup:
-    width, height = screen_size
-    w = max(1, round(AMMO_PICKUP_SIZE[0] * su))
-    h = max(1, round(AMMO_PICKUP_SIZE[1] * su))
+def spawn_ammo_pickup(rng: random.Random, area: tuple[int, int]) -> AmmoPickup:
+    width, height = area
+    w, h = AMMO_PICKUP_SIZE
     y = rng.randint(0, max(0, height - h))
-    return AmmoPickup(pygame.Rect(width, y, w, h), AMMO_PICKUP_SPEED * sx)
+    return AmmoPickup(pygame.Rect(width, y, w, h), AMMO_PICKUP_SPEED)
