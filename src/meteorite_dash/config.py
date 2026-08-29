@@ -12,6 +12,14 @@ class MeteoriteVariant(NamedTuple):
     contact_damage: int
 
 
+class CoinPatternSpec(NamedTuple):
+    """Ein Münz-Muster: Name (Layout in `coins.py`), Spawn-Gewicht, Bonus bei Komplettierung."""
+
+    name: str
+    weight: float
+    bonus: int
+
+
 WINDOW_SIZE: WindowSize = (800, 600)
 # Design reference: every scale factor is relative to this. At this size all
 # factors are exactly 1.0, so layout/gameplay are byte-identical to the original.
@@ -113,3 +121,32 @@ SCORE_LIGHT_YEARS_PER_SECOND = 12.0
 SCORE_FONT_SIZE = 24
 SCORE_TOP_RIGHT: WindowSize = (776, 24)
 SCORE_ALPHA = 175
+
+# --- Münzen (Collectibles, Issue #14) ---
+COIN_COLOR: Color = (255, 205, 60)
+COIN_RIM_COLOR: Color = (190, 130, 20)
+COIN_RADIUS = 12
+COIN_SPEED = 220.0
+COIN_VALUE = 1
+# Abstände innerhalb eines Musters (Referenz-px): horizontal zwischen Münzen,
+# vertikal zwischen Reihen bei mehrzeiligen Mustern (Raute).
+COIN_SPACING = 40.0
+COIN_ROW_SPACING = 48.0
+COIN_WAVE_AMPLITUDE = 70.0
+COIN_ARC_HEIGHT = 100.0
+COIN_ZIGZAG_STEP = 30.0
+# Dreh-Animation: Umdrehungen pro Sekunde und Phasenversatz je Münze im Muster.
+COIN_SPIN_HZ = 1.5
+COIN_SPIN_PHASE_STEP = 0.4
+COIN_MIN_SPIN_WIDTH = 0.3  # Anteil des Durchmessers bei Kantenansicht
+COIN_SPAWN_INTERVAL_RANGE: tuple[float, float] = (2.0, 4.5)
+COIN_PATTERNS: tuple[CoinPatternSpec, ...] = (
+    CoinPatternSpec("line", 4.0, 3),
+    CoinPatternSpec("wave", 3.0, 5),
+    CoinPatternSpec("arc", 3.0, 5),
+    CoinPatternSpec("zigzag", 2.0, 6),
+    CoinPatternSpec("diamond", 1.5, 8),
+)
+COINS_TOP_RIGHT: WindowSize = (776, 52)
+COIN_BONUS_TOP_RIGHT: WindowSize = (776, 80)
+COIN_BONUS_NOTICE_SECONDS = 1.2

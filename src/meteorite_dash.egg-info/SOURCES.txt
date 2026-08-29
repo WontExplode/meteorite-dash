@@ -10,6 +10,7 @@ src/meteorite_dash/entities.py
 src/meteorite_dash/main.py
 src/meteorite_dash/player.py
 src/meteorite_dash/score.py
+src/meteorite_dash/ships.py
 src/meteorite_dash/spawner.py
 src/meteorite_dash/starfield.py
 src/meteorite_dash/viewport.py

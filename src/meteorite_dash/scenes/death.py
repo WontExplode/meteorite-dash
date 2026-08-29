@@ -2,6 +2,7 @@ import pygame
 
 from meteorite_dash.config import (
     BACKGROUND_COLOR,
+    COIN_COLOR,
     DEATH_BORDER_COLOR,
     DEATH_HIGHLIGHT_COLOR,
     DEATH_MESSAGE_FONT_SIZE,
@@ -15,7 +16,7 @@ from meteorite_dash.config import (
 )
 from meteorite_dash.context import GameContext
 from meteorite_dash.scenes.base import Scene, Transition
-from meteorite_dash.score import format_light_years
+from meteorite_dash.score import format_coins, format_light_years
 
 
 class DeathScene(Scene):
@@ -92,6 +93,12 @@ class DeathScene(Scene):
         )
         final_score_rect = final_score.get_rect(center=(center_x, vp.py(390)))
         screen.blit(final_score, final_score_rect)
+
+        final_coins = score_font.render(
+            f"MÜNZEN: {format_coins(self.context.state.final_coins)}", True, COIN_COLOR
+        )
+        final_coins_rect = final_coins.get_rect(center=(center_x, vp.py(430)))
+        screen.blit(final_coins, final_coins_rect)
 
         hint = hint_font.render("DRÜCKE EINE BELIEBIGE TASTE", True, TEXT_COLOR)
         hint_rect = hint.get_rect(center=(center_x, vp.py(500)))

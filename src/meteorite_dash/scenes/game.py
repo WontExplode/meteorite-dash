@@ -4,10 +4,17 @@ import random
 import pygame
 
 from meteorite_dash.audio import GAME_MUSIC_ENDED
+from meteorite_dash.coins import CoinFormation, spawn_coin_formation
 from meteorite_dash.combat import apply_contact_damage, resolve_projectile_hits
 from meteorite_dash.config import (
     AMMO_PICKUP_WEIGHT,
     BACKGROUND_COLOR,
+    COIN_BONUS_NOTICE_SECONDS,
+    COIN_BONUS_TOP_RIGHT,
+    COIN_COLOR,
+    COIN_PATTERNS,
+    COIN_SPAWN_INTERVAL_RANGE,
+    COINS_TOP_RIGHT,
     HP_HUD_TOP_LEFT,
     HUNTER_ENEMY_WEIGHT,
     METEORITE_WEIGHT,
@@ -35,7 +42,7 @@ from meteorite_dash.entities import (
 from meteorite_dash.player import KeyStates, Player
 from meteorite_dash.projectiles import Projectile, spawn_projectile
 from meteorite_dash.scenes.base import Scene, Transition
-from meteorite_dash.score import DistanceScore
+from meteorite_dash.score import DistanceScore, format_coins
 from meteorite_dash.spawner import SpawnEntry, Spawner
 from meteorite_dash.weapons import WeaponLoadout
 
@@ -45,9 +52,14 @@ class GameScene(Scene):
         super().__init__(context)
         self.entities: list[Entity] = []
         self.projectiles: list[Projectile] = []
+        # Münzen leben getrennt von `entities`: Berührung sammelt ein, schadet nicht.
+        self.formations: list[CoinFormation] = []
+        self.coins_collected = 0
         self.score = DistanceScore(SCORE_LIGHT_YEARS_PER_SECOND)
         self.loadout: WeaponLoadout
         self._shoot_cooldown = 0.0
+        self._bonus_notice = ""
+        self._bonus_notice_ttl = 0.0
         self._build()
 
     def _scales(self) -> tuple[float, float, float]:
@@ -57,7 +69,7 @@ class GameScene(Scene):
     def _scaled_player_size(self, su: float) -> tuple[int, int]:
         return (round(PLAYER_SIZE[0] * su), round(PLAYER_SIZE[1] * su))
 
-    def _spawn_table(self, sx: float, sy: float, su: float) -> list[SpawnEntry]:
+    def _spawn_table(self, sx: float, sy: float, su: float) -> list[SpawnEntry[Entity]]:
         return [
             SpawnEntry(
                 METEORITE_WEIGHT,
@@ -77,6 +89,15 @@ class GameScene(Scene):
             ),
         ]
 
+    def _coin_table(self, sx: float, sy: float, su: float) -> list[SpawnEntry[CoinFormation]]:
+        return [
+            SpawnEntry(
+                pattern.weight,
+                functools.partial(spawn_coin_formation, pattern=pattern, sx=sx, sy=sy, su=su),
+            )
+            for pattern in COIN_PATTERNS
+        ]
+
     def _build(self) -> None:
         sx, sy, su = self._scales()
         size = self.context.screen.get_size()
@@ -87,8 +108,10 @@ class GameScene(Scene):
         self.loadout = WeaponLoadout(spec.weapon_slots)
         self.projectiles = []
         self._shoot_cooldown = 0.0
-        self.spawner = Spawner(
-            self._spawn_table(sx, sy, su), size, random.Random(), SPAWN_INTERVAL_RANGE
+        rng = random.Random()
+        self.spawner = Spawner(self._spawn_table(sx, sy, su), size, rng, SPAWN_INTERVAL_RANGE)
+        self.coin_spawner = Spawner(
+            self._coin_table(sx, sy, su), size, rng, COIN_SPAWN_INTERVAL_RANGE
         )
 
     def on_resize(self, size: tuple[int, int]) -> None:
@@ -107,12 +130,16 @@ class GameScene(Scene):
         )
         self.spawner.screen_size = size
         self.spawner.set_table(self._spawn_table(sx, sy, su))
+        self.coin_spawner.screen_size = size
+        self.coin_spawner.set_table(self._coin_table(sx, sy, su))
 
     def on_enter(self) -> None:
         self.context.music.start_game_playlist()
 
     def on_exit(self) -> None:
         self.context.music.stop()
+        # Session-Summe auch bei Abbruch (Escape) gutschreiben.
+        self.context.state.total_coins += self.coins_collected
 
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type == GAME_MUSIC_ENDED:
@@ -148,11 +175,14 @@ class GameScene(Scene):
         if collect_pickups(self.player.rect, self.entities):
             self.loadout.refill_standard()
 
+        self._update_coins(dt, player_y)
+
         resolve_projectile_hits(self.projectiles, self.entities)
 
         self.player.hp = apply_contact_damage(self.player.rect, self.player.hp, self.entities)
         if self.player.hp <= 0:
             self.context.state.final_light_years = self.score.light_years
+            self.context.state.final_coins = self.coins_collected
             self.finish(Transition.DEATH_SCREEN)
 
     def _update_shooting(self, dt: float, keys: KeyStates) -> None:
@@ -170,9 +200,23 @@ class GameScene(Scene):
         if fired_spec.sound is not None:
             self.context.music.play_sound_effect(fired_spec.sound)
 
+    def _update_coins(self, dt: float, player_y: int) -> None:
+        self.formations.extend(self.coin_spawner.update(dt))
+        for formation in self.formations:
+            formation.update(dt, player_y)
+            pickup = formation.collect(self.player.rect)
+            self.coins_collected += pickup.total
+            if pickup.bonus:
+                self._bonus_notice = f"BONUS +{pickup.bonus}"
+                self._bonus_notice_ttl = COIN_BONUS_NOTICE_SECONDS
+        self.formations = [f for f in self.formations if not f.is_finished]
+        self._bonus_notice_ttl = max(0.0, self._bonus_notice_ttl - dt)
+
     def draw(self) -> None:
         self.context.screen.fill(BACKGROUND_COLOR)
         self.context.starfield.draw(self.context.screen)
+        for formation in self.formations:
+            formation.draw(self.context.screen)
         for entity in self.entities:
             entity.draw(self.context.screen)
         for projectile in self.projectiles:
@@ -207,7 +251,22 @@ class GameScene(Scene):
     def _draw_score(self) -> None:
         vp = self.context.viewport
         font = vp.font(SCORE_FONT_SIZE)
+
         score_text = font.render(f"LIGHTYRS {self.score.formatted()}", True, TEXT_COLOR)
         score_text.set_alpha(SCORE_ALPHA)
-        score_rect = score_text.get_rect(topright=vp.point(*SCORE_TOP_RIGHT))
-        self.context.screen.blit(score_text, score_rect)
+        self.context.screen.blit(
+            score_text, score_text.get_rect(topright=vp.point(*SCORE_TOP_RIGHT))
+        )
+
+        coins_text = font.render(f"COINS {format_coins(self.coins_collected)}", True, COIN_COLOR)
+        coins_text.set_alpha(SCORE_ALPHA)
+        self.context.screen.blit(
+            coins_text, coins_text.get_rect(topright=vp.point(*COINS_TOP_RIGHT))
+        )
+
+        if self._bonus_notice_ttl > 0:
+            bonus_text = font.render(self._bonus_notice, True, COIN_COLOR)
+            bonus_text.set_alpha(round(255 * self._bonus_notice_ttl / COIN_BONUS_NOTICE_SECONDS))
+            self.context.screen.blit(
+                bonus_text, bonus_text.get_rect(topright=vp.point(*COIN_BONUS_TOP_RIGHT))
+            )
