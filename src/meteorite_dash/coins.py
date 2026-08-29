@@ -68,6 +68,19 @@ class Coin(Entity):
         super().update(dt, player_y)
         self._elapsed += dt
 
+    def pull_toward(self, target: tuple[int, int], step: float) -> None:
+        """Zieht die Münze um höchstens `step` px auf `target` zu (Magnet-Zubehör)."""
+        dx = target[0] - self.rect.centerx
+        dy = target[1] - self.rect.centery
+        distance = math.hypot(dx, dy)
+        if distance == 0:
+            return
+        factor = min(1.0, step / distance)
+        self._x += dx * factor
+        self._y += dy * factor
+        self.rect.x = round(self._x)
+        self.rect.y = round(self._y)
+
     def draw(self, surface: pygame.Surface) -> None:
         # Dreh-Animation: Ellipsenbreite folgt |cos|, Höhe bleibt konstant. Die
         # Mindestbreite hält die Kante sichtbar, statt zum Strich zu werden.
@@ -172,6 +185,12 @@ class CoinFormation:
             else:
                 remaining.append(coin)
         self.coins = remaining
+
+    def attract(self, target: tuple[int, int], radius: float, step: float) -> None:
+        """Zieht alle Münzen im Umkreis `radius` um `target` um `step` px heran."""
+        for coin in self.coins:
+            if math.hypot(target[0] - coin.rect.centerx, target[1] - coin.rect.centery) <= radius:
+                coin.pull_toward(target, step)
 
     def collect(self, player_rect: pygame.Rect) -> Pickup:
         value = 0

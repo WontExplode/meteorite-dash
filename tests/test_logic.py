@@ -124,19 +124,23 @@ def test_main_menu_actions_map_to_transitions(context: GameContext) -> None:
 
 def test_ship_selection_navigation_wraps(context: GameContext) -> None:
     selection = ShipSelection(context)
-    assert context.state.selected_ship_index == 0
+    assert selection.cursor == 0
 
     selection.handle_event(_keydown(pygame.K_LEFT))
-    assert context.state.selected_ship_index == len(SHIPS) - 1
-
-    selection.handle_event(_keydown(pygame.K_RIGHT))
+    assert selection.cursor == len(SHIPS) - 1
+    # Der Cursor darf über gesperrte Schiffe laufen, die Auswahl bleibt unberührt.
     assert context.state.selected_ship_index == 0
 
+    selection.handle_event(_keydown(pygame.K_RIGHT))
+    assert selection.cursor == 0
 
-def test_ship_selection_confirm_returns_to_menu(context: GameContext) -> None:
+
+def test_ship_selection_escape_returns_without_change(context: GameContext) -> None:
     selection = ShipSelection(context)
+    selection.handle_event(_keydown(pygame.K_RIGHT))
     selection.handle_event(_keydown(pygame.K_ESCAPE))
     assert selection._transition is Transition.MAIN_MENU
+    assert context.state.selected_ship_index == 0
 
 
 def test_music_player_track_cycle(monkeypatch: pytest.MonkeyPatch) -> None:

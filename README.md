@@ -16,6 +16,9 @@ immer mehr zurückgelegte Lichtjahre.
 - Lightyears-Score als HUD-Anzeige
 - sammelbare Münzen in Mustern (Linie, Welle, Bogen, Zickzack, Raute); Muster
   komplett eingesammelt gibt Bonus, eigener Münz-Score im HUD
+- Shop: Münzen aus allen Läufen werden gespeichert und kaufen Schiffe,
+  Zubehör (Schild, Magnet, Extra-Munition, Panzerung) und Schiffsfarben
+- Zubehör wird pro Schiff in dessen Zubehörplätze gelegt und wirkt im Lauf
 - Game-Over-Screen mit finalem Score
 - dynamische Fenstergröße und Vollbild über einen gemeinsamen `Viewport`
 - Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
@@ -23,7 +26,9 @@ immer mehr zurückgelegte Lichtjahre.
 ## Steuerung
 
 - `Pfeil hoch` / `Pfeil runter`: Raumschiff bewegen oder Menüpunkt wechseln
-- `Pfeil links` / `Pfeil rechts`: Raumschiff in der Schiffsauswahl wechseln
+- `Pfeil links` / `Pfeil rechts`: Raumschiff in der Schiffsauswahl wechseln,
+  Reiter im Shop wechseln
+- `Enter` im Shop: kaufen, ausrüsten/ablegen oder Farbe wählen
 - `Space`: schießen (im Spiel)
 - `R`: Waffe wechseln (im Spiel, wenn mehrere Waffen vorhanden)
 - `Enter` / `Space`: Menüauswahl bestätigen
@@ -53,7 +58,10 @@ src/meteorite_dash/
   projectiles.py       Spieler-Projektile
   weapons.py           Waffen-Loadout und Munitionslogik
   combat.py            Projektil- und Kollisionsschaden
-  ships.py             Schiffsdatenblätter und Slot-Limits
+  ships.py             Schiffsdatenblätter, Slot-Limits, Preise und Farben
+  accessories.py       Zubehör-Katalog (Schild, Magnet, Extra-Munition, Panzerung)
+  progress.py          Guthaben, Freischaltungen, Ausrüstung (Shop-Regeln)
+  persistence.py       JSON-Speicherstand im Nutzer-Datenverzeichnis
   coins.py             Münzen, Muster-Layouts und Formationen
   spawner.py           Timergesteuertes Spawning
   starfield.py         Bewegter Sternenhintergrund
@@ -61,6 +69,8 @@ src/meteorite_dash/
     base.py            Basis-Szene mit gemeinsamer Loop
     main_menu.py       Hauptmenü
     ship_selection.py  Schiffsauswahl
+    shop.py            Shop (Schiffe, Zubehör, Farben)
+    widgets.py         Geteilte Zeichen-Helfer (Münz-Guthaben)
     game.py            Spielszene
     death.py           Game-Over-Screen
 ```
@@ -91,3 +101,7 @@ git config core.hooksPath .githooks
 - Neue Positionen, Größen und Schriften sollten über `Viewport` skaliert werden,
   damit Resize und Vollbild funktionieren.
 - Tests laufen headless mit Dummy-Video- und Dummy-Audiotreiber.
+- Der Spielfortschritt liegt als `progress.json` im Nutzer-Datenverzeichnis
+  (Linux: `~/.local/share/meteorite-dash/`, Windows: `%APPDATA%`, macOS:
+  `~/Library/Application Support`). `METEORITE_DASH_SAVE_DIR` überschreibt
+  den Ordner.

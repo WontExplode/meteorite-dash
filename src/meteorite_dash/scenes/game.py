@@ -3,11 +3,14 @@ import random
 
 import pygame
 
+from meteorite_dash.accessories import AccessoryKind
 from meteorite_dash.audio import GAME_MUSIC_ENDED
 from meteorite_dash.coins import CoinFormation, coin_rects, is_clear, spawn_coin_formation
-from meteorite_dash.combat import apply_contact_damage, resolve_projectile_hits
+from meteorite_dash.combat import absorb_contact, apply_contact_damage, resolve_projectile_hits
 from meteorite_dash.config import (
     AMMO_PICKUP_WEIGHT,
+    AMMO_RESERVE_BONUS,
+    ARMOR_HP_BONUS,
     BACKGROUND_COLOR,
     COIN_BONUS_NOTICE_SECONDS,
     COIN_BONUS_TOP_RIGHT,
@@ -18,6 +21,8 @@ from meteorite_dash.config import (
     COINS_TOP_RIGHT,
     HP_HUD_TOP_LEFT,
     HUNTER_ENEMY_WEIGHT,
+    MAGNET_PULL_SPEED,
+    MAGNET_RADIUS,
     METEORITE_WEIGHT,
     PLAYER_SIZE,
     PLAYER_START_POSITION,
@@ -25,6 +30,9 @@ from meteorite_dash.config import (
     SCORE_FONT_SIZE,
     SCORE_LIGHT_YEARS_PER_SECOND,
     SCORE_TOP_RIGHT,
+    SHIELD_CHARGES,
+    SHIELD_HUD_COLOR,
+    SHIELD_HUD_TOP_LEFT,
     SPAWN_INTERVAL_RANGE,
     TEXT_COLOR,
     WAVE_ENEMY_WEIGHT,
@@ -59,6 +67,9 @@ class GameScene(Scene):
         self.score = DistanceScore(SCORE_LIGHT_YEARS_PER_SECOND)
         self.loadout: WeaponLoadout
         self._shoot_cooldown = 0.0
+        # Zubehör-Effekte (Issue #14), gesetzt in `_build` aus dem Fortschritt.
+        self.shield_charges = 0
+        self.magnet_enabled = False
         self._bonus_notice = ""
         self._bonus_notice_ttl = 0.0
         self._build()
@@ -69,6 +80,11 @@ class GameScene(Scene):
 
     def _scaled_player_size(self, su: float) -> tuple[int, int]:
         return (round(PLAYER_SIZE[0] * su), round(PLAYER_SIZE[1] * su))
+
+    def _ship_image(self, su: float) -> pygame.Surface:
+        spec = self.context.state.selected_ship
+        tint = self.context.state.progress.ship_tint(spec)
+        return self.context.assets.load_ship(spec.sprite, self._scaled_player_size(su), tint)
 
     def _spawn_table(self, sx: float, sy: float, su: float) -> list[SpawnEntry[Entity]]:
         return [
@@ -103,10 +119,15 @@ class GameScene(Scene):
         sx, sy, su = self._scales()
         size = self.context.screen.get_size()
         spec = self.context.state.selected_ship
-        image = self.context.assets.load_ship(spec.sprite, self._scaled_player_size(su), spec.tint)
+        equipped = {acc.kind for acc in self.context.state.progress.equipped_accessories(spec)}
+        image = self._ship_image(su)
         start = (round(PLAYER_START_POSITION[0] * sx), round(PLAYER_START_POSITION[1] * sy))
-        self.player = Player(image, start, spec)
-        self.loadout = WeaponLoadout(spec.weapon_slots)
+        extra_hp = ARMOR_HP_BONUS if AccessoryKind.ARMOR in equipped else 0
+        self.player = Player(image, start, spec, extra_hp=extra_hp)
+        ammo_bonus = AMMO_RESERVE_BONUS if AccessoryKind.AMMO_RESERVE in equipped else 0
+        self.loadout = WeaponLoadout(spec.weapon_slots, standard_ammo_bonus=ammo_bonus)
+        self.shield_charges = SHIELD_CHARGES if AccessoryKind.SHIELD in equipped else 0
+        self.magnet_enabled = AccessoryKind.MAGNET in equipped
         self.projectiles = []
         self._shoot_cooldown = 0.0
         rng = random.Random()
@@ -117,8 +138,7 @@ class GameScene(Scene):
 
     def on_resize(self, size: tuple[int, int]) -> None:
         sx, sy, su = self._scales()
-        spec = self.context.state.selected_ship
-        image = self.context.assets.load_ship(spec.sprite, self._scaled_player_size(su), spec.tint)
+        image = self._ship_image(su)
         centery = self.player.rect.centery
         self.player.image = image
         self.player.rect = image.get_rect()
@@ -139,8 +159,9 @@ class GameScene(Scene):
 
     def on_exit(self) -> None:
         self.context.music.stop()
-        # Session-Summe auch bei Abbruch (Escape) gutschreiben.
-        self.context.state.total_coins += self.coins_collected
+        # Guthaben auch bei Abbruch (Escape) gutschreiben und sichern.
+        self.context.state.progress.add_coins(self.coins_collected)
+        self.context.save_progress()
 
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type == GAME_MUSIC_ENDED:
@@ -180,7 +201,10 @@ class GameScene(Scene):
 
         resolve_projectile_hits(self.projectiles, self.entities)
 
-        self.player.hp = apply_contact_damage(self.player.rect, self.player.hp, self.entities)
+        if self.shield_charges > 0 and absorb_contact(self.player.rect, self.entities):
+            self.shield_charges -= 1
+        else:
+            self.player.hp = apply_contact_damage(self.player.rect, self.player.hp, self.entities)
         if self.player.hp <= 0:
             self.context.state.final_light_years = self.score.light_years
             self.context.state.final_coins = self.coins_collected
@@ -218,8 +242,13 @@ class GameScene(Scene):
 
     def _update_coins(self, dt: float, player_y: int) -> None:
         self.formations.extend(self.coin_spawner.update(dt, accept=self._accept_formation))
+        su = self.context.viewport.scale
         for formation in self.formations:
             formation.update(dt, player_y)
+            if self.magnet_enabled:
+                formation.attract(
+                    self.player.rect.center, MAGNET_RADIUS * su, MAGNET_PULL_SPEED * su * dt
+                )
             pickup = formation.collect(self.player.rect)
             self.coins_collected += pickup.total
             if pickup.bonus:
@@ -242,8 +271,18 @@ class GameScene(Scene):
         self.player.draw(self.context.screen)
         self._draw_weapon_hud()
         self._draw_hp_hud()
+        self._draw_shield_hud()
         self._draw_score()
         pygame.display.flip()
+
+    def _draw_shield_hud(self) -> None:
+        if self.shield_charges <= 0:
+            return
+        vp = self.context.viewport
+        font = vp.font(WEAPON_HUD_FONT_SIZE)
+        text = font.render(f"SCHILD x{self.shield_charges}", True, SHIELD_HUD_COLOR)
+        text.set_alpha(SCORE_ALPHA)
+        self.context.screen.blit(text, text.get_rect(topleft=vp.point(*SHIELD_HUD_TOP_LEFT)))
 
     def _draw_hp_hud(self) -> None:
         vp = self.context.viewport

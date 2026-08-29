@@ -11,10 +11,12 @@ from meteorite_dash.config import (
 )
 from meteorite_dash.context import GameContext
 from meteorite_dash.scenes.base import Scene, Transition
+from meteorite_dash.scenes.widgets import draw_wallet
 
 _ACTION_TRANSITIONS: dict[MenuAction, Transition] = {
     "start": Transition.START_GAME,
     "ship": Transition.SHIP_SELECTION,
+    "shop": Transition.SHOP,
     "quit": Transition.QUIT,
 }
 
@@ -50,7 +52,7 @@ class MainMenu(Scene):
         for index, (label, _) in enumerate(MENU_ITEMS):
             color = SELECTED_TEXT_COLOR if index == self.selected_index else TEXT_COLOR
             text = menu_font.render(label, True, color)
-            text_rect = text.get_rect(center=(center_x, vp.py(240 + index * 70)))
+            text_rect = text.get_rect(center=(center_x, vp.py(220 + index * 66)))
             screen.blit(text, text_rect)
 
         selected_ship = hint_font.render(
@@ -63,4 +65,5 @@ class MainMenu(Scene):
         hint_rect = hint.get_rect(center=(center_x, vp.py(535)))
         screen.blit(hint, hint_rect)
 
+        draw_wallet(self.context)
         pygame.display.flip()
