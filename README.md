@@ -6,7 +6,7 @@ immer mehr zurückgelegte Lichtjahre.
 
 ## Features
 
-- Hauptmenü mit Schiffsauswahl
+- Hauptmenü mit Start, Daily Run, Schiffsauswahl und Shop
 - vertikale Raumschiffsteuerung
 - Standardwaffe mit 7 Schüssen und Munitions-Pickups
 - zerstörbare Meteoriten und Gegner mit HP; Spieler-HP aus Schiffsrumpf
@@ -27,6 +27,8 @@ immer mehr zurückgelegte Lichtjahre.
   `uv run meteorite-dash --verify datei.json` spielt ihn nach und prüft ihn
 - Ghost: der beste gespeicherte Lauf zum selben Seed fliegt halbtransparent
   mit, das HUD zeigt den Vorsprung
+- Daily Run: ein gemeinsamer Seed pro Tag für alle Spieler (ohne Server); der
+  Tagesrekord fliegt als Ghost mit, der Game-Over-Screen zeigt den Vergleich
 - Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
 
 ## Steuerung
@@ -67,6 +69,7 @@ src/meteorite_dash/
   headless.py          Simulation ohne Fenster abspielen (Tests, Replay-Prüfung)
   replay.py            Replay-Format, Recorder und Ablage (JSON)
   ghost.py             Ghost: Replay als zweite Simulation im Gleichschritt
+  daily.py             Tages-Seed für den Daily Run
   mathutil.py          Plattformstabiler Sinus/Abstand für die Simulation
   entities.py          Gegner, Hindernisse und Munitions-Pickups
   projectiles.py       Spieler-Projektile
@@ -128,3 +131,5 @@ git config core.hooksPath .githooks
   Freunde schicken und `uv run meteorite-dash --verify datei.json` beweist den
   Lauf Tick für Tick. Liegt ein fremdes Replay im Ordner, erscheint es bei
   gleichem Seed (`METEORITE_DASH_SEED`) als Ghost.
+- Der Daily-Seed hängt am UTC-Datum; der Tagesrekord liegt als
+  `replays/daily-<datum>.json`.

@@ -10,8 +10,9 @@ from meteorite_dash.config import (
     WINDOW_SIZE,
 )
 from meteorite_dash.context import GameContext, GameState
+from meteorite_dash.daily import daily_seed, today_utc
 from meteorite_dash.persistence import SaveStore, default_save_path
-from meteorite_dash.replay import ReplayStore, default_replay_dir
+from meteorite_dash.replay import ReplayStore, RunMode, default_replay_dir
 from meteorite_dash.scenes.base import Scene, Transition
 from meteorite_dash.scenes.death import DeathScene
 from meteorite_dash.scenes.game import GameScene
@@ -22,6 +23,7 @@ from meteorite_dash.starfield import StarField
 from meteorite_dash.viewport import Viewport
 
 _MENU_TRANSITIONS = (Transition.MAIN_MENU, Transition.SHIP_SELECTION, Transition.SHOP)
+_GAME_TRANSITIONS = (Transition.START_GAME, Transition.START_DAILY)
 
 
 class App:
@@ -55,7 +57,7 @@ class App:
 
                 transition = self._create_scene(transition).run()
 
-                if transition is Transition.START_GAME:
+                if transition in _GAME_TRANSITIONS:
                     menu_music_playing = False
         finally:
             self.context.music.stop()
@@ -70,6 +72,11 @@ class App:
             return ShopScene(self.context)
         if transition is Transition.START_GAME:
             return GameScene(self.context)
+        if transition is Transition.START_DAILY:
+            day = today_utc()
+            return GameScene(
+                self.context, seed=daily_seed(day), mode=RunMode.DAILY, label=day.isoformat()
+            )
         if transition is Transition.DEATH_SCREEN:
             return DeathScene(self.context)
         raise ValueError(f"No scene for transition {transition}")

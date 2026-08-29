@@ -7,6 +7,7 @@ from meteorite_dash.config import (
     COIN_BONUS_TOP_RIGHT,
     COIN_COLOR,
     COINS_TOP_RIGHT,
+    DAILY_REPLAY_PREFIX,
     GHOST_ALPHA,
     GHOST_HUD_COLOR,
     GHOST_HUD_TOP_RIGHT,
@@ -29,7 +30,7 @@ from meteorite_dash.context import GameContext
 from meteorite_dash.ghost import Ghost
 from meteorite_dash.inputs import InputFrame, from_pressed
 from meteorite_dash.render import RenderContext
-from meteorite_dash.replay import Recorder, Replay
+from meteorite_dash.replay import Recorder, Replay, RunMode
 from meteorite_dash.scenes.base import Scene, Transition
 from meteorite_dash.score import format_coins, format_light_years
 from meteorite_dash.simulation import EventKind, RunConfig, SimEvent, Simulation, pick_seed
@@ -53,11 +54,15 @@ class GameScene(Scene):
         *,
         seed: int | None = None,
         ghost: Replay | None = None,
+        mode: RunMode = RunMode.FREE,
+        label: str = "",
     ) -> None:
         super().__init__(context)
         self.seed = seed if seed is not None else pick_seed()
+        self.mode = mode
+        self.label = label
         self.sim = Simulation(self.run_config(self.seed))
-        self.recorder = Recorder(self.sim.config)
+        self.recorder = Recorder(self.sim.config, mode=mode, label=label)
         # Ghost: bester gespeicherter Lauf zum selben Seed (oder explizit übergeben).
         ghost_replay = ghost if ghost is not None else self.find_ghost(self.seed)
         self.ghost = Ghost(ghost_replay) if ghost_replay is not None else None
@@ -154,18 +159,29 @@ class GameScene(Scene):
             state.final_light_years = self.sim.light_years
             state.final_coins = self.sim.coins_collected
             state.final_seed = self.seed
+            state.final_mode = self.mode
+            state.final_label = self.label
+            state.final_record_light_years = (
+                self.ghost.replay.light_years if self.ghost is not None else None
+            )
             state.last_replay = self._store_replay(self.recorder.finish(self.sim))
             self.finish(Transition.DEATH_SCREEN)
 
+    def record_name(self) -> str:
+        """Rekord-Datei: `best` im freien Lauf, `daily-<datum>` im Daily Run."""
+        if self.mode is RunMode.DAILY:
+            return f"{DAILY_REPLAY_PREFIX}{self.label}"
+        return REPLAY_BEST_NAME
+
     def _store_replay(self, replay: Replay) -> Replay:
-        """`last` immer, `best` nur bei neuer Bestweite. Ohne Store bleibt es im Speicher."""
+        """`last` immer, Rekord nur bei neuer Bestweite. Ohne Store bleibt es im Speicher."""
         store = self.context.replays
         if store is None:
             return replay
         store.save(REPLAY_LAST_NAME, replay)
-        best = store.load(REPLAY_BEST_NAME)
-        if best is None or replay.light_years > best.light_years:
-            store.save(REPLAY_BEST_NAME, replay)
+        record = store.load(self.record_name())
+        if record is None or replay.light_years > record.light_years:
+            store.save(self.record_name(), replay)
         return replay
 
     def draw(self) -> None:

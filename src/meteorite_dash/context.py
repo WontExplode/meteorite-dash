@@ -7,7 +7,7 @@ from meteorite_dash.audio import MusicPlayer
 from meteorite_dash.config import MIN_WINDOW_SIZE, REFERENCE_SIZE
 from meteorite_dash.persistence import SaveStore
 from meteorite_dash.progress import Progress
-from meteorite_dash.replay import Replay, ReplayStore
+from meteorite_dash.replay import Replay, ReplayStore, RunMode
 from meteorite_dash.ships import SHIPS, ShipSpec
 from meteorite_dash.starfield import StarField
 from meteorite_dash.viewport import Viewport
@@ -19,6 +19,10 @@ class GameState:
     final_light_years: float = 0.0
     final_coins: int = 0
     final_seed: int = 0
+    final_mode: RunMode = RunMode.FREE
+    final_label: str = ""  # Daily: ISO-Datum
+    # Bisheriger Rekord (Ghost) zum Seed des letzten Laufs; None = kein Vergleich.
+    final_record_light_years: float | None = None
     # Aufzeichnung des letzten beendeten Laufs (Issue #34), für Death-Screen/Ghost.
     last_replay: Replay | None = None
     # Persistenter Fortschritt: Münz-Guthaben, Freischaltungen, Ausrüstung (Issue #14).

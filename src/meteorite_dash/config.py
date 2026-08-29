@@ -2,7 +2,7 @@ from typing import Literal, NamedTuple
 
 WindowSize = tuple[int, int]
 Color = tuple[int, int, int]
-MenuAction = Literal["start", "ship", "shop", "quit"]
+MenuAction = Literal["start", "daily", "ship", "shop", "quit"]
 
 
 class MeteoriteVariant(NamedTuple):
@@ -48,10 +48,13 @@ DEATH_MESSAGE_FONT_SIZE = 24
 
 MENU_ITEMS: tuple[tuple[str, MenuAction], ...] = (
     ("Start", "start"),
+    ("Daily Run", "daily"),
     ("Raumschiff auswählen", "ship"),
     ("Shop", "shop"),
     ("Beenden", "quit"),
 )
+
+MENU_ITEM_SPACING = 56  # Referenz-px zwischen Menüpunkten
 
 MENU_MUSIC = "menumusic.mp3"
 DEATH_SOUND = "gameovermusic.mp3"
@@ -211,3 +214,10 @@ GHOST_ALPHA = 110
 GHOST_TINT: Color = (150, 210, 255)
 GHOST_HUD_COLOR: Color = (150, 210, 255)
 GHOST_HUD_TOP_RIGHT: WindowSize = (776, 108)
+
+# --- Daily Run (Issue #34) ---
+# Der Tages-Seed ist ein Hash aus Salt + UTC-Datum: alle Spieler rechnen ihn
+# lokal aus, kein Server nötig. Salt ändern = neue Seed-Serie.
+DAILY_SEED_SALT = "meteorite-dash-daily"
+DAILY_REPLAY_PREFIX = "daily-"
+DEATH_MODE_COLOR: Color = (150, 210, 255)

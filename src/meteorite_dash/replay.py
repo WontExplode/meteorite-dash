@@ -19,6 +19,7 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import Enum
 from pathlib import Path
 
 from meteorite_dash.config import REPLAY_DIR_NAME, REPLAY_FORMAT_VERSION, SIM_VERSION
@@ -35,6 +36,11 @@ _HASH = re.compile(r"^[0-9a-f]{64}$")
 Frames = tuple[tuple[int, int], ...]  # (Maske, Anzahl Ticks)
 
 
+class RunMode(Enum):
+    FREE = "free"  # zufälliger Seed, Rekord in `best`
+    DAILY = "daily"  # Tages-Seed, Rekord in `daily-<datum>`
+
+
 @dataclass(frozen=True)
 class Replay:
     config: RunConfig
@@ -43,7 +49,7 @@ class Replay:
     state_hash: str
     sim_version: int = SIM_VERSION
     recorded_at: str = ""  # ISO-Datum (UTC)
-    mode: str = "free"  # "free" | "daily"
+    mode: RunMode = RunMode.FREE
     label: str = ""  # z. B. Daily-Datum
 
     @property
@@ -67,7 +73,7 @@ class Replay:
             "format": REPLAY_FORMAT_VERSION,
             "sim_version": self.sim_version,
             "recorded_at": self.recorded_at,
-            "mode": self.mode,
+            "mode": self.mode.value,
             "label": self.label,
             "config": {
                 "seed": self.config.seed,
@@ -116,7 +122,7 @@ class Replay:
                 state_hash=state_hash,
                 sim_version=_as_int(data.get("sim_version", 0)),
                 recorded_at=_as_str(data.get("recorded_at", "")),
-                mode=_as_str(data.get("mode", "free")),
+                mode=RunMode(_as_str(data.get("mode", RunMode.FREE.value))),
                 label=_as_str(data.get("label", "")),
             )
         except (KeyError, TypeError, ValueError):
@@ -165,7 +171,7 @@ class Recorder:
     """Sammelt die Eingaben eines Laufs lauflängenkodiert."""
 
     config: RunConfig
-    mode: str = "free"
+    mode: RunMode = RunMode.FREE
     label: str = ""
     _frames: list[list[int]] = field(default_factory=list)
 
