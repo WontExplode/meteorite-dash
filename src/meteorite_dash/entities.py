@@ -8,6 +8,7 @@ import pygame
 from meteorite_dash.assets import AssetLoader
 from meteorite_dash.config import (
     AMMO_PICKUP_COLOR,
+    AMMO_PICKUP_HIGHLIGHT_COLOR,
     AMMO_PICKUP_SIZE,
     AMMO_PICKUP_SPEED,
     ENEMY_SIZE,
