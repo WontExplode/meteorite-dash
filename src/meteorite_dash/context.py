@@ -14,6 +14,9 @@ from meteorite_dash.viewport import Viewport
 class GameState:
     selected_ship_index: int = 0
     final_light_years: float = 0.0
+    final_coins: int = 0
+    # Session-Summe über alle Läufe — Haken für Währung/Persistenz (Issue #14).
+    total_coins: int = 0
 
     @property
     def selected_ship(self) -> ShipSpec:

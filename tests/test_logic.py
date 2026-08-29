@@ -504,6 +504,8 @@ def test_game_scene_fires_projectile(
 ) -> None:
     monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys({pygame.K_SPACE}))
     scene = GameScene(context)
+    # Spawner stumm: ein zufällig gespawnter Meteorit könnte das Projektil verbrauchen.
+    monkeypatch.setattr(scene.spawner, "update", lambda dt: [])
     scene.update(1.0)
     assert len(scene.projectiles) == 1
     assert scene.loadout.active.ammo == STANDARD_WEAPON.max_ammo - 1

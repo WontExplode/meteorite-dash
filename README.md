@@ -14,6 +14,8 @@ immer mehr zurückgelegte Lichtjahre.
 - Gegner mit unterschiedlichen Bewegungsmustern
 - scrollendes Sternenfeld als Hintergrund
 - Lightyears-Score als HUD-Anzeige
+- sammelbare Münzen in Mustern (Linie, Welle, Bogen, Zickzack, Raute); Muster
+  komplett eingesammelt gibt Bonus, eigener Münz-Score im HUD
 - Game-Over-Screen mit finalem Score
 - dynamische Fenstergröße und Vollbild über einen gemeinsamen `Viewport`
 - Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
@@ -52,6 +54,7 @@ src/meteorite_dash/
   weapons.py           Waffen-Loadout und Munitionslogik
   combat.py            Projektil- und Kollisionsschaden
   ships.py             Schiffsdatenblätter und Slot-Limits
+  coins.py             Münzen, Muster-Layouts und Formationen
   spawner.py           Timergesteuertes Spawning
   starfield.py         Bewegter Sternenhintergrund
   scenes/

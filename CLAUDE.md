@@ -58,6 +58,10 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   physikalischen Grundwerten (mass/thrust/hull, Slot-Zahlen) und abgeleiteten
   Spielwerten; 4 Schiffe mit Tint-Farbvarianten und Stat-Balken in der Auswahl.
 - Lightyears-Score im HUD; finaler Score wird im Death-Screen angezeigt.
+- Münzen (`coins.py`, Issue #14): sammelbare Münz-Muster (`line`, `wave`,
+  `arc`, `zigzag`, `diamond`) als `CoinFormation`; komplett eingesammeltes
+  Muster zahlt Bonus. Eigener Münz-Score im HUD und Death-Screen,
+  Session-Summe `GameState.total_coins` (noch ohne Datei-Persistenz).
 - Strikte Typprüfung, Linting, Tests, CI.
 
 **Noch NICHT vorhanden** (aus dem Spec — meist als GitHub-Issue getrackt):
@@ -67,9 +71,10 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
 - **Steigende Schwierigkeit** über die Zeit (Speed ist momentan konstant).
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
-  (Issue #10), Münzen/Währung (Issue #14), Spieler-Stats (Issue #13),
-  iOS/Android-Port (Issue #5). Zubehör-Slots sind in `ShipSpec` als
-  Zahlen vorbereitet, aber noch ohne Funktion.
+  (Issue #10), Münz-Persistenz/Währungs-Shop (Issue #14 — Einsammeln
+  existiert), Spieler-Stats (Issue #13), iOS/Android-Port (Issue #5).
+  Zubehör-Slots sind in `ShipSpec` als Zahlen vorbereitet, aber noch ohne
+  Funktion.
 
 Issues sind die Feature-Quelle der Wahrheit: `gh issue list`.
 
@@ -147,8 +152,8 @@ Ein `@dataclass`, der alle geteilten Ressourcen hält und **Fenster-Resize +
 Vollbild** besitzt (`apply_resize`, `toggle_fullscreen`). Beim Resize aktualisiert
 er Screen, `Viewport` und `StarField` gemeinsam — Größenlogik lebt hier, nicht in
 den Szenen. `GameState` hält den eigentlichen Spielzustand (aktuell
-`selected_ship_index` und `final_light_years`); neue persistente Felder (Leben,
-Munition, Highscore …) kommen hierher.
+`selected_ship_index`, `final_light_years`, `final_coins`, `total_coins`); neue
+persistente Felder (Leben, Munition, Highscore …) kommen hierher.
 
 ### Viewport — Referenz-Raum (zentrales Konzept)
 
@@ -179,7 +184,10 @@ fenster-unabhängig bleibt.
   `random.Random` → deterministisch testbar.
 - Meteoriten-Größen und Bildvarianten liegen zentral in `METEORITE_VARIANTS`;
   neue Varianten dort ergänzen und weiter über `spawn_meteorite` erzeugen.
-- `Spawner` zieht timergesteuert aus einer **gewichteten Tabelle** (`SpawnEntry`).
+- `Spawner[T]` zieht timergesteuert aus einer **gewichteten Tabelle**
+  (`SpawnEntry[T]`). Generisch über den Spawn-Typ: `GameScene` hält zwei
+  Instanzen mit eigenem Timer — Gegner (`Entity`) und Münz-Formationen
+  (`CoinFormation`) —, damit Münzen die Gegner-Gewichte nicht verwässern.
   Neuer Gegnertyp = neue `Entity`-Subklasse + `spawn_*`-Fabrik + Eintrag in
   `GameScene._spawn_table`. Munitions-Pickups folgen demselben Muster.
 
@@ -204,6 +212,20 @@ fenster-unabhängig bleibt.
 - Spieler startet mit `ShipSpec.hp`; bei 0 HP → Death-Screen. Kollision
   entfernt das Hindernis und zieht `contact_damage` ab.
 
+### Münzen (Collectibles)
+
+- `coins.py`: `Coin(Entity)` (prozedural gezeichnete Gold-Scheibe mit
+  Dreh-Animation, kein Bild-Asset), Muster-Layouts als **reine Funktionen**
+  `Random -> Offsets` im Referenzraum (`LAYOUTS`), `spawn_coin_formation`
+  skaliert Offsets (`sx`/`sy`) und Größe (`su`) und wählt den Anker so, dass
+  das Muster vertikal ins Fenster passt.
+- `CoinFormation` bewegt/zeichnet seine Münzen als Einheit, zählt `collected`
+  und `missed`; `collect(player_rect)` liefert ein `Pickup(coins, bonus)` — der
+  Bonus fällt nur, wenn alle Münzen geholt und keine verpasst wurden.
+- Münzen leben in `GameScene.formations`, **getrennt** von den tödlichen
+  `entities`. Muster-Tabelle (`COIN_PATTERNS`: Name, Gewicht, Bonus) und alle
+  Abstände/Farben liegen in `config.py`.
+
 ### Assets & Audio
 
 - `AssetLoader.load_ship` lädt/skaliert/rotiert Schiffsbilder aus dem
@@ -222,8 +244,11 @@ fenster-unabhängig bleibt.
   Meilensteine oder Boss-Abschnitte.
 - `GameScene` rendert den Score als transparentes HUD (`LIGHTYRS ...`) über den
   `Viewport` und schreibt bei Kollision `state.final_light_years`.
-- `DeathScene` liest `state.final_light_years` und zeigt den finalen Wert auf dem
-  Game-Over-Screen.
+- `DeathScene` liest `state.final_light_years` und `state.final_coins` und zeigt
+  beide auf dem Game-Over-Screen.
+- Münzen: `GameScene.coins_collected` (inkl. Boni) → HUD `COINS ...` plus
+  kurzer `BONUS +n`-Hinweis; bei Tod nach `state.final_coins`, in `on_exit`
+  (auch bei Escape) auf `state.total_coins` addiert.
 
 ---
 
@@ -264,6 +289,9 @@ fenster-unabhängig bleibt.
   `Transition` + Verdrahtung in `App._create_scene`.
 - **Spielzustand** (Leben/Munition/Highscore): Felder in `GameState`, in
   `GameScene` fortschreiben, über `Viewport`-Schrift im HUD rendern.
+- **Münz-Muster:** Layout-Funktion in `coins.py` + Eintrag in `LAYOUTS` +
+  `CoinPatternSpec` in `COIN_PATTERNS` (`config.py`) → Test in
+  `tests/test_coins.py` (Determinismus, passt ins Fenster).
 
 ---
 
@@ -276,8 +304,8 @@ fenster-unabhängig bleibt.
   pytest-Schritt gesetzt. Bei neuem display-/audio-berührendem Test denselben
   Weg nutzen.
 - Muster: `FakeKeys` für Tastatur, gesetzter RNG-Seed, `context`-Fixture baut
-  einen vollständigen `GameContext`. Logik (`test_logic.py`) und Skalierung/Resize
-  (`test_viewport.py`) sind getrennt.
+  einen vollständigen `GameContext`. Logik (`test_logic.py`), Münzen
+  (`test_coins.py`) und Skalierung/Resize (`test_viewport.py`) sind getrennt.
 - Neue Spiel-Logik braucht einen Test. Reine Funktionen bevorzugen, die ohne
   laufenden Loop prüfbar sind (siehe vorhandene Spawner-/Entity-/Player-Tests).
 
