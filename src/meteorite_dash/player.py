@@ -12,12 +12,22 @@ class KeyStates(Protocol):
 
 
 class Player:
-    def __init__(self, image: pygame.Surface, position: tuple[int, int], spec: ShipSpec) -> None:
+    def __init__(
+        self,
+        image: pygame.Surface,
+        position: tuple[int, int],
+        spec: ShipSpec,
+        *,
+        extra_hp: int = 0,
+    ) -> None:
+        if extra_hp < 0:
+            raise ValueError("extra_hp darf nicht negativ sein")
         self.image = image
         self.rect = image.get_rect(topleft=position)
         self.spec = spec
-        self.max_hp = spec.hp
-        self.hp = spec.hp
+        # Zubehör "Panzerung" legt Hüllenpunkte auf den Schiffswert drauf.
+        self.max_hp = spec.hp + extra_hp
+        self.hp = self.max_hp
         self.velocity = 0.0  # px/s, vertikal; negativ = aufwärts
         self._y = float(position[1])  # Float-Position für verlustfreies Integrieren
 

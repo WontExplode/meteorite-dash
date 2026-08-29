@@ -287,12 +287,12 @@ def test_game_scene_death_records_final_coins(context: GameContext) -> None:
     assert context.state.final_coins == 7
 
 
-def test_game_scene_credits_session_total_on_exit(context: GameContext) -> None:
-    context.state.total_coins = 10
+def test_game_scene_credits_wallet_on_exit(context: GameContext) -> None:
+    context.state.progress.coins = 10
     scene = GameScene(context)
     scene.coins_collected = 7
     scene.on_exit()
-    assert context.state.total_coins == 17
+    assert context.state.progress.coins == 17
 
 
 def test_format_coins() -> None:

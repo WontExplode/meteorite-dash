@@ -45,22 +45,38 @@ def resolve_projectile_hits(projectiles: list[Projectile], entities: list[Entity
         ]
 
 
-def apply_contact_damage(player_rect: pygame.Rect, hp: int, entities: list[Entity]) -> int:
-    """Wendet Kollisionsschaden auf den Spieler an und entfernt getroffene Gegner."""
-    if hp <= 0:
-        return hp
-
-    remaining_hp = hp
-    remaining_entities: list[Entity] = []
+def _split_contact_hits(
+    player_rect: pygame.Rect, entities: list[Entity]
+) -> tuple[list[DamageableEntity], list[Entity]]:
+    """Teilt in Gefahren, die den Spieler gerade berühren, und alle übrigen."""
+    hits: list[DamageableEntity] = []
+    remaining: list[Entity] = []
     for entity in entities:
         if (
             entity.damages_player
             and isinstance(entity, DamageableEntity)
             and player_rect.colliderect(entity.rect)
         ):
-            remaining_hp -= entity.contact_damage
-            continue
-        remaining_entities.append(entity)
+            hits.append(entity)
+        else:
+            remaining.append(entity)
+    return hits, remaining
 
-    entities[:] = remaining_entities
-    return max(0, remaining_hp)
+
+def apply_contact_damage(player_rect: pygame.Rect, hp: int, entities: list[Entity]) -> int:
+    """Wendet Kollisionsschaden auf den Spieler an und entfernt getroffene Gegner."""
+    if hp <= 0:
+        return hp
+
+    hits, remaining = _split_contact_hits(player_rect, entities)
+    entities[:] = remaining
+    return max(0, hp - sum(hit.contact_damage for hit in hits))
+
+
+def absorb_contact(player_rect: pygame.Rect, entities: list[Entity]) -> bool:
+    """Schild: entfernt berührende Gefahren ohne Schaden. True, wenn etwas geblockt wurde."""
+    hits, remaining = _split_contact_hits(player_rect, entities)
+    if not hits:
+        return False
+    entities[:] = remaining
+    return True

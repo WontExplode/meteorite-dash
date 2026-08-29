@@ -10,15 +10,17 @@ from meteorite_dash.config import (
     WINDOW_SIZE,
 )
 from meteorite_dash.context import GameContext, GameState
+from meteorite_dash.persistence import SaveStore, default_save_path
 from meteorite_dash.scenes.base import Scene, Transition
 from meteorite_dash.scenes.death import DeathScene
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.scenes.main_menu import MainMenu
 from meteorite_dash.scenes.ship_selection import ShipSelection
+from meteorite_dash.scenes.shop import ShopScene
 from meteorite_dash.starfield import StarField
 from meteorite_dash.viewport import Viewport
 
-_MENU_TRANSITIONS = (Transition.MAIN_MENU, Transition.SHIP_SELECTION)
+_MENU_TRANSITIONS = (Transition.MAIN_MENU, Transition.SHIP_SELECTION, Transition.SHOP)
 
 
 class App:
@@ -26,6 +28,7 @@ class App:
         pygame.init()
         screen = pygame.display.set_mode(WINDOW_SIZE, pygame.RESIZABLE)
         pygame.display.set_caption(CAPTION)
+        store = SaveStore(default_save_path())
         self.context = GameContext(
             screen=screen,
             clock=pygame.time.Clock(),
@@ -33,9 +36,10 @@ class App:
             hint_font=pygame.font.SysFont(MENU_FONT_NAME, HINT_FONT_SIZE),
             music=MusicPlayer(),
             assets=AssetLoader(),
-            state=GameState(),
+            state=GameState(progress=store.load()),
             starfield=StarField(screen.get_width(), screen.get_height()),
             viewport=Viewport(screen.get_width(), screen.get_height()),
+            store=store,
         )
 
     def run(self) -> None:
@@ -60,6 +64,8 @@ class App:
             return MainMenu(self.context)
         if transition is Transition.SHIP_SELECTION:
             return ShipSelection(self.context)
+        if transition is Transition.SHOP:
+            return ShopScene(self.context)
         if transition is Transition.START_GAME:
             return GameScene(self.context)
         if transition is Transition.DEATH_SCREEN:

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 
 from meteorite_dash.config import (
@@ -48,13 +48,17 @@ class WeaponLoadout:
     einmalige Spezialwaffen aufnehmen; leere Spezialwaffen werden entfernt.
     """
 
-    def __init__(self, weapon_slots: int) -> None:
+    def __init__(self, weapon_slots: int, *, standard_ammo_bonus: int = 0) -> None:
         if weapon_slots < 1:
             raise ValueError("weapon_slots muss mindestens 1 sein")
+        if standard_ammo_bonus < 0:
+            raise ValueError("standard_ammo_bonus darf nicht negativ sein")
         self._max_slots = weapon_slots
-        self._weapons: list[WeaponInstance] = [
-            WeaponInstance(STANDARD_WEAPON, STANDARD_WEAPON.max_ammo)
-        ]
+        # Zubehör "Extra-Munition" vergrößert das Magazin der Standardwaffe.
+        standard = STANDARD_WEAPON
+        if standard_ammo_bonus:
+            standard = replace(standard, max_ammo=standard.max_ammo + standard_ammo_bonus)
+        self._weapons: list[WeaponInstance] = [WeaponInstance(standard, standard.max_ammo)]
         self.active_index = 0
 
     @property

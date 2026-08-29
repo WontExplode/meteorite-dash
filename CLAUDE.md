@@ -60,8 +60,14 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - Lightyears-Score im HUD; finaler Score wird im Death-Screen angezeigt.
 - Münzen (`coins.py`, Issue #14): sammelbare Münz-Muster (`line`, `wave`,
   `arc`, `zigzag`, `diamond`) als `CoinFormation`; komplett eingesammeltes
-  Muster zahlt Bonus. Eigener Münz-Score im HUD und Death-Screen,
-  Session-Summe `GameState.total_coins` (noch ohne Datei-Persistenz).
+  Muster zahlt Bonus. Eigener Münz-Score im HUD und Death-Screen; nach jedem
+  Lauf wandern die Münzen ins persistente Guthaben.
+- **Shop & Fortschritt** (Issue #14): `Progress` (Guthaben, Freischaltungen,
+  Ausrüstung) wird als JSON im Nutzer-Datenverzeichnis gespeichert
+  (`persistence.py`). `ShopScene` mit drei Reitern: Schiffe freischalten
+  (`ShipSpec.price`), Zubehör für die `accessory_slots` (Schild, Magnet,
+  Extra-Munition, Panzerung — `accessories.py`) und Farbvarianten (`TINTS` in
+  `ships.py`). Schiffsauswahl zeigt gesperrte Schiffe abgedunkelt mit Preis.
 - Strikte Typprüfung, Linting, Tests, CI.
 
 **Noch NICHT vorhanden** (aus dem Spec — meist als GitHub-Issue getrackt):
@@ -71,10 +77,7 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
 - **Steigende Schwierigkeit** über die Zeit (Speed ist momentan konstant).
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
-  (Issue #10), Münz-Persistenz/Währungs-Shop (Issue #14 — Einsammeln
-  existiert), Spieler-Stats (Issue #13), iOS/Android-Port (Issue #5).
-  Zubehör-Slots sind in `ShipSpec` als Zahlen vorbereitet, aber noch ohne
-  Funktion.
+  (Issue #10), Spieler-Stats (Issue #13), iOS/Android-Port (Issue #5).
 
 Issues sind die Feature-Quelle der Wahrheit: `gh issue list`.
 
@@ -129,6 +132,7 @@ main.main()                 Entry-Point, ruft App().run()
    └─ Scene (scenes/base)   Template-Method-Loop; gibt beim Verlassen ein
       ├─ MainMenu            Transition zurück → App wählt nächste Szene
       ├─ ShipSelection
+      ├─ ShopScene          Münzen gegen Schiffe, Zubehör, Farben
       ├─ GameScene          eigentlicher Spiel-Loop (Spieler, Spawner, Entities)
       └─ DeathScene         Game-Over-Screen mit finalem Lightyears-Score
 ```
@@ -152,8 +156,11 @@ Ein `@dataclass`, der alle geteilten Ressourcen hält und **Fenster-Resize +
 Vollbild** besitzt (`apply_resize`, `toggle_fullscreen`). Beim Resize aktualisiert
 er Screen, `Viewport` und `StarField` gemeinsam — Größenlogik lebt hier, nicht in
 den Szenen. `GameState` hält den eigentlichen Spielzustand (aktuell
-`selected_ship_index`, `final_light_years`, `final_coins`, `total_coins`); neue
-persistente Felder (Leben, Munition, Highscore …) kommen hierher.
+`selected_ship_index`, `final_light_years`, `final_coins` und den persistenten
+`progress`); neue Session-Felder (Leben, Munition …) kommen hierher, alles, was
+über den Neustart hinaus gelten soll, in `Progress`. `GameContext.store`
+(`SaveStore | None`) schreibt den Fortschritt; `save_progress()` ist ohne Store
+(Tests) ein No-op.
 
 ### Viewport — Referenz-Raum (zentrales Konzept)
 
@@ -200,6 +207,8 @@ fenster-unabhängig bleibt.
 - `WeaponSpec` / `WeaponLoadout` in `weapons.py`: Slot 0 ist die permanente
   Standardwaffe; weitere Slots nutzen `ShipSpec.weapon_slots`. Spezialwaffen
   (später) haben feste Munition und werden bei 0 entfernt.
+  `standard_ammo_bonus` vergrößert das Standard-Magazin (Zubehör
+  „Extra-Munition“).
 - `Projectile` in `projectiles.py` fliegt nach rechts, unabhängig von `Entity`.
 - `AmmoPickup` ist eine harmlose `Entity`-Subklasse (`damages_player = False`);
   Aufsammeln füllt die Standardwaffe über `WeaponLoadout.refill_standard()`.
@@ -235,6 +244,39 @@ fenster-unabhängig bleibt.
   in Gefahren ab (`is_clear`, Abstand `COIN_HAZARD_CLEARANCE`). Harmlose
   Pickups sind ausgenommen. Zeichenreihenfolge: Gefahren, dann Münzen darüber.
 
+### Shop, Zubehör & Persistenz (Issue #14)
+
+- `progress.py`: `Progress` ist reine Logik — Guthaben (`coins`),
+  `unlocked_ships`, `owned_accessories`, `owned_tints`, `equipped` (Schiffsname
+  → Zubehör-IDs) und `tints` (Schiffsname → Farb-ID). Kauf-/Ausrüst-Methoden
+  liefern ein `ShopResult` (`OK`, `TOO_EXPENSIVE`, `NO_FREE_SLOT`, …); die Szene
+  übersetzt das in Text. Kostenlose Schiffe (`price == 0`) sind immer frei.
+- `persistence.py`: `SaveStore(path)` liest/schreibt `Progress` als JSON —
+  atomar (Temp-Datei + `os.replace`), defensiv geparst (`Progress.from_dict`
+  verwirft falsche Typen und unbekannte IDs), kaputte/fehlende Datei → frischer
+  Fortschritt, Schreibfehler → Warnung statt Crash. Pfad:
+  `default_save_path()` (XDG / AppData / Application Support), überschreibbar
+  per `METEORITE_DASH_SAVE_DIR`.
+- Kataloge: `ShipSpec.price` in `SHIPS`, `AccessorySpec` in
+  `accessories.ACCESSORIES` (Kind, Name, Beschreibung, Preis), `TintSpec` in
+  `ships.TINTS`. Effektstärken (`SHIELD_CHARGES`, `MAGNET_RADIUS`,
+  `AMMO_RESERVE_BONUS`, `ARMOR_HP_BONUS`) stehen in `config.py`.
+- Zubehör wird **einmal gekauft** und pro Schiff ausgerüstet, begrenzt durch
+  `ShipSpec.accessory_slots`. Farben ebenso: einmal kaufen, pro Schiff
+  wählen; `Progress.ship_tint(spec)` liefert die effektive Färbung (gekaufte
+  Farbe oder `ShipSpec.tint`).
+- Effekte wendet `GameScene._build` an: Panzerung → `Player(extra_hp=…)`,
+  Extra-Munition → `WeaponLoadout(standard_ammo_bonus=…)`, Schild →
+  `shield_charges` + `combat.absorb_contact` (blockt Treffer ohne Schaden,
+  HUD `SCHILD xN`), Magnet → `CoinFormation.attract` zieht Münzen im Radius
+  heran.
+- `ShopScene` (`scenes/shop.py`): Reiter Schiffe / Zubehör / Farben, `rows()`
+  baut die Zeilen aus `Progress`, `_activate` kauft/rüstet/wählt und ruft
+  danach `context.save_progress()`. Wallet oben rechts über
+  `scenes/widgets.draw_wallet` — auch im Hauptmenü und in der Schiffsauswahl.
+- `ShipSelection` hält einen eigenen `cursor`; nur ein freigeschaltetes Schiff
+  wird per Enter in `GameState.selected_ship_index` übernommen.
+
 ### Assets & Audio
 
 - `AssetLoader.load_ship` lädt/skaliert/rotiert Schiffsbilder aus dem
@@ -257,7 +299,7 @@ fenster-unabhängig bleibt.
   beide auf dem Game-Over-Screen.
 - Münzen: `GameScene.coins_collected` (inkl. Boni) → HUD `COINS ...` plus
   kurzer `BONUS +n`-Hinweis; bei Tod nach `state.final_coins`, in `on_exit`
-  (auch bei Escape) auf `state.total_coins` addiert.
+  (auch bei Escape) auf `state.progress.coins` addiert und gespeichert.
 
 ---
 
@@ -301,6 +343,13 @@ fenster-unabhängig bleibt.
 - **Münz-Muster:** Layout-Funktion in `coins.py` + Eintrag in `LAYOUTS` +
   `CoinPatternSpec` in `COIN_PATTERNS` (`config.py`) → Test in
   `tests/test_coins.py` (Determinismus, passt ins Fenster).
+- **Zubehör:** `AccessoryKind` + `AccessorySpec` in `accessories.py`,
+  Effektstärke in `config.py`, Effekt in `GameScene._build` (oder als reine
+  Funktion in `combat.py` / `coins.py`) → Tests in `tests/test_shop.py`.
+  `Progress` braucht keine Änderung — IDs kommen aus dem Katalog.
+- **Shop-Artikel / Farbe:** `TintSpec` in `ships.TINTS` bzw. `price` am
+  `ShipSpec`; Persistenz übernimmt neue IDs automatisch, alte Speicherstände
+  bleiben lesbar.
 
 ---
 
@@ -313,8 +362,10 @@ fenster-unabhängig bleibt.
   pytest-Schritt gesetzt. Bei neuem display-/audio-berührendem Test denselben
   Weg nutzen.
 - Muster: `FakeKeys` für Tastatur, gesetzter RNG-Seed, `context`-Fixture baut
-  einen vollständigen `GameContext`. Logik (`test_logic.py`), Münzen
-  (`test_coins.py`) und Skalierung/Resize (`test_viewport.py`) sind getrennt.
+  einen vollständigen `GameContext` **ohne** `store` (kein Datei-Zugriff).
+  Logik (`test_logic.py`), Münzen (`test_coins.py`), Fortschritt/Persistenz
+  (`test_progress.py`, mit `tmp_path`), Shop/Zubehör (`test_shop.py`) und
+  Skalierung/Resize (`test_viewport.py`) sind getrennt.
 - Neue Spiel-Logik braucht einen Test. Reine Funktionen bevorzugen, die ohne
   laufenden Loop prüfbar sind (siehe vorhandene Spawner-/Entity-/Player-Tests).
 
@@ -336,16 +387,17 @@ Spielcode. Die realistischen Punkte:
   `image_path`/`sound_path`. Werden später **nutzergelieferte Dateien** geladen
   (Skins, Mods), Pfade validieren (kein Path-Traversal außerhalb eines erlaubten
   Verzeichnisses) und nur erwartete Dateitypen akzeptieren.
-- **Persistenz (Highscore/Settings, geplant):** **JSON, niemals `pickle`/`eval`**
-  auf nicht vertrauenswürdige Daten. Beim Einlesen defensiv parsen (fehlende/
-  falsch typisierte Felder abfangen), in ein nutzer-beschreibbares Verzeichnis
-  schreiben, kaputte Dateien tolerieren statt crashen.
+- **Persistenz (`persistence.py`):** **JSON, niemals `pickle`/`eval`** auf
+  nicht vertrauenswürdige Daten. `Progress.from_dict` parst defensiv (fehlende/
+  falsch typisierte Felder, unbekannte IDs, `bool`-als-`int`), Datei liegt im
+  nutzer-beschreibbaren Datenverzeichnis, kaputte Dateien werden toleriert.
+  Dieses Muster für Highscore/Settings wiederverwenden, nicht neu erfinden.
 - **Abhängigkeiten:** über `uv` gepinnt halten; nur etablierte Pakete (pygame-ce)
   aus PyPI. Keine ungeprüften Downloads zur Laufzeit.
 
-Es gibt hier **keine** echten Angriffsflächen wie Eingabe-Eval, Deserialisierung
-oder Netzwerk — keine erfinden. Defensiv werden, sobald Persistenz oder
-nutzergelieferte Inhalte dazukommen.
+Es gibt hier **keine** echten Angriffsflächen wie Eingabe-Eval oder Netzwerk —
+keine erfinden. Die einzige Deserialisierung ist der JSON-Speicherstand (siehe
+oben); defensiv bleiben, sobald nutzergelieferte Inhalte dazukommen.
 
 ---
 

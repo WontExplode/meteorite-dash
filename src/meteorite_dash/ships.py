@@ -20,12 +20,20 @@ class ShipSpec:
     hull: float
     weapon_slots: int
     accessory_slots: int
+    # Münzpreis im Shop; 0 = von Anfang an freigeschaltet.
+    price: int = 0
 
     def __post_init__(self) -> None:
         if self.mass <= 0 or self.thrust <= 0 or self.hull <= 0:
             raise ValueError(f"{self.name}: mass, thrust und hull müssen > 0 sein")
         if self.weapon_slots < 0 or self.accessory_slots < 0:
             raise ValueError(f"{self.name}: Slots dürfen nicht negativ sein")
+        if self.price < 0:
+            raise ValueError(f"{self.name}: price darf nicht negativ sein")
+
+    @property
+    def is_free(self) -> bool:
+        return self.price == 0
 
     @property
     def acceleration(self) -> float:
@@ -70,6 +78,7 @@ SHIPS: tuple[ShipSpec, ...] = (
         hull=60.0,
         weapon_slots=1,
         accessory_slots=1,
+        price=300,
     ),
     ShipSpec(
         name="Brawler",
@@ -80,6 +89,7 @@ SHIPS: tuple[ShipSpec, ...] = (
         hull=200.0,
         weapon_slots=3,
         accessory_slots=2,
+        price=500,
     ),
     ShipSpec(
         name="Racer",
@@ -90,5 +100,35 @@ SHIPS: tuple[ShipSpec, ...] = (
         hull=80.0,
         weapon_slots=1,
         accessory_slots=0,
+        price=400,
     ),
 )
+SHIPS_BY_NAME: dict[str, ShipSpec] = {spec.name: spec for spec in SHIPS}
+
+
+@dataclass(frozen=True)
+class TintSpec:
+    """Kaufbare Farbvariante (Issue #14): multiplikativ auf das Schiffssprite.
+
+    Einmal gekauft, ist die Farbe für alle Schiffe verfügbar; die Standardfarbe
+    eines Schiffs (`ShipSpec.tint`) bleibt kostenlos wählbar.
+    """
+
+    id: str
+    name: str
+    color: Color
+    price: int
+
+    def __post_init__(self) -> None:
+        if self.price < 0:
+            raise ValueError(f"{self.id}: price darf nicht negativ sein")
+
+
+TINTS: tuple[TintSpec, ...] = (
+    TintSpec("gold", "Gold", (255, 220, 100), 100),
+    TintSpec("violet", "Violett", (210, 130, 255), 100),
+    TintSpec("cyan", "Cyan", (110, 240, 240), 100),
+    TintSpec("magenta", "Magenta", (255, 120, 220), 120),
+    TintSpec("ember", "Glut", (255, 160, 60), 120),
+)
+TINTS_BY_ID: dict[str, TintSpec] = {tint.id: tint for tint in TINTS}
