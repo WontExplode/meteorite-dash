@@ -195,3 +195,11 @@ SIM_VERSION = 1
 # Seeds sind 32-Bit-Zahlen — kurz genug zum Abtippen ("Rennen gegen Freunde").
 SEED_BITS = 32
 SEED_ENV = "METEORITE_DASH_SEED"
+
+# --- Replays (Issue #34) ---
+# Replays liegen neben `progress.json`; `last` ist immer der letzte, `best` der
+# weiteste Lauf. Namen laufen durch `ReplayStore.path_for` (kein Path-Traversal).
+REPLAY_DIR_NAME = "replays"
+REPLAY_FORMAT_VERSION = 1
+REPLAY_LAST_NAME = "last"
+REPLAY_BEST_NAME = "best"

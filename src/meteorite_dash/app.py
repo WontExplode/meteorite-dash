@@ -11,6 +11,7 @@ from meteorite_dash.config import (
 )
 from meteorite_dash.context import GameContext, GameState
 from meteorite_dash.persistence import SaveStore, default_save_path
+from meteorite_dash.replay import ReplayStore, default_replay_dir
 from meteorite_dash.scenes.base import Scene, Transition
 from meteorite_dash.scenes.death import DeathScene
 from meteorite_dash.scenes.game import GameScene
@@ -40,6 +41,7 @@ class App:
             starfield=StarField(screen.get_width(), screen.get_height()),
             viewport=Viewport(screen.get_width(), screen.get_height()),
             store=store,
+            replays=ReplayStore(default_replay_dir()),
         )
 
     def run(self) -> None:
