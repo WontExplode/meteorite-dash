@@ -8,6 +8,8 @@ MenuAction = Literal["start", "ship", "quit"]
 class MeteoriteVariant(NamedTuple):
     radius: int
     images: tuple[str, str]
+    hp: int
+    contact_damage: int
 
 
 WINDOW_SIZE: WindowSize = (800, 600)
@@ -62,12 +64,16 @@ WAVE_ENEMY_COLOR: Color = (220, 90, 90)
 HUNTER_ENEMY_COLOR: Color = (90, 200, 130)
 
 METEORITE_VARIANTS: tuple[MeteoriteVariant, ...] = (
-    MeteoriteVariant(20, ("AsteroidTiny.png", "AsteroidTiny2.png")),
-    MeteoriteVariant(30, ("AsteroidSmall.png", "AsteroidSmall2.png")),
-    MeteoriteVariant(42, ("AsteroidMedium.png", "AsteroidMedium2.png")),
-    MeteoriteVariant(60, ("AsteroidLarge.png", "AsteroidLarge2.png")),
+    MeteoriteVariant(20, ("AsteroidTiny.png", "AsteroidTiny2.png"), hp=10, contact_damage=15),
+    MeteoriteVariant(30, ("AsteroidSmall.png", "AsteroidSmall2.png"), hp=20, contact_damage=22),
+    MeteoriteVariant(42, ("AsteroidMedium.png", "AsteroidMedium2.png"), hp=40, contact_damage=30),
+    MeteoriteVariant(60, ("AsteroidLarge.png", "AsteroidLarge2.png"), hp=70, contact_damage=45),
 )
 ENEMY_SIZE: WindowSize = (44, 44)
+WAVE_ENEMY_HP = 20
+HUNTER_ENEMY_HP = 30
+WAVE_ENEMY_CONTACT_DAMAGE = 25
+HUNTER_ENEMY_CONTACT_DAMAGE = 35
 
 METEORITE_SPEED = 220.0
 WAVE_ENEMY_SPEED = 180.0
@@ -81,6 +87,26 @@ SPAWN_INTERVAL_RANGE: tuple[float, float] = (0.6, 1.4)
 METEORITE_WEIGHT = 8.0
 WAVE_ENEMY_WEIGHT = 2.0
 HUNTER_ENEMY_WEIGHT = 0.5
+
+AMMO_PICKUP_WEIGHT = 1.5
+
+# --- Waffen & Projektile ---
+STANDARD_WEAPON_MAX_AMMO = 7
+STANDARD_WEAPON_DAMAGE = 10
+PROJECTILE_SPEED = 500.0
+PROJECTILE_SIZE: WindowSize = (16, 8)
+PROJECTILE_COLOR: Color = (255, 255, 120)
+SHOOT_COOLDOWN = 0.25
+STANDARD_WEAPON_SOUND = "standard-gun.mp3"
+
+AMMO_PICKUP_SIZE: WindowSize = (24, 24)
+AMMO_PICKUP_COLOR: Color = (255, 210, 80)
+AMMO_PICKUP_SPEED = 180.0
+AMMO_PICKUP_HIGHLIGHT_COLOR = (255, 240, 180)
+
+WEAPON_HUD_FONT_SIZE = 20
+WEAPON_HUD_TOP_LEFT: WindowSize = (24, 24)
+HP_HUD_TOP_LEFT: WindowSize = (24, 52)
 
 # --- Score ---
 SCORE_LIGHT_YEARS_PER_SECOND = 12.0

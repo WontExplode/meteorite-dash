@@ -7,8 +7,14 @@ import pygame
 
 from meteorite_dash.assets import AssetLoader
 from meteorite_dash.config import (
+    AMMO_PICKUP_COLOR,
+    AMMO_PICKUP_HIGHLIGHT_COLOR,
+    AMMO_PICKUP_SIZE,
+    AMMO_PICKUP_SPEED,
     ENEMY_SIZE,
     HUNTER_ENEMY_COLOR,
+    HUNTER_ENEMY_CONTACT_DAMAGE,
+    HUNTER_ENEMY_HP,
     HUNTER_ENEMY_SPEED,
     HUNTER_VERTICAL_SPEED,
     METEORITE_COLOR,
@@ -16,6 +22,8 @@ from meteorite_dash.config import (
     METEORITE_VARIANTS,
     WAVE_AMPLITUDE,
     WAVE_ENEMY_COLOR,
+    WAVE_ENEMY_CONTACT_DAMAGE,
+    WAVE_ENEMY_HP,
     WAVE_ENEMY_SPEED,
     WAVE_FREQUENCY,
     Color,
@@ -30,6 +38,10 @@ class Entity(ABC):
         self._x = float(rect.x)
         self._y = float(rect.y)
         self.speed_x = speed_x
+
+    @property
+    def damages_player(self) -> bool:
+        return True
 
     @property
     def is_off_screen(self) -> bool:
@@ -49,14 +61,36 @@ class Entity(ABC):
         raise NotImplementedError
 
 
-class Meteorite(Entity):
+class DamageableEntity(Entity):
+    def __init__(
+        self,
+        rect: pygame.Rect,
+        speed_x: float,
+        *,
+        hp: int,
+        contact_damage: int,
+    ) -> None:
+        super().__init__(rect, speed_x)
+        self.max_hp = hp
+        self.hp = hp
+        self.contact_damage = contact_damage
+
+    def take_damage(self, amount: int) -> bool:
+        self.hp -= amount
+        return self.hp <= 0
+
+
+class Meteorite(DamageableEntity):
     def __init__(
         self,
         rect: pygame.Rect,
         speed_x: float,
         image: pygame.Surface | None = None,
+        *,
+        hp: int,
+        contact_damage: int,
     ) -> None:
-        super().__init__(rect, speed_x)
+        super().__init__(rect, speed_x, hp=hp, contact_damage=contact_damage)
         self.image = image
 
     def draw(self, surface: pygame.Surface) -> None:
@@ -68,16 +102,18 @@ class Meteorite(Entity):
         pygame.draw.circle(surface, METEORITE_COLOR, self.rect.center, radius)
 
 
-class WaveEnemy(Entity):
+class WaveEnemy(DamageableEntity):
     def __init__(
         self,
         rect: pygame.Rect,
         speed_x: float,
         *,
+        hp: int = WAVE_ENEMY_HP,
+        contact_damage: int = WAVE_ENEMY_CONTACT_DAMAGE,
         amplitude: float = WAVE_AMPLITUDE,
         frequency: float = WAVE_FREQUENCY,
     ) -> None:
-        super().__init__(rect, speed_x)
+        super().__init__(rect, speed_x, hp=hp, contact_damage=contact_damage)
         self._base_y = self._y
         self._elapsed = 0.0
         self._amplitude = amplitude
@@ -93,15 +129,17 @@ class WaveEnemy(Entity):
         _draw_left_triangle(surface, self.rect, WAVE_ENEMY_COLOR)
 
 
-class HunterEnemy(Entity):
+class HunterEnemy(DamageableEntity):
     def __init__(
         self,
         rect: pygame.Rect,
         speed_x: float,
         *,
+        hp: int = HUNTER_ENEMY_HP,
+        contact_damage: int = HUNTER_ENEMY_CONTACT_DAMAGE,
         vertical_speed: float = HUNTER_VERTICAL_SPEED,
     ) -> None:
-        super().__init__(rect, speed_x)
+        super().__init__(rect, speed_x, hp=hp, contact_damage=contact_damage)
         self._vertical_speed = vertical_speed
 
     def _update_vertical(self, dt: float, player_y: int) -> None:
@@ -118,13 +156,39 @@ class HunterEnemy(Entity):
         _draw_left_triangle(surface, self.rect, HUNTER_ENEMY_COLOR)
 
 
+class AmmoPickup(Entity):
+    @property
+    def damages_player(self) -> bool:
+        return False
+
+    def draw(self, surface: pygame.Surface) -> None:
+        pygame.draw.rect(surface, AMMO_PICKUP_COLOR, self.rect, border_radius=4)
+        inner = self.rect.inflate(-self.rect.width // 3, -self.rect.height // 3)
+        pygame.draw.rect(surface, AMMO_PICKUP_HIGHLIGHT_COLOR, inner, border_radius=2)
+
+
 def _draw_left_triangle(surface: pygame.Surface, rect: pygame.Rect, color: Color) -> None:
     points = [(rect.left, rect.centery), (rect.right, rect.top), (rect.right, rect.bottom)]
     pygame.draw.polygon(surface, color, points)
 
 
 def collides_with_any(player_rect: pygame.Rect, entities: Iterable[Entity]) -> bool:
-    return any(player_rect.colliderect(entity.rect) for entity in entities)
+    return any(
+        entity.damages_player and player_rect.colliderect(entity.rect) for entity in entities
+    )
+
+
+def collect_pickups(player_rect: pygame.Rect, entities: list[Entity]) -> list[Entity]:
+    """Entfernt eingesammelte Munitions-Pickups und gibt sie zurück."""
+    collected: list[Entity] = []
+    remaining: list[Entity] = []
+    for entity in entities:
+        if isinstance(entity, AmmoPickup) and player_rect.colliderect(entity.rect):
+            collected.append(entity)
+        else:
+            remaining.append(entity)
+    entities[:] = remaining
+    return collected
 
 
 def spawn_meteorite(
@@ -141,7 +205,13 @@ def spawn_meteorite(
     image_filename = rng.choice(variant.images)
     image = assets.load_image(image_filename, (diameter, diameter)) if assets is not None else None
     y = rng.randint(0, max(0, height - diameter))
-    return Meteorite(pygame.Rect(width, y, diameter, diameter), METEORITE_SPEED * sx, image)
+    return Meteorite(
+        pygame.Rect(width, y, diameter, diameter),
+        METEORITE_SPEED * sx,
+        image,
+        hp=variant.hp,
+        contact_damage=variant.contact_damage,
+    )
 
 
 def spawn_wave_enemy(
@@ -180,3 +250,17 @@ def spawn_hunter_enemy(
         HUNTER_ENEMY_SPEED * sx,
         vertical_speed=HUNTER_VERTICAL_SPEED * sy,
     )
+
+
+def spawn_ammo_pickup(
+    rng: random.Random,
+    screen_size: tuple[int, int],
+    *,
+    sx: float = 1.0,
+    su: float = 1.0,
+) -> AmmoPickup:
+    width, height = screen_size
+    w = max(1, round(AMMO_PICKUP_SIZE[0] * su))
+    h = max(1, round(AMMO_PICKUP_SIZE[1] * su))
+    y = rng.randint(0, max(0, height - h))
+    return AmmoPickup(pygame.Rect(width, y, w, h), AMMO_PICKUP_SPEED * sx)

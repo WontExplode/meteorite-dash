@@ -17,7 +17,7 @@ Die Vision (Designvorlage):
 - Raumschiff bewegt sich nach oben/unten.
 - Meteoriten fliegen von rechts nach links; Geschwindigkeit steigt mit der Zeit.
 - Sterne geben Punkte, wenn man sie einsammelt.
-- Schießen mit **begrenzter Munition**; Munitions-Extras füllen sie wieder auf.
+- Schießen mit **begrenzter Munition**; Munitions-Extras füllen die Standardwaffe wieder auf.
 - Zerstörbare Meteoriten (große brauchen mehrere Treffer) und unzerstörbare, die
   man umfliegen muss.
 - Kollision kostet ein Leben; bei null Leben ist das Spiel vorbei.
@@ -47,7 +47,13 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - Datengetriebener `Spawner` (gewichtete Tabelle, timergesteuert).
 - Scrollendes Sternenfeld als Hintergrund (`StarField`).
 - Musik (Menü-Loop + Spiel-Playlist), Soundeffekte, Asset-/Font-Caching.
-- Spieler-Bewegung (vertikal) mit Trägheitsphysik, Kollision → Death-Screen.
+- Spieler-Bewegung (vertikal) mit Trägheitsphysik; Kollisionsschaden und Tod bei 0 HP.
+- **Waffensystem:** Standard-Schuss (7 Munition, startet voll), Projektile,
+  Munitions-Pickups im Spawner, Waffen-HUD; `WeaponLoadout` respektiert
+  `ShipSpec.weapon_slots` und ist für Spezialwaffen + `R`-Wechsel vorbereitet.
+- **Kampf / HP:** Spieler-HP aus `ShipSpec.hull`; zerstörbare Meteoriten und
+  Gegner mit größenabhängigen HP; Projektil- und Kollisionsschaden über
+  `combat.py`.
 - Schiffssystem (`ships.py`, Issue #11): `ShipSpec`-Datenblätter mit
   physikalischen Grundwerten (mass/thrust/hull, Slot-Zahlen) und abgeleiteten
   Spielwerten; 4 Schiffe mit Tint-Farbvarianten und Stat-Balken in der Auswahl.
@@ -56,15 +62,13 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 
 **Noch NICHT vorhanden** (aus dem Spec — meist als GitHub-Issue getrackt):
 
-- **Schießen / Projektile** und **begrenzte Munition** sowie Munitions-Extras.
 - **Sammelbare Sterne** für Punkte (`StarField` ist nur Deko, nicht einsammelbar).
-- Leben-Zähler (aktuell beendet **eine** Kollision das Spiel).
-- **Zerstörbare vs. unzerstörbare Meteoriten**, Trefferpunkte (HP), große
-  Meteoriten mit mehreren Treffern.
+- **Spezialwaffen-Pickups** (Loadout und Slot-Limit sind vorbereitet).
+- **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
 - **Steigende Schwierigkeit** über die Zeit (Speed ist momentan konstant).
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
   (Issue #10), Münzen/Währung (Issue #14), Spieler-Stats (Issue #13),
-  iOS/Android-Port (Issue #5). Waffen-/Zubehör-Slots sind in `ShipSpec` als
+  iOS/Android-Port (Issue #5). Zubehör-Slots sind in `ShipSpec` als
   Zahlen vorbereitet, aber noch ohne Funktion.
 
 Issues sind die Feature-Quelle der Wahrheit: `gh issue list`.
@@ -177,7 +181,28 @@ fenster-unabhängig bleibt.
   neue Varianten dort ergänzen und weiter über `spawn_meteorite` erzeugen.
 - `Spawner` zieht timergesteuert aus einer **gewichteten Tabelle** (`SpawnEntry`).
   Neuer Gegnertyp = neue `Entity`-Subklasse + `spawn_*`-Fabrik + Eintrag in
-  `GameScene._spawn_table`.
+  `GameScene._spawn_table`. Munitions-Pickups folgen demselben Muster.
+
+### Waffen & Munition
+
+- `WeaponSpec` / `WeaponLoadout` in `weapons.py`: Slot 0 ist die permanente
+  Standardwaffe; weitere Slots nutzen `ShipSpec.weapon_slots`. Spezialwaffen
+  (später) haben feste Munition und werden bei 0 entfernt.
+- `Projectile` in `projectiles.py` fliegt nach rechts, unabhängig von `Entity`.
+- `AmmoPickup` ist eine harmlose `Entity`-Subklasse (`damages_player = False`);
+  Aufsammeln füllt die Standardwaffe über `WeaponLoadout.refill_standard()`.
+- `GameScene` steuert Feuern (`Space`, Cooldown), Waffenwechsel (`R`) und HUD.
+
+### Kampf
+
+- `DamageableEntity` in `entities.py`: HP + Kollisionsschaden; Meteoriten-HP
+  stehen in `MeteoriteVariant`, Gegner-HP in `config.py`.
+- `combat.py`: `resolve_projectile_hits` und `apply_contact_damage` — rein
+  logisch, headless testbar.
+- `WeaponSpec.damage` und `WeaponSpec.fire_cooldown` pro Waffe; Standardwaffe
+  verursacht 10 Schaden (großer Meteorit: 7 Treffer = volles Magazin).
+- Spieler startet mit `ShipSpec.hp`; bei 0 HP → Death-Screen. Kollision
+  entfernt das Hindernis und zieht `contact_damage` ab.
 
 ### Assets & Audio
 
@@ -233,6 +258,8 @@ fenster-unabhängig bleibt.
 
 - **Gegner/Hindernis:** `Entity`-Subklasse → `spawn_*`-Fabrik (mit `sx/sy/su`) →
   Gewicht in `GameScene._spawn_table` → Logik-Test mit gesetztem Seed.
+- **Waffe/Pickup:** Konstanten in `config.py`, Logik in `weapons.py` /
+  `projectiles.py`, Integration in `GameScene`.
 - **Szene/Screen** (z. B. Game-Over, Issue #15): `Scene`-Subklasse +
   `Transition` + Verdrahtung in `App._create_scene`.
 - **Spielzustand** (Leben/Munition/Highscore): Felder in `GameState`, in
@@ -295,8 +322,7 @@ nutzergelieferte Inhalte dazukommen.
 - **Vollbild** merkt sich die Fenstergröße (`_windowed_size`); OS-`VIDEORESIZE`
   wird im Vollbild ignoriert. Resize-Logik nur in `GameContext` ändern, beide
   Pfade (windowed/fullscreen) bedenken.
-- **Kollision = sofort Death-Screen.** Es gibt noch keine Leben. Wer Leben
-  einbaut, ersetzt den direkten `finish(Transition.DEATH_SCREEN)`-Pfad in
-  `GameScene.update`.
+- **Spieler-HP aus `ShipSpec.hull`.** Kollision zieht `contact_damage` ab und
+  entfernt das Hindernis; bei 0 HP → Death-Screen.
 - **`Player.update` clampt nur Bewegung**, holt das Schiff aber nicht aus dem Bild
   zurück — `GameScene.on_resize` re-klemmt es nach einem Resize aktiv.

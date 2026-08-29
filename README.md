@@ -8,18 +8,22 @@ immer mehr zurückgelegte Lichtjahre.
 
 - Hauptmenü mit Schiffsauswahl
 - vertikale Raumschiffsteuerung
+- Standardwaffe mit 7 Schüssen und Munitions-Pickups
+- zerstörbare Meteoriten und Gegner mit HP; Spieler-HP aus Schiffsrumpf
 - Meteoriten in vier Größen mit zufälligen Farbvarianten
 - Gegner mit unterschiedlichen Bewegungsmustern
 - scrollendes Sternenfeld als Hintergrund
 - Lightyears-Score als HUD-Anzeige
 - Game-Over-Screen mit finalem Score
 - dynamische Fenstergröße und Vollbild über einen gemeinsamen `Viewport`
-- Menü-Musik, Game-Playlist und Game-Over-Sound
+- Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
 
 ## Steuerung
 
 - `Pfeil hoch` / `Pfeil runter`: Raumschiff bewegen oder Menüpunkt wechseln
 - `Pfeil links` / `Pfeil rechts`: Raumschiff in der Schiffsauswahl wechseln
+- `Space`: schießen (im Spiel)
+- `R`: Waffe wechseln (im Spiel, wenn mehrere Waffen vorhanden)
 - `Enter` / `Space`: Menüauswahl bestätigen
 - `Escape`: im Spiel zurück ins Hauptmenü
 - `F` / `F11`: Vollbild umschalten
@@ -43,7 +47,11 @@ src/meteorite_dash/
   assets.py            Asset-Pfade und Bild-Caching
   audio.py             Musik und Sounds
   score.py             Lightyears-Score
-  entities.py          Gegner und Hindernisse
+  entities.py          Gegner, Hindernisse und Munitions-Pickups
+  projectiles.py       Spieler-Projektile
+  weapons.py           Waffen-Loadout und Munitionslogik
+  combat.py            Projektil- und Kollisionsschaden
+  ships.py             Schiffsdatenblätter und Slot-Limits
   spawner.py           Timergesteuertes Spawning
   starfield.py         Bewegter Sternenhintergrund
   scenes/
