@@ -203,3 +203,11 @@ REPLAY_DIR_NAME = "replays"
 REPLAY_FORMAT_VERSION = 1
 REPLAY_LAST_NAME = "last"
 REPLAY_BEST_NAME = "best"
+
+# --- Ghost (Issue #34) ---
+# Der Ghost ist der beste gespeicherte Lauf zum selben Seed und läuft als
+# zweite Simulation im Gleichschritt mit; nur sein Schiff wird gezeichnet.
+GHOST_ALPHA = 110
+GHOST_TINT: Color = (150, 210, 255)
+GHOST_HUD_COLOR: Color = (150, 210, 255)
+GHOST_HUD_TOP_RIGHT: WindowSize = (776, 108)
