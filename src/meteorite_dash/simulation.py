@@ -260,6 +260,7 @@ class Simulation:
         interval = self.difficulty.spawn_interval_multiplier
 
         self.player.update(dt, inputs)
+        self.score.set_rate_multiplier(speed)
         self.score.update(dt)
         if InputFrame.SWAP_WEAPON in inputs:
             self.loadout.cycle_weapon()
@@ -282,7 +283,7 @@ class Simulation:
             self.loadout.refill_standard()
             events.extend(self._event(EventKind.AMMO_PICKUP) for _ in collected)
 
-        self._update_coins(dt, player_y, speed, interval, events)
+        self._update_coins(dt, player_y, speed, events)
 
         projectiles_before = len(self.projectiles)
         entities_before = len(self.entities)
@@ -343,15 +344,23 @@ class Simulation:
         dt: float,
         player_y: int,
         speed: float,
-        interval: float,
         events: list[SimEvent],
     ) -> None:
         """Spawnt, bewegt und sammelt Münz-Formationen; Magnet zieht im Radius heran.
 
         Münzwert und Bonus erhöhen `coins_collected` und liefern je ein Event.
+        Die zeitliche Kadenz folgt dem Welttempo, nicht der Gefahren-Dichte.
         """
+        # Die Gefahren-Dichte darf keine zusätzliche Münzdichte erzeugen.
+        # Nur das höhere Welttempo verkürzt die Zeitabstände, sodass der
+        # räumliche Abstand der Formationen ungefähr konstant bleibt.
+        coin_interval = 1.0 / speed
         self.formations.extend(
-            self.coin_spawner.update(dt, accept=self._accept_formation, interval_scale=interval)
+            self.coin_spawner.update(
+                dt,
+                accept=self._accept_formation,
+                interval_scale=coin_interval,
+            )
         )
         for formation in self.formations:
             formation.update(dt, player_y, speed)
