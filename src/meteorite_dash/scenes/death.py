@@ -6,6 +6,7 @@ from meteorite_dash.config import (
     DEATH_BORDER_COLOR,
     DEATH_HIGHLIGHT_COLOR,
     DEATH_MESSAGE_FONT_SIZE,
+    DEATH_MODE_COLOR,
     DEATH_MUTED_COLOR,
     DEATH_SOUND,
     DEATH_SUBTITLE_FONT_SIZE,
@@ -15,6 +16,7 @@ from meteorite_dash.config import (
     TEXT_COLOR,
 )
 from meteorite_dash.context import GameContext
+from meteorite_dash.replay import RunMode
 from meteorite_dash.scenes.base import Scene, Transition
 from meteorite_dash.score import format_coins, format_light_years
 
@@ -82,29 +84,45 @@ class DeathScene(Scene):
         subtitle_rect = subtitle.get_rect(center=(center_x, vp.py(260)))
         screen.blit(subtitle, subtitle_rect)
 
-        message = message_font.render("DEIN LAUF ENDET HIER", True, muted_color)
-        message_rect = message.get_rect(center=(center_x, vp.py(330)))
-        screen.blit(message, message_rect)
+        state = self.context.state
+        if state.final_mode is RunMode.DAILY:
+            message = message_font.render(f"DAILY RUN {state.final_label}", True, DEATH_MODE_COLOR)
+        else:
+            message = message_font.render("DEIN LAUF ENDET HIER", True, muted_color)
+        screen.blit(message, message.get_rect(center=(center_x, vp.py(330))))
 
         final_score = score_font.render(
-            f"DISTANZ: {format_light_years(self.context.state.final_light_years)} LICHTJAHRE",
+            f"DISTANZ: {format_light_years(state.final_light_years)} LICHTJAHRE",
             True,
             highlight_color,
         )
-        final_score_rect = final_score.get_rect(center=(center_x, vp.py(390)))
-        screen.blit(final_score, final_score_rect)
+        screen.blit(final_score, final_score.get_rect(center=(center_x, vp.py(390))))
 
         final_coins = score_font.render(
-            f"MÜNZEN: {format_coins(self.context.state.final_coins)}", True, COIN_COLOR
+            f"MÜNZEN: {format_coins(state.final_coins)}", True, COIN_COLOR
         )
-        final_coins_rect = final_coins.get_rect(center=(center_x, vp.py(430)))
-        screen.blit(final_coins, final_coins_rect)
+        screen.blit(final_coins, final_coins.get_rect(center=(center_x, vp.py(425))))
 
-        seed_text = hint_font.render(f"SEED {self.context.state.final_seed}", True, muted_color)
-        screen.blit(seed_text, seed_text.get_rect(center=(center_x, vp.py(465))))
+        record_line, record_color = self._record_line()
+        if record_line:
+            record_text = score_font.render(record_line, True, record_color)
+            screen.blit(record_text, record_text.get_rect(center=(center_x, vp.py(458))))
+
+        seed_text = hint_font.render(f"SEED {state.final_seed}", True, muted_color)
+        screen.blit(seed_text, seed_text.get_rect(center=(center_x, vp.py(488))))
 
         hint = hint_font.render("DRÜCKE EINE BELIEBIGE TASTE", True, TEXT_COLOR)
-        hint_rect = hint.get_rect(center=(center_x, vp.py(500)))
-        screen.blit(hint, hint_rect)
+        screen.blit(hint, hint.get_rect(center=(center_x, vp.py(515))))
 
         pygame.display.flip()
+
+    def _record_line(self) -> tuple[str, tuple[int, int, int]]:
+        """Vergleich mit dem Ghost-Rekord zum selben Seed; leer ohne Vergleich."""
+        state = self.context.state
+        record = state.final_record_light_years
+        if record is None:
+            return "", DEATH_MUTED_COLOR
+        if state.final_light_years > record:
+            return f"NEUER REKORD (VORHER {format_light_years(record)})", DEATH_HIGHLIGHT_COLOR
+        delta = round(state.final_light_years - record)
+        return f"REKORD {format_light_years(record)} ({delta:+d})", DEATH_MUTED_COLOR

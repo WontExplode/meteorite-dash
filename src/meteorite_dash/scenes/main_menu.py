@@ -4,6 +4,7 @@ from meteorite_dash.config import (
     BACKGROUND_COLOR,
     HINT_FONT_SIZE,
     MENU_FONT_SIZE,
+    MENU_ITEM_SPACING,
     MENU_ITEMS,
     SELECTED_TEXT_COLOR,
     TEXT_COLOR,
@@ -15,6 +16,7 @@ from meteorite_dash.scenes.widgets import draw_wallet
 
 _ACTION_TRANSITIONS: dict[MenuAction, Transition] = {
     "start": Transition.START_GAME,
+    "daily": Transition.START_DAILY,
     "ship": Transition.SHIP_SELECTION,
     "shop": Transition.SHOP,
     "quit": Transition.QUIT,
@@ -52,7 +54,7 @@ class MainMenu(Scene):
         for index, (label, _) in enumerate(MENU_ITEMS):
             color = SELECTED_TEXT_COLOR if index == self.selected_index else TEXT_COLOR
             text = menu_font.render(label, True, color)
-            text_rect = text.get_rect(center=(center_x, vp.py(220 + index * 66)))
+            text_rect = text.get_rect(center=(center_x, vp.py(220 + index * MENU_ITEM_SPACING)))
             screen.blit(text, text_rect)
 
         selected_ship = hint_font.render(

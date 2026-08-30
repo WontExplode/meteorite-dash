@@ -101,6 +101,7 @@ def test_replay_json_roundtrip() -> None:
         lambda d: {**d, "config": {**d["config"], "accessories": ["jetpack"]}},
         lambda d: {**d, "config": {**d["config"], "seed": True}},  # bool-als-int
         lambda d: {**d, "state_hash": "nope"},
+        lambda d: {**d, "mode": "weekly"},
         lambda d: {**d, "final": {**d["final"], "hp": "voll"}},
     ],
 )

@@ -37,7 +37,8 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 **Vorhanden:**
 
 - Szenen-Framework (`scenes/base.py`) mit Template-Method-Loop bei 60 FPS.
-- Szenen: Hauptmenü, Schiffsauswahl, Spiel-Szene, Death-/Game-Over-Screen.
+- Szenen: Hauptmenü (Start, Daily Run, Schiffsauswahl, Shop), Spiel-Szene,
+  Death-/Game-Over-Screen.
 - `GameContext` als zentraler Zustands-/Ressourcen-Container.
 - Dynamische Fenstergröße + Vollbild (`Viewport`, Referenz-Raum 800×600). Die
   Spiellogik rechnet **nur** im Referenzraum; `RenderContext` (`render.py`)
@@ -85,6 +86,10 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Ghost** (Issue #34): `ghost.py` spielt den besten gespeicherten Lauf zum
   selben Seed als zweite `Simulation` im Gleichschritt nach; `GameScene`
   zeichnet nur sein Schiff halbtransparent und zeigt `GHOST <ly> ±Δ` im HUD.
+- **Daily Run** (Issue #34): Menüpunkt mit gemeinsamem Tages-Seed
+  (`daily.py`, SHA-256 aus Salt + UTC-Datum, kein Server). Rekord des Tages
+  als `daily-<datum>.json`, fliegt als Ghost mit; Death-Screen zeigt Modus,
+  Rekordvergleich und Seed.
 - Strikte Typprüfung, Linting, Tests, CI.
 
 **Noch NICHT vorhanden** (aus dem Spec — meist als GitHub-Issue getrackt):
@@ -94,7 +99,8 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
 - **Steigende Schwierigkeit** über die Zeit (Vertrag in `difficulty.py`,
   Umsetzung Issues #32/#33 — nicht Teil von #34).
-- Daily Run mit gemeinsamem Seed (Issue #34, Folge-PR auf Ghost).
+- Server-Anbindung für Daily-Bestenlisten (Issue #34 „+ Server funktion“):
+  Replay-Datei ist die Upload-Einheit, `headless.verify` die Prüfung.
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
   (Issue #10), Spieler-Stats (Issue #13), iOS/Android-Port (Issue #5).
 
@@ -309,6 +315,28 @@ Replays zu brechen:
 - Ghost gegen Freunde: fremdes Replay in den `replays/`-Ordner legen und mit
   `METEORITE_DASH_SEED=<seed>` denselben Lauf starten.
 
+### Daily Run (Issue #34)
+
+- `daily.py`: `daily_seed(day)` = SHA-256 über `DAILY_SEED_SALT:<ISO-Datum>`,
+  auf `SEED_BITS` gekürzt; `today_utc()` liefert den UTC-Tag (Tageswechsel für
+  alle gleichzeitig). `daily_replay_name(day)` → `daily-<datum>`. Werte sind
+  in `tests/test_daily.py` festgenagelt — Salt/Formel ändern heißt neue Serie.
+- `RunMode` (`replay.py`): `FREE` | `DAILY`, im Replay gespeichert (`mode`,
+  `label` = Datum). `Transition.START_DAILY` → `App._create_scene` baut
+  `GameScene(seed=daily_seed(today), mode=DAILY, label=datum)`; Menüpunkt
+  „Daily Run“ in `MENU_ITEMS` (`MENU_ITEM_SPACING` hält fünf Einträge im Bild).
+- Rekord: `GameScene.record_name()` — `best` im freien Lauf, `daily-<datum>`
+  im Daily; `_store_replay` überschreibt nur bei größerer Lichtjahr-Zahl.
+  Ghost = `best_for_seed(daily_seed)`, also automatisch der Tagesrekord.
+- Death-Screen: `GameState.final_mode`/`final_label` (Zeile „DAILY RUN <datum>“),
+  `final_record_light_years` (Rekord des Ghosts vor diesem Lauf) →
+  `DeathScene._record_line`: „NEUER REKORD (VORHER …)“ oder „REKORD … (±Δ)“,
+  dazu `SEED …`.
+- Fairness-Entscheidung: Schiff und Zubehör sind frei (stehen im Replay-Header);
+  Vergleich ist lokal. Gleicher Seed heißt gleiche Regeln und gleicher Start —
+  die Spawn-Folge divergiert nach der ersten Spieler-Abweichung (Hunter,
+  Treffer, Münzen), das ist gewollt.
+
 ### Entities & Spawner
 
 - `Entity` (ABC): hält eine `pygame.Rect`-Hitbox im Referenzraum, bewegt sich
@@ -486,7 +514,8 @@ Replays zu brechen:
   `SIM_VERSION` erhöhen, Replay-Test nach dem Muster
   `test_director_keeps_replays_bit_identical`.
 - **Szene/Screen** (z. B. Game-Over, Issue #15): `Scene`-Subklasse +
-  `Transition` + Verdrahtung in `App._create_scene`.
+  `Transition` + Verdrahtung in `App._create_scene`; Menüpunkte in
+  `MENU_ITEMS` + `_ACTION_TRANSITIONS` (`scenes/main_menu.py`).
 - **Spielzustand:** Lauf-Zustand in `Simulation` (in `state_key` und ggf.
   `Snapshot` aufnehmen), Session-Felder in `GameState`, Persistentes in
   `Progress`; HUD in `GameScene` über `Viewport`-Schrift.
@@ -519,8 +548,9 @@ Replays zu brechen:
   `store` (kein Datei-Zugriff). Logik (`test_logic.py`), Simulation/Determinismus
   (`test_simulation.py`), Münzen (`test_coins.py`), Fortschritt/Persistenz
   (`test_progress.py`, mit `tmp_path`), Replays (`test_replay.py`, Golden in
-  `tests/replays/`), Shop/Zubehör (`test_shop.py`) und Skalierung/Resize
-  (`test_viewport.py`) sind getrennt.
+  `tests/replays/`), Ghost (`test_ghost.py`), Daily (`test_daily.py`),
+  Shop/Zubehör (`test_shop.py`) und Skalierung/Resize (`test_viewport.py`)
+  sind getrennt.
 - Neue Spiel-Logik braucht einen Test. Reine Funktionen bevorzugen, die ohne
   laufenden Loop prüfbar sind (siehe vorhandene Spawner-/Entity-/Player-Tests).
 
