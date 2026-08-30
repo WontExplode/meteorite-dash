@@ -33,5 +33,4 @@ jobs:
             Wenn du was findest genau ein Kommentar via `gh pr comment` mit Datei- und Zeilenlink.
           claude_args: |
             --model sonnet
-            --max-turns 10
             --allowedTools "Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Read,Grep,Glob"
