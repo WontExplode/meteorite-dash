@@ -1,3 +1,5 @@
+"""Entry-Point: Spiel starten oder mit `--verify` ein Replay headless prüfen."""
+
 import argparse
 import json
 import sys
@@ -6,6 +8,7 @@ from pathlib import Path
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Parst die Kommandozeile; ohne `--verify` startet die `App`. Liefert den Exit-Code."""
     parser = argparse.ArgumentParser(prog="meteorite-dash", description="Meteorite Dash")
     parser.add_argument(
         "--verify",

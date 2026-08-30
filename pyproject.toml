@@ -50,6 +50,14 @@ select = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.interrogate]
+ignore-init-method = true
+ignore-magic = true
+ignore-private = true
+ignore-nested-functions = true
+exclude = ["tests", "src/meteorite_dash.egg-info"]
+fail-under = 80
+
 [tool.mypy]
 python_version = "3.13"
 strict = true
