@@ -1,32 +1,21 @@
 import random
 
 import pygame
-import pytest
 
 from meteorite_dash.config import (
     ENEMY_SIZE,
-    HUNTER_ENEMY_SPEED,
     HUNTER_VERTICAL_SPEED,
     METEORITE_SPEED,
     METEORITE_VARIANTS,
-    WAVE_AMPLITUDE,
-    WAVE_ENEMY_SPEED,
+    PLAYER_SIZE,
+    REFERENCE_SIZE,
 )
 from meteorite_dash.context import GameContext
 from meteorite_dash.entities import spawn_hunter_enemy, spawn_meteorite, spawn_wave_enemy
-from meteorite_dash.player import Player
+from meteorite_dash.render import RenderContext
 from meteorite_dash.scenes.game import GameScene
-from meteorite_dash.ships import SHIPS
 from meteorite_dash.starfield import StarField
 from meteorite_dash.viewport import Viewport
-
-
-class FakeKeys:
-    def __init__(self, pressed: set[int]) -> None:
-        self._pressed = pressed
-
-    def __getitem__(self, key: int) -> bool:
-        return key in self._pressed
 
 
 def test_viewport_is_identity_at_reference() -> None:
@@ -71,38 +60,6 @@ def test_viewport_font_is_cached_and_rebuilt_on_size_change(context: GameContext
     vp.resize(800, 1200)
     bigger = vp.font(42)
     assert bigger is not first  # font_size changed 42 -> 84 -> rebuilt
-
-
-def test_player_speed_scales_with_height() -> None:
-    # Gleicher Schub, doppelte Fensterhöhe: Geschwindigkeit und zurückgelegte
-    # Strecke verdoppeln sich, damit die Durchquerungszeit konstant bleibt.
-    image = pygame.Surface((64, 64))
-    reference = Player(image, (50, 100), SHIPS[0])
-    doubled = Player(image, (50, 100), SHIPS[0])
-
-    reference.update(0.1, FakeKeys({pygame.K_DOWN}), max_height=600)
-    doubled.update(0.1, FakeKeys({pygame.K_DOWN}), max_height=1200)
-
-    assert doubled.velocity == pytest.approx(2 * reference.velocity)
-    assert doubled.rect.y - 100 == pytest.approx(2 * (reference.rect.y - 100))
-
-
-def test_spawn_meteorite_scales_size_and_speed() -> None:
-    met = spawn_meteorite(random.Random(0), (1600, 1200), sx=2.0, su=2.0)
-    expected_sizes = {round(variant.radius * 2 * 2.0) for variant in METEORITE_VARIANTS}
-    assert met.rect.width in expected_sizes
-    assert met.speed_x == METEORITE_SPEED * 2.0
-
-
-def test_spawn_enemies_scale_vertical_motion_params() -> None:
-    wave = spawn_wave_enemy(random.Random(0), (1600, 1200), sx=2.0, sy=2.0, su=2.0)
-    assert wave.rect.width == round(ENEMY_SIZE[0] * 2.0)
-    assert wave.speed_x == WAVE_ENEMY_SPEED * 2.0
-    assert wave._amplitude == WAVE_AMPLITUDE * 2.0
-
-    hunter = spawn_hunter_enemy(random.Random(0), (1600, 1200), sx=2.0, sy=2.0, su=2.0)
-    assert hunter.speed_x == HUNTER_ENEMY_SPEED * 2.0
-    assert hunter._vertical_speed == HUNTER_VERTICAL_SPEED * 2.0
 
 
 def test_context_apply_resize_updates_screen_viewport_starfield(context: GameContext) -> None:
@@ -158,19 +115,45 @@ def test_starfield_resize_rescales_star_positions() -> None:
     assert field.stars[0].y == 600.0  # 300 * (1200/600)
 
 
-def test_game_scene_builds_scaled_player(context: GameContext) -> None:
+def test_render_context_maps_reference_rect() -> None:
+    surface = pygame.Surface((1600, 1200))
+    ctx = RenderContext(surface, Viewport(1600, 1200))
+    assert ctx.rect(pygame.Rect(100, 50, 40, 20)) == pygame.Rect(200, 100, 80, 40)
+
+    # Breites Fenster: Position in x gestreckt, Größe bleibt höhen-gebunden.
+    wide = RenderContext(surface, Viewport(1600, 600))
+    assert wide.rect(pygame.Rect(100, 50, 40, 20)) == pygame.Rect(200, 50, 40, 20)
+    # Nie kleiner als 1 px, sonst verschwinden winzige Sprites.
+    tiny = RenderContext(surface, Viewport(800, 12))
+    assert tiny.rect(pygame.Rect(0, 0, 4, 4)).size == (1, 1)
+
+
+def test_spawn_factories_work_in_reference_space() -> None:
+    meteorite = spawn_meteorite(random.Random(0), REFERENCE_SIZE)
+    assert meteorite.rect.left == REFERENCE_SIZE[0]
+    assert meteorite.rect.width in {variant.radius * 2 for variant in METEORITE_VARIANTS}
+    assert meteorite.speed_x == METEORITE_SPEED
+
+    wave = spawn_wave_enemy(random.Random(0), REFERENCE_SIZE)
+    assert wave.rect.size == ENEMY_SIZE
+    hunter = spawn_hunter_enemy(random.Random(0), REFERENCE_SIZE)
+    assert hunter._vertical_speed == HUNTER_VERTICAL_SPEED
+
+
+def test_game_scene_simulation_ignores_window_size(context: GameContext) -> None:
     context.apply_resize((1600, 1200))  # scale == 2.0
     scene = GameScene(context)
-    assert scene.player.rect.width == round(64 * 2.0)
-    assert scene.spawner.screen_size == (1600, 1200)
+    assert scene.player.rect.size == PLAYER_SIZE
+    assert scene.player.rect.topleft == (50, 100)
+    assert scene.spawner.area == REFERENCE_SIZE
 
+    # Erst der RenderContext skaliert; die Szene selbst kennt keine Fensterpixel.
+    ctx = RenderContext(context.screen, context.viewport)
+    assert ctx.rect(scene.player.rect) == pygame.Rect(100, 200, 128, 128)
 
-def test_game_scene_on_resize_clamps_player_back_into_window(context: GameContext) -> None:
-    context.apply_resize((1600, 1200))
-    scene = GameScene(context)
-    scene.player.rect.y = 1100  # near the tall window's bottom
-
+    # Resize während des Laufs lässt die Simulation unberührt.
+    scene.player.set_vertical_position(500)
     context.apply_resize((800, 600))
     scene.on_resize((800, 600))
-    assert scene.player.rect.y >= 0
-    assert scene.player.rect.bottom <= 600
+    assert scene.player.rect.y == 500
+    scene.draw()

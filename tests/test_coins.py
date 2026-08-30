@@ -24,9 +24,11 @@ from meteorite_dash.config import (
 )
 from meteorite_dash.context import GameContext
 from meteorite_dash.entities import AmmoPickup, Meteorite
+from meteorite_dash.render import RenderContext
 from meteorite_dash.scenes.base import Transition
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.score import format_coins
+from meteorite_dash.viewport import Viewport
 
 DIAMETER = COIN_RADIUS * 2
 
@@ -102,23 +104,12 @@ def test_spawn_coin_formation_carries_pattern_bonus() -> None:
     assert formation.bonus == 9
 
 
-def test_spawn_coin_formation_scales_size_and_spread() -> None:
-    base = spawn_coin_formation(random.Random(3), (800, 600), pattern=_pattern("wave"))
-    scaled = spawn_coin_formation(
-        random.Random(3), (1600, 1200), pattern=_pattern("wave"), sx=2.0, sy=2.0, su=2.0
-    )
-    assert scaled.coins[0].rect.size == (DIAMETER * 2, DIAMETER * 2)
-    assert scaled.coins[0].speed_x == base.coins[0].speed_x * 2
-
-    def spread(formation: CoinFormation) -> tuple[int, int]:
-        xs = [c.rect.x for c in formation.coins]
-        ys = [c.rect.y for c in formation.coins]
-        return max(xs) - min(xs), max(ys) - min(ys)
-
-    base_dx, base_dy = spread(base)
-    scaled_dx, scaled_dy = spread(scaled)
-    assert scaled_dx == base_dx * 2
-    assert abs(scaled_dy - base_dy * 2) <= 2  # Rundung je Münze
+def test_coin_draw_scales_with_viewport() -> None:
+    # Hitbox bleibt im Referenzraum, gezeichnet wird doppelt so groß.
+    surface = pygame.Surface((DIAMETER * 2, DIAMETER * 2))
+    _coin(0, 0).draw(RenderContext(surface, Viewport(1600, 1200)))
+    assert surface.get_at((DIAMETER, DIAMETER))[:3] == COIN_COLOR
+    assert surface.get_at((DIAMETER * 2 - 1, DIAMETER * 2 - 1))[:3] != COIN_COLOR
 
 
 def test_spawn_coin_formation_survives_tiny_window() -> None:
@@ -142,7 +133,7 @@ def test_coin_moves_left_without_vertical_change() -> None:
 
 def test_coin_draw_paints_coin_color_at_center() -> None:
     surface = pygame.Surface((DIAMETER, DIAMETER))
-    _coin(0, 0).draw(surface)
+    _coin(0, 0).draw(RenderContext(surface, Viewport(800, 600)))
     assert surface.get_at((COIN_RADIUS, COIN_RADIUS))[:3] == COIN_COLOR
 
 

@@ -319,11 +319,11 @@ def test_ship_selection_blocks_locked_ship(context: GameContext) -> None:
 
 
 def test_player_extra_hp() -> None:
-    player = Player(pygame.Surface((64, 64)), (50, 100), _spec(), extra_hp=ARMOR_HP_BONUS)
+    player = Player((50, 100), _spec(), extra_hp=ARMOR_HP_BONUS)
     assert player.max_hp == _spec().hp + ARMOR_HP_BONUS
     assert player.hp == player.max_hp
     with pytest.raises(ValueError):
-        Player(pygame.Surface((64, 64)), (50, 100), _spec(), extra_hp=-1)
+        Player((50, 100), _spec(), extra_hp=-1)
 
 
 def test_weapon_loadout_standard_ammo_bonus() -> None:
@@ -438,7 +438,7 @@ def test_game_scene_uses_progress_tint(context: GameContext) -> None:
     progress.apply_tint(ALLROUNDER, GOLD)
     scene = GameScene(context)
     expected = context.assets.load_ship(ALLROUNDER.sprite, scene.player.rect.size, GOLD.color)
-    assert scene.player.image is expected
+    assert scene.ship_image(scene.player.rect.size) is expected
 
 
 def test_game_scene_exit_saves_wallet(context: GameContext, tmp_path: Path) -> None:

@@ -39,7 +39,9 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - Szenen-Framework (`scenes/base.py`) mit Template-Method-Loop bei 60 FPS.
 - Szenen: Hauptmenü, Schiffsauswahl, Spiel-Szene, Death-/Game-Over-Screen.
 - `GameContext` als zentraler Zustands-/Ressourcen-Container.
-- Dynamische Fenstergröße + Vollbild (`Viewport`, Referenz-Raum 800×600).
+- Dynamische Fenstergröße + Vollbild (`Viewport`, Referenz-Raum 800×600). Die
+  Spiellogik rechnet **nur** im Referenzraum; `RenderContext` (`render.py`)
+  übersetzt beim Zeichnen ins Fenster.
 - Entities: `Meteorite`, `WaveEnemy` (Sinus-Bahn), `HunterEnemy` (verfolgt den
   Spieler vertikal). Gemeinsame Basis `Entity`.
 - Meteoriten-Varianten in vier Größen (`Tiny`, `Small`, `Medium`, `Large`) mit
@@ -178,17 +180,27 @@ rohe Fensterpixel hardcoden — sonst bricht Resize/Vollbild. Geschwindigkeiten 
 Sprite-Größen sind höhen-gebunden, damit die vertikale Ausweich-Schwierigkeit
 fenster-unabhängig bleibt.
 
+**Simulation vs. Rendering:** Spieler, Entities, Projektile und Münzen rechnen
+**ausschließlich im Referenzraum** — Hitboxen, Geschwindigkeiten, Spawn-Fläche
+(`REFERENCE_SIZE`). Die Fenstergröße erreicht die Logik nie. Beim Zeichnen bekommt
+jedes Objekt einen `RenderContext` (`render.py`: Surface, Viewport, optionaler
+`AssetLoader`); `ctx.rect(ref_rect)` liefert das Fenster-Rechteck, `ctx.image`
+das Sprite in genau dieser Größe aus dem Cache. Resize/Vollbild ändern damit nur
+das Bild, nie den Spielzustand — Grundlage für Determinismus und Replays.
+
 ### Entities & Spawner
 
-- `Entity` (ABC): hält eine `pygame.Rect`-Hitbox, bewegt sich pro `update(dt,
-  player_y)` nach links. Subklassen überschreiben `_update_vertical` (Standard:
-  keine vertikale Bewegung) und `draw`.
+- `Entity` (ABC): hält eine `pygame.Rect`-Hitbox im Referenzraum, bewegt sich
+  pro `update(dt, player_y)` nach links. Subklassen überschreiben
+  `_update_vertical` (Standard: keine vertikale Bewegung) und `draw(ctx)`.
+  Entities halten **keine Surfaces** — `Meteorite` merkt sich nur den
+  Bild-Dateinamen, `ctx.image` holt das Sprite beim Zeichnen.
 - Bewegung ist **dt-basiert** (frame-rate-unabhängig) — float-Position intern,
   gerundet in `rect`. Beibehalten.
 - Spawn über Fabrikfunktionen `spawn_meteorite` / `spawn_wave_enemy` /
-  `spawn_hunter_enemy` mit Skalierungs-Parametern `sx` (Speed-x), `sy` (vertikale
-  Bewegungs-Parameter) und `su` (Größe). Sie nehmen ein injiziertes
-  `random.Random` → deterministisch testbar.
+  `spawn_hunter_enemy` mit Signatur `(rng, area)`: `area` ist die Spawn-Fläche
+  im Referenzraum (immer `REFERENCE_SIZE`), keine Skalierungs-Parameter. Sie
+  nehmen ein injiziertes `random.Random` → deterministisch testbar.
 - Meteoriten-Größen und Bildvarianten liegen zentral in `METEORITE_VARIANTS`;
   neue Varianten dort ergänzen und weiter über `spawn_meteorite` erzeugen.
 - `Spawner[T]` zieht timergesteuert aus einer **gewichteten Tabelle**
@@ -196,7 +208,7 @@ fenster-unabhängig bleibt.
   Instanzen mit eigenem Timer — Gegner (`Entity`) und Münz-Formationen
   (`CoinFormation`) —, damit Münzen die Gegner-Gewichte nicht verwässern.
   Neuer Gegnertyp = neue `Entity`-Subklasse + `spawn_*`-Fabrik + Eintrag in
-  `GameScene._spawn_table`. Munitions-Pickups folgen demselben Muster.
+  `scenes/game.SPAWN_TABLE`. Munitions-Pickups folgen demselben Muster.
 - `Spawner.update(dt, accept=...)` nimmt ein optionales Prädikat: abgelehnte
   Kandidaten werden bis `SPAWN_MAX_ATTEMPTS` neu gewürfelt, danach fällt der
   Spawn aus. `GameScene` nutzt das für den gegenseitigen Ausschluss von
@@ -209,7 +221,8 @@ fenster-unabhängig bleibt.
   (später) haben feste Munition und werden bei 0 entfernt.
   `standard_ammo_bonus` vergrößert das Standard-Magazin (Zubehör
   „Extra-Munition“).
-- `Projectile` in `projectiles.py` fliegt nach rechts, unabhängig von `Entity`.
+- `Projectile` in `projectiles.py` fliegt nach rechts, unabhängig von `Entity`;
+  `is_off_screen` prüft gegen die Referenzbreite.
 - `AmmoPickup` ist eine harmlose `Entity`-Subklasse (`damages_player = False`);
   Aufsammeln füllt die Standardwaffe über `WeaponLoadout.refill_standard()`.
 - `GameScene` steuert Feuern (`Space`, Cooldown), Waffenwechsel (`R`) und HUD.
@@ -230,8 +243,7 @@ fenster-unabhängig bleibt.
 - `coins.py`: `Coin(Entity)` (prozedural gezeichnete Gold-Scheibe mit
   Dreh-Animation, kein Bild-Asset), Muster-Layouts als **reine Funktionen**
   `Random -> Offsets` im Referenzraum (`LAYOUTS`), `spawn_coin_formation`
-  skaliert Offsets (`sx`/`sy`) und Größe (`su`) und wählt den Anker so, dass
-  das Muster vertikal ins Fenster passt.
+  wählt den Anker so, dass das Muster vertikal in den Referenzraum passt.
 - `CoinFormation` bewegt/zeichnet seine Münzen als Einheit, zählt `collected`
   und `missed`; `collect(player_rect)` liefert ein `Pickup(coins, bonus)` — der
   Bonus fällt nur, wenn alle Münzen geholt und keine verpasst wurden.
@@ -313,8 +325,9 @@ fenster-unabhängig bleibt.
 3. **Konstanten zentral in `config.py`.** Spielwerte (Speeds, Größen, Farben,
    Gewichte, Fenstergröße) gehören dorthin — eine Quelle der Wahrheit, keine
    magischen Zahlen in der Logik.
-4. **Alles über den Viewport** rendern/platzieren (siehe §5). Resize/Vollbild
-   müssen weiter funktionieren.
+4. **Logik im Referenzraum, Rendering über `RenderContext`/`Viewport`** (siehe
+   §5). Fensterpixel gehören nur in `draw`-Methoden und HUD-Code.
+   Resize/Vollbild müssen weiter funktionieren.
 5. **Determinismus für Testbarkeit.** Zufall immer über ein injiziertes
    `random.Random`. Reine Spiel-Logik (Bewegung, Kollision, Spawn) ohne harte
    Display-Abhängigkeit halten, damit sie headless testbar bleibt.
@@ -332,8 +345,9 @@ fenster-unabhängig bleibt.
 
 ### Neues Feature — typische Schritte
 
-- **Gegner/Hindernis:** `Entity`-Subklasse → `spawn_*`-Fabrik (mit `sx/sy/su`) →
-  Gewicht in `GameScene._spawn_table` → Logik-Test mit gesetztem Seed.
+- **Gegner/Hindernis:** `Entity`-Subklasse mit `draw(ctx)` → `spawn_*`-Fabrik
+  `(rng, area)` → Gewicht in `scenes/game.SPAWN_TABLE` → Logik-Test mit
+  gesetztem Seed.
 - **Waffe/Pickup:** Konstanten in `config.py`, Logik in `weapons.py` /
   `projectiles.py`, Integration in `GameScene`.
 - **Szene/Screen** (z. B. Game-Over, Issue #15): `Scene`-Subklasse +
@@ -413,5 +427,6 @@ oben); defensiv bleiben, sobald nutzergelieferte Inhalte dazukommen.
   Pfade (windowed/fullscreen) bedenken.
 - **Spieler-HP aus `ShipSpec.hull`.** Kollision zieht `contact_damage` ab und
   entfernt das Hindernis; bei 0 HP → Death-Screen.
-- **`Player.update` clampt nur Bewegung**, holt das Schiff aber nicht aus dem Bild
-  zurück — `GameScene.on_resize` re-klemmt es nach einem Resize aktiv.
+- **Kein Fenstermaß in der Logik.** `Player`, Entities und Spawner kennen nur
+  `REFERENCE_SIZE`; wer `screen.get_size()` in Spiellogik zieht, bricht
+  Determinismus und Replays. `GameScene` braucht deshalb kein `on_resize`.

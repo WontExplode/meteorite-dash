@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from meteorite_dash.config import SPAWN_MAX_ATTEMPTS
 
+# Fabrik: (RNG, Spawn-Fläche im Referenzraum) -> Objekt
 type Factory[T] = Callable[[random.Random, tuple[int, int]], T]
 type Acceptor[T] = Callable[[T], bool]
 
@@ -25,7 +26,7 @@ class Spawner[T]:
     def __init__(
         self,
         table: Sequence[SpawnEntry[T]],
-        screen_size: tuple[int, int],
+        area: tuple[int, int],
         rng: random.Random,
         interval_range: tuple[float, float],
         *,
@@ -33,7 +34,7 @@ class Spawner[T]:
     ) -> None:
         self._table = list(table)
         self._weights = [entry.weight for entry in self._table]
-        self.screen_size = screen_size
+        self.area = area
         self._rng = rng
         self._interval_range = interval_range
         self._max_attempts = max_attempts
@@ -52,7 +53,7 @@ class Spawner[T]:
         """Zieht Kandidaten, bis `accept` einen annimmt; None nach `max_attempts` Absagen."""
         for _ in range(self._max_attempts):
             entry = self._rng.choices(self._table, weights=self._weights, k=1)[0]
-            candidate = entry.factory(self._rng, self.screen_size)
+            candidate = entry.factory(self._rng, self.area)
             if accept is None or accept(candidate):
                 return candidate
         return None

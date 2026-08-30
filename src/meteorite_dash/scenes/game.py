@@ -24,8 +24,8 @@ from meteorite_dash.config import (
     MAGNET_PULL_SPEED,
     MAGNET_RADIUS,
     METEORITE_WEIGHT,
-    PLAYER_SIZE,
     PLAYER_START_POSITION,
+    REFERENCE_SIZE,
     SCORE_ALPHA,
     SCORE_FONT_SIZE,
     SCORE_LIGHT_YEARS_PER_SECOND,
@@ -50,13 +50,29 @@ from meteorite_dash.entities import (
 )
 from meteorite_dash.player import KeyStates, Player
 from meteorite_dash.projectiles import Projectile, spawn_projectile
+from meteorite_dash.render import RenderContext
 from meteorite_dash.scenes.base import Scene, Transition
 from meteorite_dash.score import DistanceScore, format_coins
 from meteorite_dash.spawner import SpawnEntry, Spawner
 from meteorite_dash.weapons import WeaponLoadout
 
+# Spawn-Tabellen sind fensterunabhängig: alle Fabriken arbeiten im Referenzraum.
+SPAWN_TABLE: tuple[SpawnEntry[Entity], ...] = (
+    SpawnEntry(METEORITE_WEIGHT, spawn_meteorite),
+    SpawnEntry(WAVE_ENEMY_WEIGHT, spawn_wave_enemy),
+    SpawnEntry(HUNTER_ENEMY_WEIGHT, spawn_hunter_enemy),
+    SpawnEntry(AMMO_PICKUP_WEIGHT, spawn_ammo_pickup),
+)
+COIN_TABLE: tuple[SpawnEntry[CoinFormation], ...] = tuple(
+    SpawnEntry(pattern.weight, functools.partial(spawn_coin_formation, pattern=pattern))
+    for pattern in COIN_PATTERNS
+)
+
 
 class GameScene(Scene):
+    """Spiel-Loop. Die Spiellogik läuft im Referenzraum (`REFERENCE_SIZE`);
+    Fenstergröße und Vollbild betreffen nur das Zeichnen über den `RenderContext`."""
+
     def __init__(self, context: GameContext) -> None:
         super().__init__(context)
         self.entities: list[Entity] = []
@@ -74,56 +90,17 @@ class GameScene(Scene):
         self._bonus_notice_ttl = 0.0
         self._build()
 
-    def _scales(self) -> tuple[float, float, float]:
-        vp = self.context.viewport
-        return vp.scale_x, vp.scale_y, vp.scale
-
-    def _scaled_player_size(self, su: float) -> tuple[int, int]:
-        return (round(PLAYER_SIZE[0] * su), round(PLAYER_SIZE[1] * su))
-
-    def _ship_image(self, su: float) -> pygame.Surface:
+    def ship_image(self, size: tuple[int, int]) -> pygame.Surface:
+        """Schiffssprite in Fenstergröße (gecacht), mit der gewählten Färbung."""
         spec = self.context.state.selected_ship
         tint = self.context.state.progress.ship_tint(spec)
-        return self.context.assets.load_ship(spec.sprite, self._scaled_player_size(su), tint)
-
-    def _spawn_table(self, sx: float, sy: float, su: float) -> list[SpawnEntry[Entity]]:
-        return [
-            SpawnEntry(
-                METEORITE_WEIGHT,
-                functools.partial(spawn_meteorite, sx=sx, su=su, assets=self.context.assets),
-            ),
-            SpawnEntry(
-                WAVE_ENEMY_WEIGHT,
-                functools.partial(spawn_wave_enemy, sx=sx, sy=sy, su=su),
-            ),
-            SpawnEntry(
-                HUNTER_ENEMY_WEIGHT,
-                functools.partial(spawn_hunter_enemy, sx=sx, sy=sy, su=su),
-            ),
-            SpawnEntry(
-                AMMO_PICKUP_WEIGHT,
-                functools.partial(spawn_ammo_pickup, sx=sx, su=su),
-            ),
-        ]
-
-    def _coin_table(self, sx: float, sy: float, su: float) -> list[SpawnEntry[CoinFormation]]:
-        return [
-            SpawnEntry(
-                pattern.weight,
-                functools.partial(spawn_coin_formation, pattern=pattern, sx=sx, sy=sy, su=su),
-            )
-            for pattern in COIN_PATTERNS
-        ]
+        return self.context.assets.load_ship(spec.sprite, size, tint)
 
     def _build(self) -> None:
-        sx, sy, su = self._scales()
-        size = self.context.screen.get_size()
         spec = self.context.state.selected_ship
         equipped = {acc.kind for acc in self.context.state.progress.equipped_accessories(spec)}
-        image = self._ship_image(su)
-        start = (round(PLAYER_START_POSITION[0] * sx), round(PLAYER_START_POSITION[1] * sy))
         extra_hp = ARMOR_HP_BONUS if AccessoryKind.ARMOR in equipped else 0
-        self.player = Player(image, start, spec, extra_hp=extra_hp)
+        self.player = Player(PLAYER_START_POSITION, spec, extra_hp=extra_hp)
         ammo_bonus = AMMO_RESERVE_BONUS if AccessoryKind.AMMO_RESERVE in equipped else 0
         self.loadout = WeaponLoadout(spec.weapon_slots, standard_ammo_bonus=ammo_bonus)
         self.shield_charges = SHIELD_CHARGES if AccessoryKind.SHIELD in equipped else 0
@@ -131,28 +108,8 @@ class GameScene(Scene):
         self.projectiles = []
         self._shoot_cooldown = 0.0
         rng = random.Random()
-        self.spawner = Spawner(self._spawn_table(sx, sy, su), size, rng, SPAWN_INTERVAL_RANGE)
-        self.coin_spawner = Spawner(
-            self._coin_table(sx, sy, su), size, rng, COIN_SPAWN_INTERVAL_RANGE
-        )
-
-    def on_resize(self, size: tuple[int, int]) -> None:
-        sx, sy, su = self._scales()
-        image = self._ship_image(su)
-        centery = self.player.rect.centery
-        self.player.image = image
-        self.player.rect = image.get_rect()
-        self.player.rect.x = round(PLAYER_START_POSITION[0] * sx)
-        self.player.rect.centery = centery
-        # Re-clamp into the (possibly smaller) window; Player.update only blocks
-        # further out-of-bounds movement, it never pulls a stranded ship back in.
-        self.player.set_vertical_position(
-            max(0, min(self.player.rect.y, size[1] - self.player.rect.height))
-        )
-        self.spawner.screen_size = size
-        self.spawner.set_table(self._spawn_table(sx, sy, su))
-        self.coin_spawner.screen_size = size
-        self.coin_spawner.set_table(self._coin_table(sx, sy, su))
+        self.spawner = Spawner(SPAWN_TABLE, REFERENCE_SIZE, rng, SPAWN_INTERVAL_RANGE)
+        self.coin_spawner = Spawner(COIN_TABLE, REFERENCE_SIZE, rng, COIN_SPAWN_INTERVAL_RANGE)
 
     def on_enter(self) -> None:
         self.context.music.start_game_playlist()
@@ -174,7 +131,7 @@ class GameScene(Scene):
 
     def update(self, dt: float) -> None:
         keys = pygame.key.get_pressed()
-        self.player.update(dt, keys, self.context.screen.get_height())
+        self.player.update(dt, keys)
         self.context.starfield.update(dt)
         self.score.update(dt)
         self._update_shooting(dt, keys)
@@ -185,14 +142,9 @@ class GameScene(Scene):
             entity.update(dt, player_y)
         self.entities = [entity for entity in self.entities if not entity.is_off_screen]
 
-        screen_width = self.context.screen.get_width()
         for projectile in self.projectiles:
             projectile.update(dt)
-        self.projectiles = [
-            projectile
-            for projectile in self.projectiles
-            if not projectile.is_off_screen(screen_width)
-        ]
+        self.projectiles = [p for p in self.projectiles if not p.is_off_screen]
 
         if collect_pickups(self.player.rect, self.entities):
             self.loadout.refill_standard()
@@ -217,16 +169,10 @@ class GameScene(Scene):
         fired_spec = self.loadout.active.spec
         if not self.loadout.fire():
             return
-        sx, _, su = self._scales()
-        self.projectiles.append(
-            spawn_projectile(self.player, damage=fired_spec.damage, sx=sx, su=su)
-        )
+        self.projectiles.append(spawn_projectile(self.player, damage=fired_spec.damage))
         self._shoot_cooldown = fired_spec.fire_cooldown
         if fired_spec.sound is not None:
             self.context.music.play_sound_effect(fired_spec.sound)
-
-    def _clearance(self) -> int:
-        return round(COIN_HAZARD_CLEARANCE * self.context.viewport.scale)
 
     def _hazard_rects(self) -> list[pygame.Rect]:
         return [entity.rect for entity in self.entities if entity.damages_player]
@@ -235,20 +181,17 @@ class GameScene(Scene):
         """Gefahren spawnen nicht in ein Münz-Muster: gleich schnell → sonst dauerhaft verdeckt."""
         if not entity.damages_player:
             return True
-        return is_clear([entity.rect], coin_rects(self.formations), self._clearance())
+        return is_clear([entity.rect], coin_rects(self.formations), COIN_HAZARD_CLEARANCE)
 
     def _accept_formation(self, formation: CoinFormation) -> bool:
-        return is_clear(coin_rects([formation]), self._hazard_rects(), self._clearance())
+        return is_clear(coin_rects([formation]), self._hazard_rects(), COIN_HAZARD_CLEARANCE)
 
     def _update_coins(self, dt: float, player_y: int) -> None:
         self.formations.extend(self.coin_spawner.update(dt, accept=self._accept_formation))
-        su = self.context.viewport.scale
         for formation in self.formations:
             formation.update(dt, player_y)
             if self.magnet_enabled:
-                formation.attract(
-                    self.player.rect.center, MAGNET_RADIUS * su, MAGNET_PULL_SPEED * su * dt
-                )
+                formation.attract(self.player.rect.center, MAGNET_RADIUS, MAGNET_PULL_SPEED * dt)
             pickup = formation.collect(self.player.rect)
             self.coins_collected += pickup.total
             if pickup.bonus:
@@ -258,22 +201,28 @@ class GameScene(Scene):
         self._bonus_notice_ttl = max(0.0, self._bonus_notice_ttl - dt)
 
     def draw(self) -> None:
-        self.context.screen.fill(BACKGROUND_COLOR)
-        self.context.starfield.draw(self.context.screen)
+        screen = self.context.screen
+        ctx = RenderContext(screen, self.context.viewport, self.context.assets)
+        screen.fill(BACKGROUND_COLOR)
+        self.context.starfield.draw(screen)
         for entity in self.entities:
-            entity.draw(self.context.screen)
+            entity.draw(ctx)
         # Münzen über den Gefahren: Collectibles bleiben sichtbar, auch wenn ein
         # langsamerer Gegner kurz überholt wird.
         for formation in self.formations:
-            formation.draw(self.context.screen)
+            formation.draw(ctx)
         for projectile in self.projectiles:
-            projectile.draw(self.context.screen)
-        self.player.draw(self.context.screen)
+            projectile.draw(ctx)
+        self._draw_player(ctx)
         self._draw_weapon_hud()
         self._draw_hp_hud()
         self._draw_shield_hud()
         self._draw_score()
         pygame.display.flip()
+
+    def _draw_player(self, ctx: RenderContext) -> None:
+        target = ctx.rect(self.player.rect)
+        ctx.surface.blit(self.ship_image(target.size), target)
 
     def _draw_shield_hud(self) -> None:
         if self.shield_charges <= 0:

@@ -7,9 +7,11 @@ from meteorite_dash.assets import SHIP_IMAGES, AssetLoader, ship_image_path
 from meteorite_dash.audio import MusicPlayer
 from meteorite_dash.combat import apply_contact_damage, resolve_projectile_hits
 from meteorite_dash.config import (
+    AMMO_PICKUP_SIZE,
     DRAG,
     GAME_MUSIC_TRACKS,
     MENU_ITEMS,
+    METEORITE_COLOR,
     METEORITE_VARIANTS,
     SHOOT_COOLDOWN,
     STANDARD_WEAPON_DAMAGE,
@@ -28,6 +30,7 @@ from meteorite_dash.entities import (
 )
 from meteorite_dash.player import Player
 from meteorite_dash.projectiles import Projectile, spawn_projectile
+from meteorite_dash.render import RenderContext
 from meteorite_dash.scenes.base import Transition
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.scenes.main_menu import MainMenu
@@ -35,6 +38,7 @@ from meteorite_dash.scenes.ship_selection import ShipSelection
 from meteorite_dash.score import DistanceScore, format_light_years
 from meteorite_dash.ships import SHIPS, ShipSpec
 from meteorite_dash.spawner import SpawnEntry, Spawner
+from meteorite_dash.viewport import Viewport
 from meteorite_dash.weapons import STANDARD_WEAPON, WeaponKind, WeaponLoadout, WeaponSpec
 
 
@@ -80,8 +84,7 @@ def _spec(mass: float = 1.0, thrust: float = 1200.0, hull: float = 100.0) -> Shi
 
 
 def _player(y: int, spec: ShipSpec | None = None) -> Player:
-    image = pygame.Surface((64, 64))
-    return Player(image, (50, y), spec or _spec())
+    return Player((50, y), spec or _spec())
 
 
 def _meteorite(
@@ -231,17 +234,17 @@ def test_ship_spec_rejects_invalid_values() -> None:
 def test_player_accelerates_under_thrust() -> None:
     player = _player(300)
 
-    player.update(0.1, FakeKeys({pygame.K_UP}), max_height=600)
+    player.update(0.1, FakeKeys({pygame.K_UP}))
     assert player.velocity < 0
     assert player.rect.y < 300
 
 
 def test_player_drifts_after_release() -> None:
     player = _player(300)
-    player.update(0.1, FakeKeys({pygame.K_UP}), max_height=600)
+    player.update(0.1, FakeKeys({pygame.K_UP}))
     y_after_thrust = player.rect.y
 
-    player.update(0.1, FakeKeys(set()), max_height=600)
+    player.update(0.1, FakeKeys(set()))
     assert player.velocity < 0  # Trägheit: ohne Schub noch in Bewegung
     assert player.rect.y < y_after_thrust
 
@@ -250,15 +253,15 @@ def test_heavier_ship_accelerates_slower() -> None:
     light = _player(300, _spec(mass=0.5))
     heavy = _player(300, _spec(mass=2.5))
 
-    light.update(0.1, FakeKeys({pygame.K_DOWN}), max_height=600)
-    heavy.update(0.1, FakeKeys({pygame.K_DOWN}), max_height=600)
+    light.update(0.1, FakeKeys({pygame.K_DOWN}))
+    heavy.update(0.1, FakeKeys({pygame.K_DOWN}))
     assert light.velocity > heavy.velocity > 0
 
 
 def test_player_stops_at_top() -> None:
     player = _player(5)
 
-    player.update(0.5, FakeKeys({pygame.K_UP}), max_height=600)
+    player.update(0.5, FakeKeys({pygame.K_UP}))
     assert player.rect.y == 0
     assert player.velocity == 0
 
@@ -266,7 +269,7 @@ def test_player_stops_at_top() -> None:
 def test_player_stops_at_bottom() -> None:
     player = _player(600 - 64 - 5)
 
-    player.update(0.5, FakeKeys({pygame.K_DOWN}), max_height=600)
+    player.update(0.5, FakeKeys({pygame.K_DOWN}))
     assert player.rect.y == 600 - 64
     assert player.velocity == 0
 
@@ -295,25 +298,39 @@ def test_spawn_meteorite_uses_configured_sizes_and_images(
 ) -> None:
     for variant in METEORITE_VARIANTS:
         monkeypatch.setattr("meteorite_dash.entities.METEORITE_VARIANTS", (variant,))
-        assets = DummyAssets()
-        meteorite = spawn_meteorite(random.Random(0), (800, 600), assets=assets)
+        meteorite = spawn_meteorite(random.Random(0), (800, 600))
         expected_size = variant.radius * 2
 
         assert meteorite.rect.size == (expected_size, expected_size)
-        assert meteorite.image is not None
-        assert len(assets.loaded) == 1
-        assert assets.loaded[0][0] in variant.images
-        assert assets.loaded[0][1] == (expected_size, expected_size)
+        assert meteorite.image_name in variant.images
         assert meteorite.hp == variant.hp
         assert meteorite.contact_damage == variant.contact_damage
 
+        # Das Bild wird erst beim Zeichnen geholt — in Fenstergröße, hier 1:1.
+        assets = DummyAssets()
+        meteorite.draw(RenderContext(pygame.Surface((800, 600)), Viewport(800, 600), assets))
+        assert assets.loaded == [(meteorite.image_name, (expected_size, expected_size))]
 
-def test_spawn_meteorite_scales_variant_radius(monkeypatch: pytest.MonkeyPatch) -> None:
+
+def test_meteorite_draw_scales_image_to_viewport(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("meteorite_dash.entities.METEORITE_VARIANTS", (METEORITE_VARIANTS[0],))
-    meteorite = spawn_meteorite(random.Random(0), (800, 600), su=2.0)
+    meteorite = spawn_meteorite(random.Random(0), (800, 600))
+    assets = DummyAssets()
+    meteorite.draw(RenderContext(pygame.Surface((1600, 1200)), Viewport(1600, 1200), assets))
 
     expected_size = METEORITE_VARIANTS[0].radius * 4
-    assert meteorite.rect.size == (expected_size, expected_size)
+    assert assets.loaded[0][1] == (expected_size, expected_size)
+    # Die Hitbox bleibt im Referenzraum.
+    assert meteorite.rect.size == (expected_size // 2, expected_size // 2)
+
+
+def test_meteorite_draw_without_assets_falls_back_to_circle() -> None:
+    surface = pygame.Surface((800, 600))
+    meteorite = Meteorite(
+        pygame.Rect(100, 100, 40, 40), 0.0, "AsteroidTiny.png", hp=10, contact_damage=1
+    )
+    meteorite.draw(RenderContext(surface, Viewport(800, 600)))
+    assert surface.get_at((120, 120))[:3] == METEORITE_COLOR
 
 
 def test_wave_enemy_moves_left_and_oscillates() -> None:
@@ -505,7 +522,7 @@ def test_projectile_moves_right() -> None:
 
 def test_spawn_projectile_starts_at_player_front() -> None:
     player = _player(300)
-    projectile = spawn_projectile(player, damage=STANDARD_WEAPON_DAMAGE, sx=1.0, su=1.0)
+    projectile = spawn_projectile(player, damage=STANDARD_WEAPON_DAMAGE)
     assert projectile.rect.left == player.rect.right
     assert projectile.rect.centery == player.rect.centery
 
@@ -531,9 +548,10 @@ def test_collect_pickups() -> None:
     assert entities == [meteorite]
 
 
-def test_spawn_ammo_pickup_scales_size() -> None:
-    pickup = spawn_ammo_pickup(random.Random(0), (800, 600), su=2.0)
-    assert pickup.rect.size == (48, 48)
+def test_spawn_ammo_pickup_uses_reference_size() -> None:
+    pickup = spawn_ammo_pickup(random.Random(0), (800, 600))
+    assert pickup.rect.size == AMMO_PICKUP_SIZE
+    assert pickup.rect.left == 800
 
 
 def test_game_scene_fires_projectile(

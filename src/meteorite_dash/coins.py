@@ -1,9 +1,10 @@
 """Münzen als Collectible (Issue #14): Muster-Layouts, Spawn-Fabrik und Formationen.
 
 Ein Muster ist eine reine Funktion `Random -> Offsets` im 800x600-Referenzraum.
-`spawn_coin_formation` skaliert die Offsets auf das Fenster und liefert eine
-`CoinFormation`, die ihre Münzen als Einheit bewegt, einsammelt und bei
-Komplettierung einmalig den Bonus auszahlt.
+`spawn_coin_formation` setzt die Offsets an einen passenden Anker und liefert
+eine `CoinFormation`, die ihre Münzen als Einheit bewegt, einsammelt und bei
+Komplettierung einmalig den Bonus auszahlt. Wie alle Entities leben Münzen im
+Referenzraum; erst `draw` skaliert über den `RenderContext` ins Fenster.
 """
 
 import math
@@ -30,6 +31,7 @@ from meteorite_dash.config import (
     CoinPatternSpec,
 )
 from meteorite_dash.entities import Entity
+from meteorite_dash.render import RenderContext
 
 Offset = tuple[float, float]
 LayoutFn = Callable[[random.Random], list[Offset]]
@@ -81,16 +83,17 @@ class Coin(Entity):
         self.rect.x = round(self._x)
         self.rect.y = round(self._y)
 
-    def draw(self, surface: pygame.Surface) -> None:
+    def draw(self, ctx: RenderContext) -> None:
         # Dreh-Animation: Ellipsenbreite folgt |cos|, Höhe bleibt konstant. Die
         # Mindestbreite hält die Kante sichtbar, statt zum Strich zu werden.
+        target = ctx.rect(self.rect)
         angle = 2 * math.pi * COIN_SPIN_HZ * self._elapsed + self._spin_phase
         spin = COIN_MIN_SPIN_WIDTH + (1 - COIN_MIN_SPIN_WIDTH) * abs(math.cos(angle))
-        width = max(2, round(self.rect.width * spin))
-        disc = pygame.Rect(0, 0, width, self.rect.height)
-        disc.center = self.rect.center
-        pygame.draw.ellipse(surface, COIN_COLOR, disc)
-        pygame.draw.ellipse(surface, COIN_RIM_COLOR, disc, max(1, self.rect.height // 8))
+        width = max(2, round(target.width * spin))
+        disc = pygame.Rect(0, 0, width, target.height)
+        disc.center = target.center
+        pygame.draw.ellipse(ctx.surface, COIN_COLOR, disc)
+        pygame.draw.ellipse(ctx.surface, COIN_RIM_COLOR, disc, max(1, target.height // 8))
 
 
 # --- Muster-Layouts (Referenzraum, Offsets relativ zum Anker) -----------------
@@ -205,9 +208,9 @@ class CoinFormation:
         completed = value > 0 and not self.coins and self.missed == 0
         return Pickup(value, self.bonus if completed else 0)
 
-    def draw(self, surface: pygame.Surface) -> None:
+    def draw(self, ctx: RenderContext) -> None:
         for coin in self.coins:
-            coin.draw(surface)
+            coin.draw(ctx)
 
 
 def coin_rects(formations: Iterable[CoinFormation]) -> list[pygame.Rect]:
@@ -230,18 +233,16 @@ def is_clear(
 
 def spawn_coin_formation(
     rng: random.Random,
-    screen_size: tuple[int, int],
+    area: tuple[int, int],
     *,
     pattern: CoinPatternSpec,
-    sx: float = 1.0,
-    sy: float = 1.0,
-    su: float = 1.0,
 ) -> CoinFormation:
-    width, height = screen_size
+    """`area` ist die Spawn-Fläche im Referenzraum (`REFERENCE_SIZE`)."""
+    width, height = area
     offsets = layout_for(pattern.name)(rng)
-    diameter = max(1, round(COIN_RADIUS * 2 * su))
-    dxs = [round(dx * sx) for dx, _ in offsets]
-    dys = [round(dy * sy) for _, dy in offsets]
+    diameter = COIN_RADIUS * 2
+    dxs = [round(dx) for dx, _ in offsets]
+    dys = [round(dy) for _, dy in offsets]
 
     # Anker so wählen, dass das ganze Muster vertikal ins Fenster passt.
     low = -min(dys)
@@ -251,7 +252,7 @@ def spawn_coin_formation(
     coins = [
         Coin(
             pygame.Rect(width + dx, anchor_y + dy, diameter, diameter),
-            COIN_SPEED * sx,
+            COIN_SPEED,
             spin_phase=index * COIN_SPIN_PHASE_STEP,
         )
         for index, (dx, dy) in enumerate(zip(dxs, dys, strict=True))

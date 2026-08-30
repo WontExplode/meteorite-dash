@@ -50,6 +50,7 @@ src/meteorite_dash/
   app.py               App-Loop und Szenenwechsel
   context.py           Geteilter Zustand, Resize und Vollbild
   viewport.py          Skalierung für dynamische Fenstergrößen
+  render.py            RenderContext: Referenzraum -> Fensterpixel beim Zeichnen
   config.py            Zentrale Konstanten
   assets.py            Asset-Pfade und Bild-Caching
   audio.py             Musik und Sounds
@@ -98,8 +99,10 @@ git config core.hooksPath .githooks
 
 - Das Projekt nutzt `pygame-ce`, importiert im Code aber weiterhin `pygame`.
 - Assets liegen unter `src/meteorite_dash/assets/`.
-- Neue Positionen, Größen und Schriften sollten über `Viewport` skaliert werden,
-  damit Resize und Vollbild funktionieren.
+- Die Spiellogik rechnet im festen Referenzraum 800×600; erst beim Zeichnen
+  skaliert der `RenderContext` auf das Fenster. Neue Positionen, Größen und
+  Schriften gehen über `Viewport`/`RenderContext`, damit Resize und Vollbild
+  funktionieren.
 - Tests laufen headless mit Dummy-Video- und Dummy-Audiotreiber.
 - Der Spielfortschritt liegt als `progress.json` im Nutzer-Datenverzeichnis
   (Linux: `~/.local/share/meteorite-dash/`, Windows: `%APPDATA%`, macOS:
