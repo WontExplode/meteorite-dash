@@ -4,8 +4,10 @@ Version: 0.1.0
 Summary: A small PyGame-CE based game about dodging incoming meteorites, shooting debris and attacking enemies.
 Requires-Python: >=3.13
 Description-Content-Type: text/markdown
+Requires-Dist: coincurve>=21.0.0
 Requires-Dist: interrogate>=1.7.0
 Requires-Dist: pygame-ce>=2.5.7
+Requires-Dist: websockets>=17.1
 
 # Meteorite Dash
 

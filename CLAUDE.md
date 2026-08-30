@@ -90,6 +90,15 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   (`daily.py`, SHA-256 aus Salt + UTC-Datum, kein Server). Rekord des Tages
   als `daily-<datum>.json`, fliegt als Ghost mit; Death-Screen zeigt Modus,
   Rekordvergleich und Seed.
+- **Community-Läufe über Nostr** (Issue #34 „+ Server funktion“, ohne eigenen
+  Server): jeder eigene Rekord geht als signiertes, ersetzbares Event
+  (`kind:30078`, `d = meteorite-dash:<SIM_VERSION>:<seed>`) an öffentliche
+  Relays (`nostr.py`, `exchange.py`); Inhalt ist der kompakte Share-Code
+  (`sharecode.py`). Das Menü holt die Läufe zum Tages-Seed im Voraus, spielt
+  jeden mit `headless.verify` nach und legt bestandene als
+  `nostr-<seed>-<pubkey8>.json` in den `ReplayStore` → der weiteste fliegt als
+  Ghost mit. Identität = zufälliger Schlüssel in `identity.json`
+  (`identity.py`). `METEORITE_DASH_OFFLINE=1` schaltet alles ab.
 - Strikte Typprüfung, Linting, Tests, CI.
 
 **Noch NICHT vorhanden** (aus dem Spec — meist als GitHub-Issue getrackt):
@@ -99,8 +108,9 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
 - **Steigende Schwierigkeit** über die Zeit (Vertrag in `difficulty.py`,
   Umsetzung Issues #32/#33 — nicht Teil von #34).
-- Server-Anbindung für Daily-Bestenlisten (Issue #34 „+ Server funktion“):
-  Replay-Datei ist die Upload-Einheit, `headless.verify` die Prüfung.
+- Bestenlisten-Ansicht (Tabelle aller Community-Läufe des Tages) und
+  Freunde-Filter nach Pubkey; Share-Code als QR/Text-Import im Spiel
+  (Format steht in `sharecode.py`).
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
   (Issue #10), Spieler-Stats (Issue #13), iOS/Android-Port (Issue #5).
 
@@ -126,6 +136,8 @@ Installierte Pakete heißen im Import weiter `pygame` — Code importiert
 uv sync                      # Umgebung + Abhängigkeiten einrichten
 uv run meteorite-dash        # Spiel starten (Entry-Point aus pyproject.toml)
 uv run meteorite-dash --verify replay.json   # Replay headless nachspielen, Trace + PASS/FAIL
+uv run meteorite-dash --publish replay.json  # Replay als eigenen Bestlauf an die Relays senden
+uv run meteorite-dash --fetch 579292414      # fremde Läufe zum Seed holen, prüfen, ablegen
 
 uv run ruff format .         # formatieren
 uv run ruff check .          # linten
@@ -186,7 +198,8 @@ den Szenen. `GameState` hält den eigentlichen Spielzustand (aktuell
 `progress`); neue Session-Felder (Leben, Munition …) kommen hierher, alles, was
 über den Neustart hinaus gelten soll, in `Progress`. `GameContext.store`
 (`SaveStore | None`) schreibt den Fortschritt; `save_progress()` ist ohne Store
-(Tests) ein No-op.
+(Tests) ein No-op. `GameContext.exchange` (`RunExchange | None`) ist der
+Nostr-Anschluss — `None` in Tests und bei `METEORITE_DASH_OFFLINE`.
 
 ### Viewport — Referenz-Raum (zentrales Konzept)
 
@@ -336,6 +349,47 @@ Replays zu brechen:
   Vergleich ist lokal. Gleicher Seed heißt gleiche Regeln und gleicher Start —
   die Spawn-Folge divergiert nach der ersten Spieler-Abweichung (Hunter,
   Treffer, Münzen), das ist gewollt.
+
+### Community-Läufe über Nostr (Issue #34)
+
+Läufe austauschen ohne eigenen Server: öffentliche Nostr-Relays sind der
+Briefkasten, die Simulation ist der Richter.
+
+- `sharecode.py`: `encode`/`decode` packen ein `Replay` in Bytes (Header,
+  Snapshot, Hash, ein Byte pro Eingabe-Event, CRC-32), `to_text`/`from_text`
+  als Base64url. ~3,5 Byte pro Spielsekunde; `decode` ist defensiv wie
+  `Replay.from_dict`. Das ist das Wire-Format — auch für späteres QR/Tippen.
+  Format-Änderung → `SHARECODE_VERSION` erhöhen.
+- `identity.py`: `Identity` = 32 Byte Zufall (`secrets`), Pubkey x-only,
+  BIP-340-Schnorr über `coincurve`. `IdentityStore` speichert
+  `identity.json` neben `progress.json` (0600, atomar); fehlend/kaputt →
+  neuer Schlüssel. Der Schlüssel ist nur ein Pseudonym.
+- `nostr.py`: NIP-01-Events (`event_id` = SHA-256 der kanonischen Liste,
+  `build_run_event`, `parse_run_event` prüft Form, ID, Signatur, Share-Code
+  und dass der `d`-Tag zum Inhalt passt). `RelayClient` (`websockets`)
+  spricht alle `NOSTR_RELAYS` parallel, je Verbindung `NOSTR_TIMEOUT`;
+  `publish` zählt `OK true`, `fetch` sammelt bis `EOSE` und dedupliziert.
+  Jeder Netzfehler wird geloggt und zählt als „Relay nicht erreichbar“ —
+  nie eine Exception nach außen.
+- `exchange.py`: `RunExchange(identity, store)` ist der Trichter.
+  `import_runs(seed)`: holen → `parse_run_event` → eigene überspringen →
+  `SIM_VERSION`/Seed/`NOSTR_MAX_TICKS` prüfen → weiteste zuerst
+  `headless.verify` → `store.save(nostr-<seed>-<pubkey8>, author=pubkey)`.
+  Schon vorhandene (gleicher Hash) werden nicht erneut nachgespielt.
+  `prefetch(seed)` läuft im Thread, `wait_for(seed, timeout)` joint;
+  `publish(replay)` ist Feuer-und-vergessen, `publish_now` synchron.
+  `status` / `publish_status` sind die Texte für Menü und Death-Screen.
+- Verdrahtung: `App` baut `IdentityStore(...).load_or_create()` und den
+  `RunExchange`, außer `METEORITE_DASH_OFFLINE` ist gesetzt. `MainMenu.on_enter`
+  → `prefetch(daily_seed(today))`. `App._create_scene`: Daily immer,
+  freier Lauf nur bei erzwungenem Seed (`seed_forced()`) → `wait_for(seed,
+  NOSTR_FETCH_TIMEOUT)`, danach findet `GameScene.find_ghost` den weitesten
+  Lauf inklusive Community. `GameScene._store_replay` → `publish` bei jedem
+  eigenen Rekord (ersetzbares Event = „mein Bestlauf zu diesem Seed“).
+  `Replay.author` (Pubkey, leer bei eigenen Läufen) → `GameState.final_record_author`
+  → Death-Screen „REKORD … VON <pubkey8>“ plus Zeile mit `publish_status`.
+- Was das Netz sieht: Pubkey, Seed, Schiff, Zubehör, Eingaben, Endzustand —
+  öffentlich und praktisch dauerhaft. Sonst nichts.
 
 ### Entities & Spawner
 
@@ -530,6 +584,11 @@ Replays zu brechen:
 - **Shop-Artikel / Farbe:** `TintSpec` in `ships.TINTS` bzw. `price` am
   `ShipSpec`; Persistenz übernimmt neue IDs automatisch, alte Speicherstände
   bleiben lesbar.
+- **Neuer Transport für Läufe** (QR, Text, LAN): `sharecode.from_text` →
+  dieselbe Prüfkette wie `RunExchange.import_runs` (Version, Seed, Länge,
+  `headless.verify`) → `ReplayStore.save` mit `author`. Nie einen fremden
+  Lauf ungeprüft ablegen. Netz nur in Threads, Spiel-Loop wartet höchstens
+  `NOSTR_FETCH_TIMEOUT`.
 
 ---
 
@@ -549,8 +608,13 @@ Replays zu brechen:
   (`test_simulation.py`), Münzen (`test_coins.py`), Fortschritt/Persistenz
   (`test_progress.py`, mit `tmp_path`), Replays (`test_replay.py`, Golden in
   `tests/replays/`), Ghost (`test_ghost.py`), Daily (`test_daily.py`),
-  Shop/Zubehör (`test_shop.py`) und Skalierung/Resize (`test_viewport.py`)
-  sind getrennt.
+  Shop/Zubehör (`test_shop.py`), Skalierung/Resize (`test_viewport.py`),
+  Share-Code (`test_sharecode.py`) und Nostr (`test_nostr.py`) sind getrennt.
+- **Kein Netz in Tests:** `conftest.py` setzt `METEORITE_DASH_OFFLINE=1`, damit
+  `App()` ohne Exchange baut. `test_nostr.py` startet einen `FakeRelay`
+  (`websockets.serve` auf 127.0.0.1, ersetzbare Events, `REQ`/`EOSE`) und
+  baut `RunExchange(..., client=RelayClient([relay.url]))` explizit;
+  „Relay tot“ wird mit `ws://127.0.0.1:1` geprüft.
 - Neue Spiel-Logik braucht einen Test. Reine Funktionen bevorzugen, die ohne
   laufenden Loop prüfbar sind (siehe vorhandene Spawner-/Entity-/Player-Tests).
 
@@ -558,8 +622,10 @@ Replays zu brechen:
 
 ## 8. Security
 
-Das Spiel ist offline, single-player, ohne Netzwerk, Accounts oder Secrets im
-Spielcode. Die realistischen Punkte:
+Das Spiel ist single-player ohne Accounts oder Secrets im Spielcode; die
+einzige Netzverbindung ist der freiwillige Austausch von Läufen über
+öffentliche Nostr-Relays (ausgehende WebSockets, kein eigener Server). Die
+realistischen Punkte:
 
 - **Keine Secrets ins Repo.** `.env*` ist in `.gitignore`. Der
   `CLAUDE_CODE_OAUTH_TOKEN` lebt nur als **GitHub-Actions-Secret** — niemals
@@ -580,12 +646,22 @@ Spielcode. Die realistischen Punkte:
   potenziell fremde Dateien — Ghost gegen Freunde); `path_for` bereinigt
   Dateinamen. Dieses Muster für Highscore/Settings wiederverwenden, nicht neu
   erfinden.
+- **Nostr (`nostr.py`, `exchange.py`):** Relays sind fremde Server, Events
+  fremde Daten. Eingehend: `parse_run_event` prüft Form, ID, Signatur und
+  Größe (`NOSTR_MAX_CONTENT_CHARS`), `import_runs` deckelt Anzahl
+  (`NOSTR_MAX_RUNS`) und Länge (`NOSTR_MAX_TICKS`) und spielt jeden Lauf
+  nach, bevor er gespeichert wird — ein Relay kann Läufe verschweigen, aber
+  keinen erfinden. Ausgehend: nur Pubkey + Replay, keine Systemdaten. Der
+  private Schlüssel (`identity.json`) verlässt den Rechner nie; nicht loggen.
+  Die Relay-Liste steht in `config.py` — nur `wss://`, keine Laufzeit-Konfig
+  aus fremden Daten. `METEORITE_DASH_OFFLINE=1` ist der Aus-Schalter.
 - **Abhängigkeiten:** über `uv` gepinnt halten; nur etablierte Pakete (pygame-ce)
   aus PyPI. Keine ungeprüften Downloads zur Laufzeit.
 
-Es gibt hier **keine** echten Angriffsflächen wie Eingabe-Eval oder Netzwerk —
-keine erfinden. Die einzige Deserialisierung ist der JSON-Speicherstand (siehe
-oben); defensiv bleiben, sobald nutzergelieferte Inhalte dazukommen.
+Es gibt hier **keine** Angriffsflächen wie Eingabe-Eval oder eingehende
+Verbindungen — keine erfinden. Deserialisiert werden JSON-Speicherstand,
+Replays, `identity.json` und Relay-Nachrichten (JSON, Share-Code) — alle nach
+demselben defensiven Muster.
 
 ---
 
@@ -610,3 +686,11 @@ oben); defensiv bleiben, sobald nutzergelieferte Inhalte dazukommen.
   verloren — sonst laufen Replays auseinander. Regeländerung → `SIM_VERSION`.
 - **Exakte Tick-Vielfache im Test:** `scene.update(3 * SIM_DT)` liefert dank
   `_STEP_EPSILON` drei Ticks; ohne den Epsilon frisst Float-Rundung einen.
+- **Threads nur im Exchange.** `RunExchange` ist der einzige Ort mit Threads;
+  er fasst weder Fenster noch Simulation des laufenden Spiels an, nur Netz,
+  `headless.verify` und den `ReplayStore` (atomare Dateien). Szenen lesen nur
+  `status`/`publish_status`. `GameScene.__init__` setzt `publish_status`
+  zurück, sonst zeigt der Death-Screen den Stand des Vorlaufs.
+- **Öffentliche Relays sind flatterhaft.** Einzelne Relays antworten mit 503
+  oder gar nicht — deshalb mehrere in `NOSTR_RELAYS`, Timeouts pro Verbindung
+  und `relays_ok == 0` heißt „offline“, nicht „keine Läufe“.

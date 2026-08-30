@@ -77,6 +77,11 @@ def seeded(seed: int, stream: str) -> random.Random:
     return random.Random(f"{seed}:{stream}")
 
 
+def seed_forced() -> bool:
+    """True, wenn `METEORITE_DASH_SEED` gesetzt ist — jemand will genau diesen Lauf."""
+    return bool(os.environ.get(SEED_ENV))
+
+
 def pick_seed() -> int:
     """Zufälliger Seed für einen freien Lauf; `METEORITE_DASH_SEED` erzwingt einen."""
     override = os.environ.get(SEED_ENV)

@@ -2,6 +2,8 @@ import os
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+# Kein Test darf ins Netz: `App()` baut ohne Exchange, Fake-Relays kommen explizit.
+os.environ.setdefault("METEORITE_DASH_OFFLINE", "1")
 
 from collections.abc import Iterator
 

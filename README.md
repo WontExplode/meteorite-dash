@@ -29,6 +29,9 @@ immer mehr zurückgelegte Lichtjahre.
   mit, das HUD zeigt den Vorsprung
 - Daily Run: ein gemeinsamer Seed pro Tag für alle Spieler (ohne Server); der
   Tagesrekord fliegt als Ghost mit, der Game-Over-Screen zeigt den Vergleich
+- Community-Läufe über Nostr: eigene Rekorde gehen signiert an öffentliche
+  Relays, fremde Läufe zum Tages-Seed werden geholt, nachgespielt und
+  fliegen als Ghost mit — kein eigener Server, kein Account
 - Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
 
 ## Steuerung
@@ -48,6 +51,9 @@ immer mehr zurückgelegte Lichtjahre.
 ```terminal
 uv sync
 uv run meteorite-dash
+uv run meteorite-dash --verify replay.json    # Replay nachspielen und prüfen
+uv run meteorite-dash --publish replay.json   # Replay an die Nostr-Relays senden
+uv run meteorite-dash --fetch 579292414       # fremde Läufe zum Seed holen
 ```
 
 ## Projektstruktur
@@ -70,6 +76,10 @@ src/meteorite_dash/
   replay.py            Replay-Format, Recorder und Ablage (JSON)
   ghost.py             Ghost: Replay als zweite Simulation im Gleichschritt
   daily.py             Tages-Seed für den Daily Run
+  sharecode.py         Kompaktes Binär-/Textformat eines Replays (Share-Code)
+  identity.py          Nostr-Schlüssel pro Installation (identity.json)
+  nostr.py             Nostr-Events und Relay-Client (websockets)
+  exchange.py          Community-Läufe teilen, holen, prüfen, ablegen
   mathutil.py          Plattformstabiler Sinus/Abstand für die Simulation
   entities.py          Gegner, Hindernisse und Munitions-Pickups
   projectiles.py       Spieler-Projektile
@@ -133,3 +143,13 @@ git config core.hooksPath .githooks
   gleichem Seed (`METEORITE_DASH_SEED`) als Ghost.
 - Der Daily-Seed hängt am UTC-Datum; der Tagesrekord liegt als
   `replays/daily-<datum>.json`.
+- Community: beim ersten Start entsteht `identity.json` (zufälliger
+  Nostr-Schlüssel, nur ein Pseudonym — Ordner kopieren nimmt ihn mit). Jeder
+  eigene Rekord wird an die Relays aus `config.py` gesendet; das Hauptmenü
+  zeigt, wie viele fremde Läufe es zum Tages-Seed gibt, der weiteste fliegt
+  als Ghost mit (Game-Over-Screen: `REKORD … VON <pubkey>`). Fremde Läufe
+  werden vor dem Import nachgespielt — was nicht bit-gleich nachspielt, wird
+  verworfen. Mit `METEORITE_DASH_SEED=<seed>` holt auch ein freier Lauf die
+  Läufe zu diesem Seed (Rennen gegen Freunde). `METEORITE_DASH_OFFLINE=1`
+  schaltet Teilen und Holen ab. Öffentlich sichtbar sind Pubkey, Seed, Schiff,
+  Zubehör, Eingaben und Endstand des Laufs — sonst nichts.

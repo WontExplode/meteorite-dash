@@ -221,3 +221,35 @@ GHOST_HUD_TOP_RIGHT: WindowSize = (776, 108)
 DAILY_SEED_SALT = "meteorite-dash-daily"
 DAILY_REPLAY_PREFIX = "daily-"
 DEATH_MODE_COLOR: Color = (150, 210, 255)
+
+# --- Community-Läufe über Nostr (Issue #34, „Server-Funktion" ohne Server) ---
+# Bestläufe gehen als ersetzbares Event (NIP-78, `kind:30078`) an öffentliche
+# Relays; `d`-Tag = `NOSTR_APP_TAG:<SIM_VERSION>:<seed>`, Inhalt = Share-Code.
+# Fremde Läufe werden vor dem Import mit `headless.verify` nachgespielt.
+NOSTR_RELAYS: tuple[str, ...] = (
+    "wss://nos.lol",
+    "wss://relay.primal.net",
+    "wss://nostr.mom",
+    "wss://relay.damus.io",
+)
+NOSTR_RUN_KIND = 30078
+NOSTR_APP_TAG = "meteorite-dash"
+NOSTR_TIMEOUT = 6.0  # Sekunden pro Relay-Verbindung (verbinden + antworten)
+# So lange wartet der Spielstart auf fremde Läufe; danach geht es ohne sie los.
+NOSTR_FETCH_TIMEOUT = 3.0
+NOSTR_MAX_RUNS = 20  # höchstens so viele fremde Läufe pro Seed abholen und prüfen
+NOSTR_MAX_TICKS = 30 * 60 * SIM_TICKS_PER_SECOND  # längere fremde Läufe werden ignoriert
+NOSTR_MAX_CONTENT_CHARS = 64_000  # Share-Code-Länge, ab der ein Event verworfen wird
+NOSTR_REPLAY_PREFIX = "nostr-"  # Ablage fremder Läufe: `nostr-<seed>-<pubkey8>`
+OFFLINE_ENV = "METEORITE_DASH_OFFLINE"  # gesetzt = kein Netz, kein Teilen
+
+# Identität: zufälliger Schlüssel pro Installation, neben `progress.json`.
+IDENTITY_FILENAME = "identity.json"
+IDENTITY_FORMAT_VERSION = 1
+PUBKEY_SHORT_LEN = 8  # Anzeige-Kurzform eines Pubkeys
+
+# Share-Code: kompaktes Binärformat eines Replays (`sharecode.py`).
+SHARECODE_VERSION = 1
+
+COMMUNITY_STATUS_TOP: int = 472  # Referenz-y der Community-Zeile im Hauptmenü
+COMMUNITY_STATUS_COLOR: Color = (150, 210, 255)

@@ -51,6 +51,8 @@ class Replay:
     recorded_at: str = ""  # ISO-Datum (UTC)
     mode: RunMode = RunMode.FREE
     label: str = ""  # z. B. Daily-Datum
+    # Pubkey des Spielers bei importierten Community-Läufen, sonst leer (eigener Lauf).
+    author: str = ""
 
     @property
     def ticks(self) -> int:
@@ -75,6 +77,7 @@ class Replay:
             "recorded_at": self.recorded_at,
             "mode": self.mode.value,
             "label": self.label,
+            "author": self.author,
             "config": {
                 "seed": self.config.seed,
                 "ship": self.config.ship,
@@ -124,6 +127,7 @@ class Replay:
                 recorded_at=_as_str(data.get("recorded_at", "")),
                 mode=RunMode(_as_str(data.get("mode", RunMode.FREE.value))),
                 label=_as_str(data.get("label", "")),
+                author=_as_str(data.get("author", "")),
             )
         except (KeyError, TypeError, ValueError):
             return None

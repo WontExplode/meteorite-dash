@@ -72,6 +72,9 @@ class GameScene(Scene):
         self._pending = InputFrame.NONE
         self._bonus_notice = ""
         self._bonus_notice_ttl = 0.0
+        # Neuer Lauf: Stand des Teilens vom letzten Lauf gilt nicht mehr.
+        if context.exchange is not None:
+            context.exchange.publish_status = ""
 
     def run_config(self, seed: int) -> RunConfig:
         state = self.context.state
@@ -164,6 +167,7 @@ class GameScene(Scene):
             state.final_record_light_years = (
                 self.ghost.replay.light_years if self.ghost is not None else None
             )
+            state.final_record_author = self.ghost.replay.author if self.ghost is not None else ""
             state.last_replay = self._store_replay(self.recorder.finish(self.sim))
             self.finish(Transition.DEATH_SCREEN)
 
@@ -174,7 +178,8 @@ class GameScene(Scene):
         return REPLAY_BEST_NAME
 
     def _store_replay(self, replay: Replay) -> Replay:
-        """`last` immer, Rekord nur bei neuer Bestweite. Ohne Store bleibt es im Speicher."""
+        """`last` immer, Rekord nur bei neuer Bestweite — die geht auch an die
+        Community. Ohne Store bleibt es im Speicher."""
         store = self.context.replays
         if store is None:
             return replay
@@ -182,6 +187,8 @@ class GameScene(Scene):
         record = store.load(self.record_name())
         if record is None or replay.light_years > record.light_years:
             store.save(self.record_name(), replay)
+            if self.context.exchange is not None:
+                self.context.exchange.publish(replay)
         return replay
 
     def draw(self) -> None:

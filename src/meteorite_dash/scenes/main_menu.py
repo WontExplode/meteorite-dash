@@ -2,6 +2,8 @@ import pygame
 
 from meteorite_dash.config import (
     BACKGROUND_COLOR,
+    COMMUNITY_STATUS_COLOR,
+    COMMUNITY_STATUS_TOP,
     HINT_FONT_SIZE,
     MENU_FONT_SIZE,
     MENU_ITEM_SPACING,
@@ -11,6 +13,7 @@ from meteorite_dash.config import (
     MenuAction,
 )
 from meteorite_dash.context import GameContext
+from meteorite_dash.daily import daily_seed, today_utc
 from meteorite_dash.scenes.base import Scene, Transition
 from meteorite_dash.scenes.widgets import draw_wallet
 
@@ -27,6 +30,11 @@ class MainMenu(Scene):
     def __init__(self, context: GameContext) -> None:
         super().__init__(context)
         self.selected_index = 0
+
+    def on_enter(self) -> None:
+        # Läufe zum Tages-Seed schon im Menü holen: beim Start sind sie meist da.
+        if self.context.exchange is not None:
+            self.context.exchange.prefetch(daily_seed(today_utc()))
 
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type != pygame.KEYDOWN:
@@ -56,6 +64,10 @@ class MainMenu(Scene):
             text = menu_font.render(label, True, color)
             text_rect = text.get_rect(center=(center_x, vp.py(220 + index * MENU_ITEM_SPACING)))
             screen.blit(text, text_rect)
+
+        if self.context.exchange is not None and self.context.exchange.status:
+            status = hint_font.render(self.context.exchange.status, True, COMMUNITY_STATUS_COLOR)
+            screen.blit(status, status.get_rect(center=(center_x, vp.py(COMMUNITY_STATUS_TOP))))
 
         selected_ship = hint_font.render(
             f"Ausgewählt: {self.context.state.selected_ship.name}", True, TEXT_COLOR
