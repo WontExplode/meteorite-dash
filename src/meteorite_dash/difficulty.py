@@ -18,11 +18,19 @@ die er sich halten muss, damit Replays bit-gleich bleiben:
 
 import random
 from dataclasses import dataclass
+from enum import Enum
 from typing import Protocol, runtime_checkable
 
 from meteorite_dash.entities import Entity
 from meteorite_dash.player import Player
 from meteorite_dash.weapons import WeaponLoadout
+
+
+class DirectorKind(Enum):
+    """Stabile Kennung einer Schwierigkeitsstrategie im Replay-Format."""
+
+    CONSTANT = "constant"
+    ADAPTIVE = "adaptive"
 
 
 @dataclass(frozen=True)

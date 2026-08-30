@@ -80,19 +80,20 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Adaptiver Director-Regelkern** (Issue #33): `AdaptiveDirector`
   (`adaptive_difficulty.py`) schätzt aus sicheren Passagen, schadensfreier Zeit,
   Schaden, Near Misses, HP und Munition eine individuelle Belastungsgrenze.
-  Sein vollständiger Zustand ist über `state_key()` reproduzierbar. Die
-  zentrale Auswahl in `mode_directors.py` liefert für Free eine frische adaptive
-  und für Daily weiterhin eine konstante Instanz; die produktive Verdrahtung in
-  Szene, Ghost und Replay steht noch aus.
+  Sein vollständiger Zustand fließt über `state_key()` in den Simulationshash.
+  `mode_directors.py` liefert für Free eine frische adaptive, für Daily weiterhin
+  eine konstante Instanz. Replays speichern Director-Art und getrennte
+  Regelversion, sodass Headless-Prüfungen dieselbe Strategie rekonstruieren.
 - **Replays** (Issue #34): `Recorder` zeichnet jeden Lauf als `Replay`
   (`RunConfig` + Eingaben, RLE) auf; nach dem Tod landet er als `last.json` /
   `best.json` im `ReplayStore`. `headless.verify` spielt ein Replay nach und
   vergleicht Endzustand + Hash; `uv run meteorite-dash --verify datei.json`
   macht das von der Kommandozeile. Golden-Regressionstest in
   `tests/test_replay.py` mit `tests/replays/golden-*.json`.
-- **Ghost** (Issue #34): `ghost.py` spielt den besten gespeicherten Lauf zum
-  selben Seed als zweite `Simulation` im Gleichschritt nach; `GameScene`
-  zeichnet nur sein Schiff halbtransparent und zeigt `GHOST <ly> ±Δ` im HUD.
+- **Ghost** (Issue #34): Im Daily spielt `ghost.py` den kompatiblen Tagesrekord
+  als zweite `Simulation` im Gleichschritt nach; `GameScene` zeichnet nur sein
+  Schiff halbtransparent und zeigt `GHOST <ly> ±Δ` im HUD. Der adaptive Free
+  Mode lädt bewusst keinen Ghost.
 - **Daily Run** (Issue #34): Menüpunkt mit gemeinsamem Tages-Seed
   (`daily.py`, SHA-256 aus Salt + UTC-Datum, kein Server). Rekord des Tages
   als `daily-<datum>.json`, fliegt als Ghost mit; Death-Screen zeigt Modus,
@@ -104,9 +105,10 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Sammelbare Sterne** für Punkte (`StarField` ist nur Deko, nicht einsammelbar).
 - **Spezialwaffen-Pickups** (Loadout und Slot-Limit sind vorbereitet).
 - **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
-- **Produktive Schwierigkeitssteuerung:** Der adaptive Regelkern ist vorhanden,
-  wird aber noch nicht in den Free Mode injiziert. Die feste Daily-Zeitrampe
-  bleibt eine getrennte Aufgabe des zweiten Modus.
+- **Weitere adaptive Stellgrößen und Diagnose-HUD:** Free nutzt bereits Speed-
+  und Spawnintervallfaktor. Gegnermix, Größenbias und das geplante verborgene
+  Debug-HUD sind noch nicht umgesetzt; die feste Daily-Zeitrampe bleibt eine
+  getrennte Aufgabe des zweiten Modus.
 - Server-Anbindung für Daily-Bestenlisten (Issue #34 „+ Server funktion“):
   Replay-Datei ist die Upload-Einheit, `headless.verify` die Prüfung.
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
@@ -269,28 +271,29 @@ Replays zu brechen:
 - Erlaubte Eingaben: alles aus `SimulationView` (Tick, Spieler, Loadout,
   Entities, Münzen, Lightyears) und `rng`. Verboten: Wandzeit, FPS, Fenster,
   `random` ohne Seed. Zustandsbehaftete Implementierungen liefern zusätzlich
-  einen kanonischen `StatefulDirector.state_key()`; die Simulation muss ihn
-  bei der produktiven Verdrahtung in ihren Hash aufnehmen.
-- `ConstantDirector` ist der Platzhalter; Rampe (#32) und adaptiver Teil (#33)
-  ersetzen ihn über `Simulation(director=…)` und erhöhen `SIM_VERSION`.
+  einen kanonischen `StatefulDirector.state_key()`; `Simulation.state_key()`
+  nimmt ihn in den Hash auf. Zustandslose Directors verändern bestehende Hashes
+  dadurch nicht.
+- `ConstantDirector` bleibt der unveränderte Daily-Standard; der adaptive Free-
+  Teil wird über `Simulation(director=…)` injiziert.
 - `AdaptiveDirector` lebt bewusst separat in `adaptive_difficulty.py`: sichere
   Passagen und schadensfreies Spielen erhöhen `mastery`; Schaden und gehäufte
   Near Misses erhöhen `stress`. Die Intensität steigt geglättet und fällt
   schneller, mit Start-Schonzeit, Damage-Hold und Low-HP-Cap. Seine Parameter
   stehen als `DIFFICULTY_*`-Konstanten in `config.py`.
-- `mode_directors.py` ist die einzige Modusgrenze: `director_for_mode(FREE)`
-  liefert `AdaptiveDirector`, `director_for_mode(DAILY)` weiterhin
-  `ConstantDirector`. `director_version_for_mode` trennt künftige
-  Replay-Kompatibilität beider Strategien von der gemeinsamen `SIM_VERSION`.
-  Diese Factory erzeugt nur Instanzen; ihre Nutzung durch Szene/Ghost/Headless
-  folgt in einem getrennten Änderungsschritt.
+- `mode_directors.py` ist die einzige Modusgrenze: Free wird auf
+  `DirectorKind.ADAPTIVE`, Daily auf `DirectorKind.CONSTANT` abgebildet.
+  Factory und getrennte Regelversionen werden von `GameScene`, Ghost und
+  Headless-Replay gemeinsam genutzt. Änderungen nur am Tuning erhöhen die
+  betreffende Director-Version, nicht die gemeinsame `SIM_VERSION`.
 
 ### Replays (Issue #34)
 
 - `replay.py`: `Replay` = `RunConfig` + `frames` (Lauflängen `(Maske, Ticks)`)
   + `final: Snapshot` + `state_hash` + `sim_version`/`recorded_at`/`mode`/
-  `label`. `inputs()` expandiert die Frames wieder zu `InputFrame`s. Mehr
-  braucht es nicht — die Simulation ist deterministisch.
+  `label` + `director_kind`/`director_version`. `inputs()` expandiert die Frames
+  wieder zu `InputFrame`s. Alte Dateien ohne Director-Felder werden als
+  bisherige konstante Strategie gelesen.
 - JSON-Format wie der Speicherstand: `to_dict` / `from_dict` (defensiv,
   `None` statt Exception bei falschen Typen, unbekannten Katalog-IDs,
   ungültigen Frames, `bool`-als-`int`). `REPLAY_FORMAT_VERSION` in `config.py`.
@@ -299,13 +302,15 @@ Replays zu brechen:
   auf, solange `sim.is_over` False ist; Abbruch per Escape speichert nichts.
 - `ReplayStore(dir)` (`GameContext.replays`, in Tests `None`): `save`/`load`
   per Name (`path_for` bereinigt auf `[A-Za-z0-9_-]`, kein Path-Traversal),
-  `all()`, `best_for_seed(seed)` (nur gleiche `SIM_VERSION`). Ablage:
+  `all()`, `best_for_seed(seed, ...)` mit Filtern für Simulationsversion, Modus,
+  Director-Art und -Version. Ablage:
   `default_replay_dir()` = Speicherordner + `replays/`. `GameScene._store_replay`
   schreibt beim `DEATH`-Event `last` immer und `best` bei neuer Bestweite;
   `GameState.last_replay` und `final_seed` tragen den Lauf zum Death-Screen.
-- **Prüfen:** `headless.run_replay(replay)` → `Trace`; `headless.verify(replay)`
-  → `Verification(ok, version_matches)` — `ok` heißt: gleiche `SIM_VERSION`,
-  gleicher `Snapshot`, gleicher Hash. `format_trace` druckt eine Zeile pro
+- **Prüfen:** `headless.run_replay(replay)` rekonstruiert ohne expliziten
+  Override die aufgezeichnete Director-Art. `headless.verify(replay)` →
+  `Verification(ok, version_matches)` — `ok` heißt: passende Simulations- und
+  Director-Version, gleicher `Snapshot`, gleicher Hash. `format_trace` druckt eine Zeile pro
   Interaktion. CLI: `meteorite-dash --verify datei.json` (Exit 0/1). Das ist
   auch die spätere Server-Prüfung eingereichter Läufe.
 - **Golden-Regression:** `tests/replays/golden-<x>.json` (Replays aus
@@ -318,22 +323,25 @@ Replays zu brechen:
 
 ### Ghost (Issue #34)
 
-- `ghost.py`: `Ghost(replay)` = eigene `Simulation(replay.config)` + Iterator
-  über `replay.inputs()`. `step()` pro Tick, `finished` wenn Eingaben
+- `ghost.py`: `Ghost(replay)` = eigene `Simulation(replay.config)` mit der im
+  Replay gespeicherten Director-Art + Iterator über `replay.inputs()`. `step()`
+  pro Tick, `finished` wenn Eingaben
   aufgebraucht oder tot, danach `consistent` (Snapshot + Hash == Aufzeichnung)
   — jeder Ghost-Lauf ist damit ein Determinismus-Test im Spiel. `delta(ly)` =
   Vorsprung des Spielers.
 - Bewusst **Re-Simulation statt Positionsliste**: Datei bleibt klein, Ghost-
   Score läuft live mit. Die Ghost-Welt divergiert nach der ersten Abweichung
   (Hunter, Treffer, Münzen) — deshalb wird nur das Schiff gezeichnet.
-- `GameScene(context, seed=…, ghost=…)`: ohne `ghost` sucht `find_ghost` über
-  `ReplayStore.best_for_seed(seed)` (gleiche `SIM_VERSION`). `step()` rückt
+- `GameScene(context, seed=…, ghost=…)`: Nur im Daily sucht `find_ghost` nach
+  gleichem Seed, Modus, Director und Version. Free ignoriert auch explizit
+  übergebene Ghosts. `step()` rückt
   Ghost und Spieler gemeinsam vor; der Ghost fasst die Spieler-Simulation nie
   an. Zeichnen: `ghost_image(size)` = getöntes Schiff (`GHOST_TINT`) mit
   `GHOST_ALPHA`, pro Größe gecacht; Ghost hinter dem Spieler, verschwindet mit
   `finished`. HUD `GHOST <ly> ±Δ` über `GHOST_HUD_TOP_RIGHT`.
-- Ghost gegen Freunde: fremdes Replay in den `replays/`-Ordner legen und mit
-  `METEORITE_DASH_SEED=<seed>` denselben Lauf starten.
+- Daily-Ghost gegen Freunde: Ein kompatibles Daily-Replay kann in den
+  `replays/`-Ordner gelegt werden; Free-Replays bleiben reine Aufzeichnungen
+  und Prüfartefakte.
 
 ### Daily Run (Issue #34)
 
@@ -347,7 +355,8 @@ Replays zu brechen:
   „Daily Run“ in `MENU_ITEMS` (`MENU_ITEM_SPACING` hält fünf Einträge im Bild).
 - Rekord: `GameScene.record_name()` — `best` im freien Lauf, `daily-<datum>`
   im Daily; `_store_replay` überschreibt nur bei größerer Lichtjahr-Zahl.
-  Ghost = `best_for_seed(daily_seed)`, also automatisch der Tagesrekord.
+  Ghost = kompatibles `best_for_seed(daily_seed, mode=DAILY, ...)`, also
+  automatisch der Tagesrekord und niemals ein Free-Replay mit gleichem Seed.
 - Death-Screen: `GameState.final_mode`/`final_label` (Zeile „DAILY RUN <datum>“),
   `final_record_light_years` (Rekord des Ghosts vor diesem Lauf) →
   `DeathScene._record_line`: „NEUER REKORD (VORHER …)“ oder „REKORD … (±Δ)“,

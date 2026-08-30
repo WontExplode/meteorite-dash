@@ -22,6 +22,7 @@ from meteorite_dash.config import (
     SHIELD_HUD_COLOR,
     SHIELD_HUD_TOP_LEFT,
     SIM_DT,
+    SIM_VERSION,
     TEXT_COLOR,
     WEAPON_HUD_FONT_SIZE,
     WEAPON_HUD_TOP_LEFT,
@@ -29,6 +30,11 @@ from meteorite_dash.config import (
 from meteorite_dash.context import GameContext
 from meteorite_dash.ghost import Ghost
 from meteorite_dash.inputs import InputFrame, from_pressed
+from meteorite_dash.mode_directors import (
+    director_for_kind,
+    director_kind_for_mode,
+    director_version_for_kind,
+)
 from meteorite_dash.render import RenderContext
 from meteorite_dash.replay import Recorder, Replay, RunMode
 from meteorite_dash.scenes.base import Scene, Transition
@@ -61,10 +67,21 @@ class GameScene(Scene):
         self.seed = seed if seed is not None else pick_seed()
         self.mode = mode
         self.label = label
-        self.sim = Simulation(self.run_config(self.seed))
-        self.recorder = Recorder(self.sim.config, mode=mode, label=label)
-        # Ghost: bester gespeicherter Lauf zum selben Seed (oder explizit übergeben).
-        ghost_replay = ghost if ghost is not None else self.find_ghost(self.seed)
+        director_kind = director_kind_for_mode(mode)
+        self.sim = Simulation(self.run_config(self.seed), director=director_for_kind(director_kind))
+        self.recorder = Recorder(
+            self.sim.config,
+            mode=mode,
+            label=label,
+            director_kind=director_kind,
+            director_version=director_version_for_kind(director_kind),
+        )
+        # Ghosts gehören nur zum wiederholbaren Daily Run.
+        ghost_replay = None
+        if mode is RunMode.DAILY:
+            candidate = ghost if ghost is not None else self.find_ghost(self.seed)
+            if candidate is not None and self._is_compatible_ghost(candidate):
+                ghost_replay = candidate
         self.ghost = Ghost(ghost_replay) if ghost_replay is not None else None
         self._ghost_images: dict[tuple[int, int], pygame.Surface] = {}
         self._accumulator = 0.0
@@ -80,8 +97,28 @@ class GameScene(Scene):
         return RunConfig(seed, spec.name, equipped)
 
     def find_ghost(self, seed: int) -> Replay | None:
+        if self.mode is not RunMode.DAILY:
+            return None
         store = self.context.replays
-        return store.best_for_seed(seed) if store is not None else None
+        if store is None:
+            return None
+        director_kind = director_kind_for_mode(self.mode)
+        return store.best_for_seed(
+            seed,
+            mode=self.mode,
+            director_kind=director_kind,
+            director_version=director_version_for_kind(director_kind),
+        )
+
+    def _is_compatible_ghost(self, replay: Replay) -> bool:
+        director_kind = director_kind_for_mode(self.mode)
+        return (
+            replay.config.seed == self.seed
+            and replay.mode is self.mode
+            and replay.sim_version == SIM_VERSION
+            and replay.director_kind is director_kind
+            and replay.director_version == director_version_for_kind(director_kind)
+        )
 
     def ghost_image(self, size: tuple[int, int]) -> pygame.Surface:
         """Halbtransparente Kopie des Ghost-Schiffs, pro Fenstergröße gecacht."""
