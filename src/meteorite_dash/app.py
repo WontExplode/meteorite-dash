@@ -1,9 +1,10 @@
-import os
 """App: initialisiert pygame, baut den `GameContext` und fährt die Szenen-Schleife.
 
 Jede Szene gibt beim Verlassen eine `Transition` zurück, die hier auf die
 nächste Szene abgebildet wird.
 """
+
+import os
 
 import pygame
 

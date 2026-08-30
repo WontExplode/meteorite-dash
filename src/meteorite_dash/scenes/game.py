@@ -1,5 +1,6 @@
-from collections.abc import Iterator
 """Spiel-Szene: Fixstep-Loop um `Simulation`, Eingabe-Übersetzung, Ghost und HUD."""
+
+from collections.abc import Iterator
 
 import pygame
 
