@@ -26,6 +26,10 @@ class GameState:
     final_record_light_years: float | None = None
     # Pubkey des Rekordhalters, wenn der Ghost ein Community-Lauf war; sonst leer.
     final_record_author: str = ""
+    # Zuschauer-Modus beendet: Autor des angesehenen Laufs ("" = eigener); None = gespielt.
+    final_spectate_author: str | None = None
+    # Per Code geholter Lauf, den die nächste Szene als Ghost (Rennen) oder Replay startet.
+    pending_replay: Replay | None = None
     # Aufzeichnung des letzten beendeten Laufs (Issue #34), für Death-Screen/Ghost.
     last_replay: Replay | None = None
     # Persistenter Fortschritt: Münz-Guthaben, Freischaltungen, Ausrüstung (Issue #14).

@@ -21,6 +21,7 @@ from meteorite_dash.identity import IdentityStore
 from meteorite_dash.persistence import SaveStore, default_save_dir, default_save_path
 from meteorite_dash.replay import ReplayStore, RunMode, default_replay_dir
 from meteorite_dash.scenes.base import Scene, Transition
+from meteorite_dash.scenes.code_entry import CodeEntryScene
 from meteorite_dash.scenes.death import DeathScene
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.scenes.leaderboard import LeaderboardScene
@@ -36,8 +37,14 @@ _MENU_TRANSITIONS = (
     Transition.SHIP_SELECTION,
     Transition.SHOP,
     Transition.LEADERBOARD,
+    Transition.CODE_ENTRY,
 )
-_GAME_TRANSITIONS = (Transition.START_GAME, Transition.START_DAILY)
+_GAME_TRANSITIONS = (
+    Transition.START_GAME,
+    Transition.START_DAILY,
+    Transition.START_RACE,
+    Transition.SPECTATE,
+)
 
 
 class App:
@@ -94,6 +101,16 @@ class App:
             return ShopScene(self.context)
         if transition is Transition.LEADERBOARD:
             return LeaderboardScene(self.context)
+        if transition is Transition.CODE_ENTRY:
+            return CodeEntryScene(self.context)
+        if transition in (Transition.START_RACE, Transition.SPECTATE):
+            state = self.context.state
+            replay, state.pending_replay = state.pending_replay, None
+            if replay is None:
+                return MainMenu(self.context)
+            if transition is Transition.START_RACE:
+                return GameScene(self.context, seed=replay.config.seed, ghost=replay)
+            return GameScene(self.context, spectate=replay)
         if transition is Transition.START_GAME:
             seed = pick_seed()
             if seed_forced():

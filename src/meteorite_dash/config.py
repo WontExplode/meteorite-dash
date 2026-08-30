@@ -2,7 +2,7 @@ from typing import Literal, NamedTuple
 
 WindowSize = tuple[int, int]
 Color = tuple[int, int, int]
-MenuAction = Literal["start", "daily", "leaderboard", "ship", "shop", "quit"]
+MenuAction = Literal["start", "daily", "leaderboard", "code", "ship", "shop", "quit"]
 
 
 class MeteoriteVariant(NamedTuple):
@@ -50,13 +50,15 @@ MENU_ITEMS: tuple[tuple[str, MenuAction], ...] = (
     ("Start", "start"),
     ("Daily Run", "daily"),
     ("Daily Bestenliste", "leaderboard"),
+    ("Code eingeben", "code"),
     ("Raumschiff auswählen", "ship"),
     ("Shop", "shop"),
     ("Beenden", "quit"),
 )
 
-MENU_ITEMS_TOP = 200  # Referenz-y des ersten Menüpunkts
-MENU_ITEM_SPACING = 48  # Referenz-px zwischen Menüpunkten (sechs Einträge im Bild)
+MENU_ITEM_FONT_SIZE = 36  # kleiner als der Titel, damit sieben Einträge ins Bild passen
+MENU_ITEMS_TOP = 186  # Referenz-y des ersten Menüpunkts
+MENU_ITEM_SPACING = 44  # Referenz-px zwischen Menüpunkten
 MENU_SELECTED_SHIP_TOP = 508
 MENU_HINT_TOP = 538
 
@@ -256,6 +258,26 @@ PUBKEY_SHORT_LEN = 8  # Anzeige-Kurzform eines Pubkeys
 
 # Share-Code: kompaktes Binärformat eines Replays (`sharecode.py`).
 SHARECODE_VERSION = 1
+
+# --- Share-Phrase: drei Wörter als Adresse eines geteilten Laufs (`phrase.py`) ---
+PHRASE_WORDS_FILE = "words_de.txt"  # assets/, 2048 Wörter, eingefroren
+PHRASE_WORD_COUNT = 3
+PHRASE_WORD_BITS = 11  # 2^11 = 2048 Wörter je Position
+# Wortliste oder Ableitung geändert -> alte Phrasen ungültig -> erhöhen.
+PHRASE_VERSION = 1
+NOSTR_SHARE_EXPIRY_SECONDS = 30 * 24 * 60 * 60  # NIP-40: Relays dürfen danach löschen
+SHARE_REPLAY_PREFIX = "share-"  # Ablage geholter Codes: `share-<w1>-<w2>-<w3>`
+
+# --- Code eingeben (Szene) ---
+CODE_ENTRY_MAX_CHARS = 40
+CODE_ENTRY_TITLE_TOP = 90
+CODE_ENTRY_HINT_TOP = 150
+CODE_ENTRY_BOX_RECT: tuple[int, int, int, int] = (100, 200, 600, 60)  # Referenz-px
+CODE_ENTRY_MESSAGE_TOP = 300
+CODE_ENTRY_RESULT_TOP = 360
+CODE_ENTRY_ACTIONS_TOP = 400
+CODE_ENTRY_FOOTER_TOP = 535
+CODE_ENTRY_CURSOR_BLINK_MS = 500
 
 COMMUNITY_STATUS_TOP: int = 480  # Referenz-y der Community-Zeile im Hauptmenü
 COMMUNITY_STATUS_COLOR: Color = (150, 210, 255)

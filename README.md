@@ -6,7 +6,8 @@ immer mehr zurückgelegte Lichtjahre.
 
 ## Features
 
-- Hauptmenü mit Start, Daily Run, Daily Bestenliste, Schiffsauswahl und Shop
+- Hauptmenü mit Start, Daily Run, Daily Bestenliste, Code eingeben,
+  Schiffsauswahl und Shop
 - vertikale Raumschiffsteuerung
 - Standardwaffe mit 7 Schüssen und Munitions-Pickups
 - zerstörbare Meteoriten und Gegner mit HP; Spieler-HP aus Schiffsrumpf
@@ -33,6 +34,9 @@ immer mehr zurückgelegte Lichtjahre.
   Relays, fremde Läufe zum Tages-Seed werden geholt, nachgespielt und
   fliegen als Ghost mit — kein eigener Server, kein Account
 - Daily-Bestenliste: Top 5 zum Tages-Seed mit eigenem Rang, `R` lädt neu
+- Lauf per Code weitergeben: `C` auf dem Game-Over-Screen veröffentlicht den
+  Lauf unter drei Wörtern (z. B. `apfel berg wolke`); wer den Code im Menü
+  eingibt, tritt gegen den Lauf an oder sieht ihn sich an
 - Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
 
 ## Steuerung
@@ -45,6 +49,8 @@ immer mehr zurückgelegte Lichtjahre.
 - `R`: Waffe wechseln (im Spiel, wenn mehrere Waffen vorhanden)
 - `Enter` / `Space`: Menüauswahl bestätigen
 - `Tab` auf dem Game-Over-Screen nach einem Daily Run: Bestenliste
+- `C` auf dem Game-Over-Screen: Lauf als Drei-Wort-Code teilen
+- Menü „Code eingeben“: Code tippen, `Enter` = antreten, `Tab` = ansehen
 - `R` in der Bestenliste: neu von den Relays laden
 - `Escape`: im Spiel zurück ins Hauptmenü
 - `F` / `F11`: Vollbild umschalten
@@ -83,6 +89,7 @@ src/meteorite_dash/
   identity.py          Nostr-Schlüssel pro Installation (identity.json)
   nostr.py             Nostr-Events und Relay-Client (websockets)
   exchange.py          Community-Läufe teilen, holen, prüfen, ablegen
+  phrase.py            Drei-Wort-Phrase aus dem Lauf-Hash (assets/words_de.txt)
   leaderboard.py       Bestenliste aus gespeicherten Läufen (Logik)
   mathutil.py          Plattformstabiler Sinus/Abstand für die Simulation
   entities.py          Gegner, Hindernisse und Munitions-Pickups
@@ -102,6 +109,7 @@ src/meteorite_dash/
     ship_selection.py  Schiffsauswahl
     shop.py            Shop (Schiffe, Zubehör, Farben)
     leaderboard.py     Daily-Bestenliste
+    code_entry.py      Code eingeben, Lauf holen, antreten oder ansehen
     widgets.py         Geteilte Zeichen-Helfer (Münz-Guthaben)
     game.py            Spielszene
     death.py           Game-Over-Screen
@@ -158,3 +166,9 @@ git config core.hooksPath .githooks
   Läufe zu diesem Seed (Rennen gegen Freunde). `METEORITE_DASH_OFFLINE=1`
   schaltet Teilen und Holen ab. Öffentlich sichtbar sind Pubkey, Seed, Schiff,
   Zubehör, Eingaben und Endstand des Laufs — sonst nichts.
+- Code weitergeben: Der Drei-Wort-Code ist aus dem Lauf berechnet (gleicher
+  Lauf, gleicher Code) und eine Adresse, kein Passwort — der Lauf liegt
+  öffentlich auf den Relays, 30 Tage lang. Wer den Code eingibt, bekommt den
+  Lauf nur, wenn er bit-gleich nachspielt. Geholte Codes liegen als
+  `replays/share-<wort>-<wort>-<wort>.json` und funktionieren danach auch
+  offline.

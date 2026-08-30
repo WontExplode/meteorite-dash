@@ -103,6 +103,11 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   zum Tages-Seed aus dem `ReplayStore` (bester Lauf je Spieler, „DU“ für
   eigene), eigener Rang darunter, `R` holt neu von den Relays. Menüpunkt
   „Daily Bestenliste“, nach einem Daily Run auch per `Tab` vom Death-Screen.
+- **Lauf per Code weitergeben** (`phrase.py`, `scenes/code_entry.py`): Death-Screen
+  `C` veröffentlicht den Lauf unter einer Drei-Wort-Phrase (aus dem
+  `state_hash`, deutsche Wortliste `assets/words_de.txt`, 2048³ Kombinationen),
+  Menüpunkt „Code eingeben“ holt ihn, prüft ihn und bietet „antreten“
+  (Ghost) oder „ansehen“ (Zuschauer-Modus der `GameScene`).
 - Strikte Typprüfung, Linting, Tests, CI.
 
 **Noch NICHT vorhanden** (aus dem Spec — meist als GitHub-Issue getrackt):
@@ -112,8 +117,8 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
 - **Steigende Schwierigkeit** über die Zeit (Vertrag in `difficulty.py`,
   Umsetzung Issues #32/#33 — nicht Teil von #34).
-- Freunde-Filter nach Pubkey in der Bestenliste; Share-Code als QR/Text-Import
-  im Spiel (Format steht in `sharecode.py`).
+- Freunde-Filter nach Pubkey in der Bestenliste; QR-Anzeige des Share-Codes
+  (Format steht in `sharecode.py`).
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
   (Issue #10), Spieler-Stats (Issue #13), iOS/Android-Port (Issue #5).
 
@@ -175,6 +180,7 @@ main.main()                 Entry-Point, ruft App().run()
       ├─ ShipSelection
       ├─ ShopScene          Münzen gegen Schiffe, Zubehör, Farben
       ├─ LeaderboardScene   Daily-Bestenliste aus dem ReplayStore
+      ├─ CodeEntryScene     Drei-Wort-Code tippen -> Lauf holen -> Rennen/Ansehen
       ├─ GameScene          Fixstep-Loop um `Simulation` (simulation.py) + Rendering
       └─ DeathScene         Game-Over-Screen mit finalem Lightyears-Score
 ```
@@ -403,6 +409,44 @@ Briefkasten, die Simulation ist der Richter.
   (`NOSTR_MAX_RUNS = 100`), nicht die besten — bei sehr vielen Spielern
   fehlen alte Bestläufe, das ist die bekannte Lücke.
 
+### Lauf per Code weitergeben (Share-Phrase)
+
+Wie magic-wormhole, nur ohne dessen Server: die Phrase ist die Adresse, der
+Relay der Briefkasten, die Simulation der Richter.
+
+- `phrase.py`: `phrase_for_hash(state_hash)` nimmt die ersten 33 Bit des
+  Hashes → drei Wörter aus `assets/words_de.txt` (2048 Wörter, ASCII,
+  4–8 Buchstaben, keine Umlaut-Transliterationen, ß→ss). Deterministisch:
+  gleicher Lauf = gleiche Phrase. `normalize` macht aus Nutzereingabe die
+  kanonische Form (Klein, Trennzeichen egal, `ß`→`ss`), `matches(phrase, hash)`
+  ist die Kollisions-/Manipulationsprüfung beim Empfang. **Wortliste ist
+  eingefroren** (SHA-256 in `tests/test_phrase.py`); jede Änderung =
+  `PHRASE_VERSION` erhöhen = neue Serie.
+- `nostr.py`: `build_share_event` = `kind:30078`, `d = meteorite-dash:share:
+  <PHRASE_VERSION>:<w1-w2-w3>`, `expiration` (NIP-40, 30 Tage). `parse_run_event`
+  akzeptiert nur `d`-Tags, die zum Inhalt passen (Seed-Tag oder Phrase-Tag
+  aus dem Hash) — ein Relay kann unter einer Phrase keinen anderen Lauf
+  unterschieben.
+- `exchange.py`: `share(replay)` (Thread) / `share_now` → `share_status`
+  „CODE: … — GETEILT (n/m RELAYS)“. `start_lookup(phrase)` (Thread) /
+  `lookup_now` → `Lookup(phrase, done, replay, message)`: erst lokal
+  (`share-<w1-w2-w3>.json`), sonst Relays; neuester passender Lauf, der
+  `headless.verify` besteht, wird gespeichert (`author` = Pubkey).
+- `CodeEntryScene`: Buchstaben/Leerzeichen/Bindestrich (`event.unicode`),
+  `Enter` sucht bzw. startet das Rennen, `Tab` = ansehen, `Esc` zurück; ohne
+  Exchange nur schon geholte Codes aus dem Store. Ergebnis wandert über
+  `GameState.pending_replay` + `Transition.START_RACE` / `SPECTATE` in
+  `App._create_scene`.
+- `GameScene(spectate=replay)`: Zuschauer-Modus — Eingaben aus
+  `replay.inputs()`, kein Recorder, keine Münzen-Gutschrift, kein Store, kein
+  Publish, Schiff des Replays; HUD „REPLAY VON <pubkey8|DIR>“; Ende (Tod oder
+  Eingaben aufgebraucht) → `_end_spectate` → Death-Screen mit
+  `GameState.final_spectate_author`, `last_replay = None` (nicht teilbar).
+- Death-Screen: `C` = `exchange.share(last_replay)`, Zeile zeigt
+  `share_status` (vor `publish_status`). Hint-Zeile wird aus den
+  verfügbaren Aktionen gebaut (`_hint_line`).
+- Phrase ist Adresse, kein Passwort: alles auf Nostr ist öffentlich.
+
 ### Entities & Spawner
 
 - `Entity` (ABC): hält eine `pygame.Rect`-Hitbox im Referenzraum, bewegt sich
@@ -621,10 +665,12 @@ Briefkasten, die Simulation ist der Richter.
   (`test_progress.py`, mit `tmp_path`), Replays (`test_replay.py`, Golden in
   `tests/replays/`), Ghost (`test_ghost.py`), Daily (`test_daily.py`),
   Shop/Zubehör (`test_shop.py`), Skalierung/Resize (`test_viewport.py`),
-  Share-Code (`test_sharecode.py`), Nostr (`test_nostr.py`) und Bestenliste
-  (`test_leaderboard.py`) sind getrennt.
+  Share-Code (`test_sharecode.py`), Nostr (`test_nostr.py`), Bestenliste
+  (`test_leaderboard.py`), Phrase (`test_phrase.py`) und Code-Weitergabe
+  (`test_share.py`) sind getrennt. Der `FakeRelay` liegt in
+  `tests/fake_relay.py`.
 - **Kein Netz in Tests:** `conftest.py` setzt `METEORITE_DASH_OFFLINE=1`, damit
-  `App()` ohne Exchange baut. `test_nostr.py` startet einen `FakeRelay`
+  `App()` ohne Exchange baut. Netz-Tests starten einen `FakeRelay`
   (`websockets.serve` auf 127.0.0.1, ersetzbare Events, `REQ`/`EOSE`) und
   baut `RunExchange(..., client=RelayClient([relay.url]))` explizit;
   „Relay tot“ wird mit `ws://127.0.0.1:1` geprüft.

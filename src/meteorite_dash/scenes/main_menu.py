@@ -7,6 +7,7 @@ from meteorite_dash.config import (
     HINT_FONT_SIZE,
     MENU_FONT_SIZE,
     MENU_HINT_TOP,
+    MENU_ITEM_FONT_SIZE,
     MENU_ITEM_SPACING,
     MENU_ITEMS,
     MENU_ITEMS_TOP,
@@ -24,6 +25,7 @@ _ACTION_TRANSITIONS: dict[MenuAction, Transition] = {
     "start": Transition.START_GAME,
     "daily": Transition.START_DAILY,
     "leaderboard": Transition.LEADERBOARD,
+    "code": Transition.CODE_ENTRY,
     "ship": Transition.SHIP_SELECTION,
     "shop": Transition.SHOP,
     "quit": Transition.QUIT,
@@ -57,6 +59,7 @@ class MainMenu(Scene):
         screen.fill(BACKGROUND_COLOR)
         center_x = vp.center_x
         menu_font = vp.font(MENU_FONT_SIZE)
+        item_font = vp.font(MENU_ITEM_FONT_SIZE)
         hint_font = vp.font(HINT_FONT_SIZE)
 
         title = menu_font.render("Meteorite Dash", True, TEXT_COLOR)
@@ -65,7 +68,7 @@ class MainMenu(Scene):
 
         for index, (label, _) in enumerate(MENU_ITEMS):
             color = SELECTED_TEXT_COLOR if index == self.selected_index else TEXT_COLOR
-            text = menu_font.render(label, True, color)
+            text = item_font.render(label, True, color)
             text_rect = text.get_rect(
                 center=(center_x, vp.py(MENU_ITEMS_TOP + index * MENU_ITEM_SPACING))
             )

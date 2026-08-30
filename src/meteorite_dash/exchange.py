@@ -17,17 +17,27 @@ import logging
 import threading
 from dataclasses import dataclass, replace
 
-from meteorite_dash.config import NOSTR_MAX_TICKS, NOSTR_RELAYS, NOSTR_REPLAY_PREFIX, SIM_VERSION
+from meteorite_dash.config import (
+    NOSTR_MAX_TICKS,
+    NOSTR_RELAYS,
+    NOSTR_REPLAY_PREFIX,
+    SHARE_REPLAY_PREFIX,
+    SIM_VERSION,
+)
 from meteorite_dash.headless import verify
 from meteorite_dash.identity import Identity, short_pubkey
 from meteorite_dash.nostr import (
     ParsedRun,
     RelayClient,
     build_run_event,
+    build_share_event,
     parse_run_event,
     run_filter,
+    share_filter,
 )
+from meteorite_dash.phrase import matches, normalize, phrase_for_hash, slug
 from meteorite_dash.replay import Replay, ReplayStore
+from meteorite_dash.score import format_light_years
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +46,14 @@ STATUS_OFFLINE = "COMMUNITY: OFFLINE"
 STATUS_NONE = "COMMUNITY: NOCH KEINE FREMDEN LÄUFE"
 PUBLISH_SHARING = "TEILE LAUF …"
 PUBLISH_FAILED = "TEILEN FEHLGESCHLAGEN (OFFLINE?)"
+SHARE_SHARING = "TEILE CODE …"
+SHARE_FAILED = "TEILEN FEHLGESCHLAGEN (OFFLINE?)"
+LOOKUP_SEARCHING = "SUCHE LAUF …"
+LOOKUP_OFFLINE = "OFFLINE — KEIN RELAY ERREICHBAR"
+LOOKUP_NOT_FOUND = "KEIN LAUF UNTER DIESEM CODE"
+LOOKUP_INVALID = "LAUF SPIELT NICHT NACH — VERWORFEN"
+LOOKUP_VERSION = "LAUF AUS ANDERER SPIELVERSION"
+LOOKUP_BAD_PHRASE = "KEIN GÜLTIGER CODE (DREI WÖRTER AUS DER LISTE)"
 
 
 @dataclass(frozen=True)
@@ -59,6 +77,28 @@ def replay_name(seed: int, pubkey: str) -> str:
     return f"{NOSTR_REPLAY_PREFIX}{seed}-{short_pubkey(pubkey)}"
 
 
+def share_name(phrase: str) -> str:
+    return f"{SHARE_REPLAY_PREFIX}{slug(phrase)}"
+
+
+def describe_run(replay: Replay) -> str:
+    author = short_pubkey(replay.author) if replay.author else "DIR"
+    return (
+        f"LAUF VON {author}   {format_light_years(replay.light_years)} LJ   "
+        f"{replay.config.ship}   SEED {replay.config.seed}"
+    )
+
+
+@dataclass(frozen=True)
+class Lookup:
+    """Stand einer Code-Suche; `done` mit `replay` = gefunden und geprüft."""
+
+    phrase: str
+    done: bool
+    replay: Replay | None = None
+    message: str = ""
+
+
 class RunExchange:
     def __init__(
         self, identity: Identity, store: ReplayStore, *, client: RelayClient | None = None
@@ -68,10 +108,14 @@ class RunExchange:
         self.client = client if client is not None else RelayClient(NOSTR_RELAYS)
         self.status = ""  # Stand der letzten Suche, fürs Menü
         self.publish_status = ""  # Stand des letzten Teilens, für den Death-Screen
+        self.share_status = ""  # Stand des letzten Code-Teilens (Death-Screen, `C`)
+        self.lookup: Lookup | None = None  # laufende/letzte Code-Suche
         self._fetch_thread: threading.Thread | None = None
         self._fetch_seed: int | None = None
         self._fetch_result: ImportResult | None = None
         self._publish_thread: threading.Thread | None = None
+        self._share_thread: threading.Thread | None = None
+        self._lookup_thread: threading.Thread | None = None
 
     # --- Holen ---------------------------------------------------------------------
 
@@ -181,8 +225,99 @@ class RunExchange:
             log.exception("Teilen des Laufs fehlgeschlagen")
             self.publish_status = PUBLISH_FAILED
 
+    # --- Code teilen / holen -------------------------------------------------------
+
+    def share(self, replay: Replay) -> str:
+        """Lauf unter seiner Phrase veröffentlichen (Hintergrund); liefert die Phrase."""
+        phrase = phrase_for_hash(replay.state_hash)
+        self.share_status = f"CODE: {phrase} — {SHARE_SHARING}"
+        self._share_thread = threading.Thread(
+            target=self._share_worker, args=(replay,), name="nostr-share", daemon=True
+        )
+        self._share_thread.start()
+        return phrase
+
+    def share_now(self, replay: Replay) -> tuple[str, int]:
+        phrase = phrase_for_hash(replay.state_hash)
+        accepted = self.client.publish(build_share_event(self.identity, replay))
+        if accepted:
+            relays = len(self.client.relays)
+            self.share_status = f"CODE: {phrase} — GETEILT ({accepted}/{relays} RELAYS)"
+        else:
+            self.share_status = f"CODE: {phrase} — {SHARE_FAILED}"
+        return phrase, accepted
+
+    def _share_worker(self, replay: Replay) -> None:
+        try:
+            self.share_now(replay)
+        except Exception:
+            log.exception("Teilen per Code fehlgeschlagen")
+            self.share_status = SHARE_FAILED
+
+    def start_lookup(self, phrase: str) -> None:
+        phrase = normalize(phrase) or phrase
+        self.lookup = Lookup(phrase, done=False, message=LOOKUP_SEARCHING)
+        self._lookup_thread = threading.Thread(
+            target=self._lookup_worker, args=(phrase,), name="nostr-lookup", daemon=True
+        )
+        self._lookup_thread.start()
+
+    def lookup_now(self, phrase: str) -> Lookup:
+        """Erst lokal (schon geholt), sonst Relays: neuester passender Lauf, der
+        nachspielt, landet als `share-<phrase>` im Store."""
+        canonical = normalize(phrase)
+        if canonical is None:
+            return Lookup(phrase, True, None, LOOKUP_BAD_PHRASE)
+        phrase = canonical
+        name = share_name(phrase)
+        local = self.store.load(name)
+        if (
+            local is not None
+            and local.sim_version == SIM_VERSION
+            and matches(phrase, local.state_hash)
+        ):
+            return Lookup(phrase, True, local, describe_run(local))
+        result = self.client.fetch(share_filter(phrase))
+        candidates = [
+            parsed
+            for parsed in map(parse_run_event, result.events)
+            if parsed is not None and matches(phrase, parsed.replay.state_hash)
+        ]
+        if not candidates:
+            message = LOOKUP_OFFLINE if result.relays_ok == 0 else LOOKUP_NOT_FOUND
+            return Lookup(phrase, True, None, message)
+        candidates.sort(key=lambda parsed: parsed.created_at, reverse=True)
+        message = LOOKUP_INVALID
+        for parsed in candidates:
+            replay = parsed.replay
+            if replay.sim_version != SIM_VERSION:
+                message = LOOKUP_VERSION
+                continue
+            if replay.ticks > NOSTR_MAX_TICKS or not verify(replay).ok:
+                message = LOOKUP_INVALID
+                continue
+            stored = replace(replay, author=parsed.pubkey)
+            self.store.save(name, stored)
+            return Lookup(phrase, True, stored, describe_run(stored))
+        return Lookup(phrase, True, None, message)
+
+    def _lookup_worker(self, phrase: str) -> None:
+        try:
+            result = self.lookup_now(phrase)
+        except Exception:
+            log.exception("Code-Suche %r fehlgeschlagen", phrase)
+            result = Lookup(phrase, True, None, LOOKUP_OFFLINE)
+        if self.lookup is not None and self.lookup.phrase == phrase:
+            self.lookup = result
+
     def wait_idle(self, timeout: float) -> None:
         """Wartet auf laufende Hintergrund-Arbeit (Tests, sauberes Beenden)."""
-        for thread in (self._fetch_thread, self._publish_thread):
+        threads = (
+            self._fetch_thread,
+            self._publish_thread,
+            self._share_thread,
+            self._lookup_thread,
+        )
+        for thread in threads:
             if thread is not None:
                 thread.join(timeout)

@@ -23,6 +23,7 @@ meteorite_dash = [
     "assets/images/*.png",
     "assets/images/ships/*.png",
     "assets/sounds/*.mp3",
+    "assets/*.txt",
 ]
 
 [dependency-groups]

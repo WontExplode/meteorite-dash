@@ -34,8 +34,12 @@ class DeathScene(Scene):
 
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_TAB and self.context.state.final_mode is RunMode.DAILY:
+            state = self.context.state
+            played = state.final_spectate_author is None
+            if event.key == pygame.K_TAB and played and state.final_mode is RunMode.DAILY:
                 self.finish(Transition.LEADERBOARD)
+            elif event.key == pygame.K_c and self.can_share():
+                self.share()
             else:
                 self.finish(Transition.MAIN_MENU)
         elif event.type == pygame.QUIT:
@@ -89,7 +93,10 @@ class DeathScene(Scene):
         screen.blit(subtitle, subtitle_rect)
 
         state = self.context.state
-        if state.final_mode is RunMode.DAILY:
+        if state.final_spectate_author is not None:
+            author = short_pubkey(state.final_spectate_author) or "DIR"
+            message = message_font.render(f"REPLAY VON {author}", True, DEATH_MODE_COLOR)
+        elif state.final_mode is RunMode.DAILY:
             message = message_font.render(f"DAILY RUN {state.final_label}", True, DEATH_MODE_COLOR)
         else:
             message = message_font.render("DEIN LAUF ENDET HIER", True, muted_color)
@@ -120,12 +127,7 @@ class DeathScene(Scene):
             share_text = hint_font.render(share_line, True, DEATH_MODE_COLOR)
             screen.blit(share_text, share_text.get_rect(center=(center_x, vp.py(486))))
 
-        hint_line = (
-            "TASTE: MENÜ   TAB: BESTENLISTE"
-            if state.final_mode is RunMode.DAILY
-            else "DRÜCKE EINE BELIEBIGE TASTE"
-        )
-        hint = hint_font.render(hint_line, True, TEXT_COLOR)
+        hint = hint_font.render(self._hint_line(), True, TEXT_COLOR)
         screen.blit(hint, hint.get_rect(center=(center_x, vp.py(512))))
 
         pygame.display.flip()
@@ -149,6 +151,34 @@ class DeathScene(Scene):
         return f"REKORD {format_light_years(record)}{holder} ({delta:+d})", DEATH_MUTED_COLOR
 
     def _share_line(self) -> str:
-        """Stand des Teilens (Nostr); leer ohne Exchange oder ohne Rekord."""
+        """Stand des Teilens (Nostr): Code-Teilen vor Rekord-Teilen; leer ohne beides."""
         exchange = self.context.exchange
-        return exchange.publish_status if exchange is not None else ""
+        if exchange is None:
+            return ""
+        return exchange.share_status or exchange.publish_status
+
+    def _hint_line(self) -> str:
+        state = self.context.state
+        if state.final_spectate_author is not None:
+            return "TASTE: MENÜ"
+        parts = ["TASTE: MENÜ"]
+        if state.final_mode is RunMode.DAILY:
+            parts.append("TAB: BESTENLISTE")
+        if self.can_share():
+            parts.append("C: CODE TEILEN")
+        return "   ".join(parts)
+
+    def can_share(self) -> bool:
+        state = self.context.state
+        return (
+            self.context.exchange is not None
+            and state.last_replay is not None
+            and state.final_spectate_author is None
+        )
+
+    def share(self) -> None:
+        """`C`: den gerade beendeten Lauf unter seiner Phrase veröffentlichen."""
+        exchange = self.context.exchange
+        replay = self.context.state.last_replay
+        if exchange is not None and replay is not None and self.can_share():
+            exchange.share(replay)

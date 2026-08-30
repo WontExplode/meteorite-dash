@@ -13,6 +13,10 @@ class Transition(Enum):
     START_GAME = auto()
     START_DAILY = auto()
     LEADERBOARD = auto()
+    CODE_ENTRY = auto()
+    # Beide lesen `GameState.pending_replay` (aus der Code-Eingabe).
+    START_RACE = auto()
+    SPECTATE = auto()
     SHIP_SELECTION = auto()
     SHOP = auto()
     DEATH_SCREEN = auto()

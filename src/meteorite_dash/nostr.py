@@ -29,10 +29,13 @@ from meteorite_dash.config import (
     NOSTR_MAX_CONTENT_CHARS,
     NOSTR_MAX_RUNS,
     NOSTR_RUN_KIND,
+    NOSTR_SHARE_EXPIRY_SECONDS,
     NOSTR_TIMEOUT,
+    PHRASE_VERSION,
     SIM_VERSION,
 )
 from meteorite_dash.identity import Identity, verify_signature
+from meteorite_dash.phrase import phrase_for_hash, slug
 from meteorite_dash.replay import Replay
 
 log = logging.getLogger(__name__)
@@ -56,6 +59,15 @@ def run_filter(seed: int, *, limit: int = NOSTR_MAX_RUNS) -> Filter:
     return {"kinds": [NOSTR_RUN_KIND], "#d": [run_tag(seed)], "limit": limit}
 
 
+def share_tag(phrase: str) -> str:
+    """Adresse eines per Phrase geteilten Laufs; die Phrase steckt im `d`-Tag."""
+    return f"{NOSTR_APP_TAG}:share:{PHRASE_VERSION}:{slug(phrase)}"
+
+
+def share_filter(phrase: str, *, limit: int = NOSTR_MAX_RUNS) -> Filter:
+    return {"kinds": [NOSTR_RUN_KIND], "#d": [share_tag(phrase)], "limit": limit}
+
+
 def event_id(pubkey: str, created_at: int, kind: int, tags: Tags, content: str) -> str:
     """NIP-01: SHA-256 über `[0, pubkey, created_at, kind, tags, content]` ohne
     Whitespace und ohne `\\uXXXX`-Escapes für Nicht-ASCII."""
@@ -66,16 +78,33 @@ def event_id(pubkey: str, created_at: int, kind: int, tags: Tags, content: str) 
 
 
 def build_run_event(identity: Identity, replay: Replay, *, created_at: int | None = None) -> Event:
+    """Rekord-Event: ersetzbar je Pubkey und Seed („mein Bestlauf zu diesem Seed“)."""
+    d_tag = run_tag(replay.config.seed, replay.sim_version)
+    return _build_event(identity, replay, d_tag, [], created_at)
+
+
+def build_share_event(
+    identity: Identity, replay: Replay, *, created_at: int | None = None
+) -> Event:
+    """Code-Event: Adresse ist die Phrase des Laufs; läuft nach `NOSTR_SHARE_EXPIRY_SECONDS` ab."""
     if created_at is None:
         created_at = int(time.time())
+    phrase = phrase_for_hash(replay.state_hash)
+    expiry = [["expiration", str(created_at + NOSTR_SHARE_EXPIRY_SECONDS)]]
+    return _build_event(identity, replay, share_tag(phrase), expiry, created_at)
+
+
+def _build_event(
+    identity: Identity, replay: Replay, d_tag: str, extra_tags: Tags, created_at: int | None
+) -> Event:
+    if created_at is None:
+        created_at = int(time.time())
+    alt = f"Meteorite Dash run: {replay.light_years:.0f} light-years, seed {replay.config.seed}"
     tags: Tags = [
-        ["d", run_tag(replay.config.seed, replay.sim_version)],
+        ["d", d_tag],
         ["t", NOSTR_APP_TAG],
-        # NIP-31: lesbarer Hinweis für Clients, die den Kind nicht kennen.
-        [
-            "alt",
-            f"Meteorite Dash run: {replay.light_years:.0f} light-years, seed {replay.config.seed}",
-        ],
+        ["alt", alt],  # NIP-31: lesbarer Hinweis für Clients, die den Kind nicht kennen.
+        *extra_tags,
     ]
     content = sharecode.to_text(replay)
     eid = event_id(identity.pubkey, created_at, NOSTR_RUN_KIND, tags, content)
@@ -122,8 +151,12 @@ def parse_run_event(data: object) -> ParsedRun | None:
     replay = sharecode.from_text(content)
     if replay is None:
         return None
-    expected_tag = run_tag(replay.config.seed, replay.sim_version)
-    if ["d", expected_tag] not in tags:
+    # Der `d`-Tag muss zum Inhalt passen: Rekord (Seed) oder Code (Phrase aus dem Hash).
+    allowed = (
+        run_tag(replay.config.seed, replay.sim_version),
+        share_tag(phrase_for_hash(replay.state_hash)),
+    )
+    if not any(["d", tag] in tags for tag in allowed):
         return None
     return ParsedRun(pubkey, created_at, replay)
 
