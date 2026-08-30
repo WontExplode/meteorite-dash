@@ -192,9 +192,10 @@ main.main()                 Entry-Point, ruft App().run()
   `on_enter`, `on_exit`, `on_resize`, `update`.
 - `Scene.run()` läuft bis `finish(transition)` gerufen wird, dann gibt es den
   `Transition` zurück. `App._create_scene` mappt `Transition` → nächste Szene.
-- **Globale Events** behandelt die Basis-Szene zentral: `QUIT`, `VIDEORESIZE`
-  (→ `context.apply_resize`), Vollbild-Toggle (`F` / `F11`). Szenen müssen das
-  nicht selbst tun.
+- **Globale Events** behandelt die Basis-Szene zentral in `dispatch`: `QUIT`,
+  `VIDEORESIZE` (→ `context.apply_resize`), Vollbild-Toggle (`F` / `F11`).
+  Szenen müssen das nicht selbst tun. Szenen mit Texteingabe setzen
+  `captures_text = True` — dann ist `F` ein Buchstabe, nur `F11` bleibt global.
 - Neue Szene hinzufügen: Unterklasse von `Scene`, neuen `Transition`-Wert
   ergänzen, in `App._create_scene` verdrahten.
 

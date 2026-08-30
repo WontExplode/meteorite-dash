@@ -36,6 +36,8 @@ class CodeEntryScene(Scene):
     """Tastatur -> Phrase -> `RunExchange.start_lookup` (Thread) -> Ergebnis per
     `update`. Ohne Exchange (offline) zählt nur, was schon im `ReplayStore` liegt."""
 
+    captures_text = True  # `f` ist hier ein Buchstabe, kein Vollbild-Shortcut
+
     def __init__(self, context: GameContext) -> None:
         super().__init__(context)
         self.text = ""

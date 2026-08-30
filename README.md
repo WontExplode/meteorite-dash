@@ -53,7 +53,7 @@ immer mehr zurückgelegte Lichtjahre.
 - Menü „Code eingeben“: Code tippen, `Enter` = antreten, `Tab` = ansehen
 - `R` in der Bestenliste: neu von den Relays laden
 - `Escape`: im Spiel zurück ins Hauptmenü
-- `F` / `F11`: Vollbild umschalten
+- `F` / `F11`: Vollbild umschalten (bei der Code-Eingabe nur `F11` — `F` ist dort ein Buchstabe)
 
 ## Entwicklung
 

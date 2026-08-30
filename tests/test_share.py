@@ -192,6 +192,22 @@ def test_code_entry_typing_and_validation(context: GameContext) -> None:
     assert scene._transition is Transition.MAIN_MENU
 
 
+def test_code_entry_keeps_f_as_a_letter(context: GameContext) -> None:
+    """Der globale Vollbild-Shortcut `F` darf die Texteingabe nicht kapern."""
+    scene = CodeEntryScene(context)
+    assert not context.is_fullscreen
+    scene.dispatch(_keydown(pygame.K_f, "f"))
+    assert scene.text == "f"
+    assert not context.is_fullscreen
+    scene.dispatch(_keydown(pygame.K_F11, ""))  # F11 bleibt global
+    assert context.is_fullscreen
+    context.toggle_fullscreen()
+    menu = MainMenu(context)
+    menu.dispatch(_keydown(pygame.K_f, "f"))  # anderswo ist F weiter Vollbild
+    assert context.is_fullscreen
+    context.toggle_fullscreen()
+
+
 def test_code_entry_offline_uses_local_store_only(context: GameContext, tmp_path: Path) -> None:
     store = ReplayStore(tmp_path)
     context.replays = store

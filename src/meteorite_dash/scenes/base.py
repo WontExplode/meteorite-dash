@@ -25,6 +25,10 @@ class Transition(Enum):
 class Scene(ABC):
     """Template-method base scene providing the shared 60 FPS event loop."""
 
+    # Szenen mit Texteingabe setzen das auf True: dann ist `F` ein Buchstabe,
+    # kein Vollbild-Shortcut (`F11` bleibt immer global).
+    captures_text: bool = False
+
     def __init__(self, context: GameContext) -> None:
         self.context = context
         self._transition: Transition | None = None
@@ -40,19 +44,7 @@ class Scene(ABC):
                 dt = self.context.clock.tick(FPS) / 1000
 
                 for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        self.finish(Transition.QUIT)
-                    elif event.type == pygame.VIDEORESIZE:
-                        self.context.apply_resize(event.size)
-                        self.on_resize(self.context.screen.get_size())
-                    elif event.type == pygame.KEYDOWN and event.key in (
-                        pygame.K_F11,
-                        pygame.K_f,
-                    ):
-                        self.context.toggle_fullscreen()
-                        self.on_resize(self.context.screen.get_size())
-                    else:
-                        self.handle_event(event)
+                    self.dispatch(event)
                     if self._transition is not None:
                         break
 
@@ -66,6 +58,23 @@ class Scene(ABC):
 
         assert self._transition is not None
         return self._transition
+
+    def dispatch(self, event: pygame.event.Event) -> None:
+        """Globale Events (Quit, Resize, Vollbild) vor der Szene; der Rest geht an
+        `handle_event`."""
+        if event.type == pygame.QUIT:
+            self.finish(Transition.QUIT)
+        elif event.type == pygame.VIDEORESIZE:
+            self.context.apply_resize(event.size)
+            self.on_resize(self.context.screen.get_size())
+        elif event.type == pygame.KEYDOWN and self.is_fullscreen_key(event.key):
+            self.context.toggle_fullscreen()
+            self.on_resize(self.context.screen.get_size())
+        else:
+            self.handle_event(event)
+
+    def is_fullscreen_key(self, key: int) -> bool:
+        return key == pygame.K_F11 or (key == pygame.K_f and not self.captures_text)
 
     def on_enter(self) -> None:  # noqa: B027  (optional hook)
         pass
