@@ -1,3 +1,5 @@
+"""Schiffsauswahl: Cursor über `SHIPS`, Stat-Balken, Übernahme nur freier Schiffe."""
+
 import pygame
 
 from meteorite_dash.config import (
@@ -36,9 +38,11 @@ class ShipSelection(Scene):
 
     @property
     def highlighted(self) -> ShipSpec:
+        """Schiff unter dem Cursor (auch gesperrt)."""
         return SHIPS[self.cursor]
 
     def handle_event(self, event: pygame.event.Event) -> None:
+        """Pfeiltasten bewegen den Cursor, Enter übernimmt, Escape geht zurück."""
         if event.type != pygame.KEYDOWN:
             return
         if event.key in (pygame.K_LEFT, pygame.K_UP):
@@ -51,6 +55,7 @@ class ShipSelection(Scene):
             self.finish(Transition.MAIN_MENU)
 
     def _confirm(self) -> None:
+        """Übernimmt ein freigeschaltetes Schiff; bei gesperrtem Hinweis auf den Shop."""
         spec = self.highlighted
         if self.context.state.progress.is_ship_unlocked(spec):
             self.context.state.selected_ship_index = self.cursor
@@ -60,9 +65,11 @@ class ShipSelection(Scene):
         self._feedback_ttl = SHOP_FEEDBACK_SECONDS
 
     def update(self, dt: float) -> None:
+        """Lässt den Hinweis-Text ablaufen (Wandzeit, reine Deko)."""
         self._feedback_ttl = max(0.0, self._feedback_ttl - dt)
 
     def draw(self) -> None:
+        """Zeichnet alle Schiffe mit Name, Status, Cursor-Rahmen, Stat-Balken und Wallet."""
         screen = self.context.screen
         vp = self.context.viewport
         state = self.context.state

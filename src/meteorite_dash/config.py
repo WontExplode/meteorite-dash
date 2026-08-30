@@ -1,3 +1,9 @@
+"""Zentrale Spielkonstanten — eine Quelle der Wahrheit für Werte, Größen und Gewichte.
+
+Positionen und Größen der Spielwelt und des HUD sind Referenz-px (800x600);
+der `Viewport` rechnet sie beim Zeichnen ins Fenster um.
+"""
+
 from typing import Literal, NamedTuple
 
 WindowSize = tuple[int, int]
@@ -6,6 +12,8 @@ MenuAction = Literal["start", "daily", "ship", "shop", "quit"]
 
 
 class MeteoriteVariant(NamedTuple):
+    """Meteoriten-Größe: Radius, zwei Bildvarianten, HP und Kollisionsschaden."""
+
     radius: int
     images: tuple[str, str]
     hp: int

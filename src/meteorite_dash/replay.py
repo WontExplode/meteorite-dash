@@ -37,12 +37,20 @@ Frames = tuple[tuple[int, int], ...]  # (Maske, Anzahl Ticks)
 
 
 class RunMode(Enum):
+    """Art des Laufs: bestimmt Seed-Wahl und unter welchem Namen der Rekord liegt."""
+
     FREE = "free"  # zufälliger Seed, Rekord in `best`
     DAILY = "daily"  # Tages-Seed, Rekord in `daily-<datum>`
 
 
 @dataclass(frozen=True)
 class Replay:
+    """Aufgezeichneter Lauf: `RunConfig`, Eingaben (RLE) und Endzustand als Beweis.
+
+    `sim_version` sagt, ob der Lauf noch nachspielbar ist; `mode`/`label`
+    ordnen ihn dem freien Modus oder einem Daily-Datum zu.
+    """
+
     config: RunConfig
     frames: Frames
     final: Snapshot
@@ -54,13 +62,16 @@ class Replay:
 
     @property
     def ticks(self) -> int:
+        """Gesamtzahl der aufgezeichneten Ticks."""
         return sum(count for _, count in self.frames)
 
     @property
     def light_years(self) -> float:
+        """Erreichte Lichtjahre laut Endzustand."""
         return self.final.light_years
 
     def inputs(self) -> Iterator[InputFrame]:
+        """Expandiert die Lauflängen wieder zu einem `InputFrame` pro Tick."""
         for mask, count in self.frames:
             frame = InputFrame(mask)
             for _ in range(count):
@@ -69,6 +80,7 @@ class Replay:
     # --- Serialisierung ------------------------------------------------------
 
     def to_dict(self) -> dict[str, object]:
+        """JSON-taugliche Darstellung; Gegenstück zu `from_dict`."""
         return {
             "format": REPLAY_FORMAT_VERSION,
             "sim_version": self.sim_version,
@@ -87,6 +99,11 @@ class Replay:
 
     @classmethod
     def from_dict(cls, data: object) -> "Replay | None":
+        """Liest ein Replay aus nicht vertrauenswürdigen Daten (JSON).
+
+        Liefert `None` bei falschem Format, falschen Typen, unbekanntem
+        Schiff/Zubehör, kaputten Frames oder ungültigem Hash — nie eine Exception.
+        """
         if not isinstance(data, dict):
             return None
         try:
@@ -130,30 +147,35 @@ class Replay:
 
 
 def _as_int(value: object) -> int:
+    """Erzwingt `int` (kein `bool`), sonst `TypeError`."""
     if isinstance(value, bool) or not isinstance(value, int):
         raise TypeError(f"int erwartet, {type(value).__name__} bekommen")
     return value
 
 
 def _as_float(value: object) -> float:
+    """Erzwingt `int | float` (kein `bool`) und liefert `float`, sonst `TypeError`."""
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise TypeError(f"float erwartet, {type(value).__name__} bekommen")
     return float(value)
 
 
 def _as_str(value: object) -> str:
+    """Erzwingt `str`, sonst `TypeError`."""
     if not isinstance(value, str):
         raise TypeError(f"str erwartet, {type(value).__name__} bekommen")
     return value
 
 
 def _as_list(value: object) -> list[object]:
+    """Erzwingt `list`, sonst `TypeError`."""
     if not isinstance(value, list):
         raise TypeError(f"list erwartet, {type(value).__name__} bekommen")
     return value
 
 
 def _as_frame(value: object) -> tuple[int, int]:
+    """Prüft ein `[Maske, Anzahl]`-Paar: Anzahl > 0, Maske nur aus bekannten Bits."""
     pair = _as_list(value)
     if len(pair) != 2:
         raise ValueError("Frame braucht [Maske, Anzahl]")
@@ -177,9 +199,11 @@ class Recorder:
 
     @property
     def ticks(self) -> int:
+        """Bisher aufgezeichnete Ticks."""
         return sum(count for _, count in self._frames)
 
     def record(self, inputs: InputFrame) -> None:
+        """Zeichnet die Eingabe eines Ticks auf; gleiche Maske verlängert den letzten Lauf."""
         mask = int(inputs)
         if self._frames and self._frames[-1][0] == mask:
             self._frames[-1][1] += 1
@@ -187,6 +211,7 @@ class Recorder:
             self._frames.append([mask, 1])
 
     def finish(self, sim: Simulation) -> Replay:
+        """Schließt die Aufzeichnung mit Snapshot und Hash von `sim` zum `Replay` ab."""
         return Replay(
             config=self.config,
             frames=tuple((mask, count) for mask, count in self._frames),
@@ -203,6 +228,7 @@ class Recorder:
 
 
 def default_replay_dir() -> Path:
+    """Replay-Ordner: `replays/` neben dem Speicherstand."""
     return default_save_dir() / REPLAY_DIR_NAME
 
 
@@ -213,13 +239,16 @@ class ReplayStore:
         self.directory = directory
 
     def path_for(self, name: str) -> Path:
+        """Dateipfad zu `name`; Sonderzeichen werden ersetzt, kein Path-Traversal möglich."""
         safe = _SAFE_NAME.sub("_", name).strip("_") or "replay"
         return self.directory / f"{safe}.json"
 
     def load(self, name: str) -> Replay | None:
+        """Replay unter `name`; `None`, wenn die Datei fehlt oder unlesbar ist."""
         return self._read(self.path_for(name))
 
     def save(self, name: str, replay: Replay) -> bool:
+        """Schreibt atomar (Temp-Datei + `os.replace`). False bei Schreibfehler."""
         path = self.path_for(name)
         payload = json.dumps(replay.to_dict(), indent=2)
         tmp_path = path.with_name(path.name + ".tmp")
@@ -233,6 +262,7 @@ class ReplayStore:
         return True
 
     def all(self) -> list[Replay]:
+        """Alle lesbaren Replays im Ordner, nach Dateinamen sortiert."""
         try:
             paths = sorted(self.directory.glob("*.json"))
         except OSError:
@@ -249,6 +279,7 @@ class ReplayStore:
         return max(candidates, key=lambda replay: replay.light_years, default=None)
 
     def _read(self, path: Path) -> Replay | None:
+        """Liest und parst eine Datei defensiv; jeder Fehler wird geloggt und liefert `None`."""
         try:
             raw = path.read_text(encoding="utf-8")
         except FileNotFoundError:

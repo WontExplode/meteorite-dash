@@ -10,6 +10,9 @@ uv run ruff check .
 echo "=== mypy ==="
 uv run mypy .
 
+echo "=== interrogate ==="
+uv run interrogate
+
 echo "=== pytest ==="
 uv run pytest || test $? -eq 5
 

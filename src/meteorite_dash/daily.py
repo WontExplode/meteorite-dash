@@ -14,13 +14,16 @@ from meteorite_dash.config import DAILY_REPLAY_PREFIX, DAILY_SEED_SALT, SEED_BIT
 
 
 def today_utc() -> date:
+    """Heutiges Datum in UTC — der Tageswechsel gilt für alle gleichzeitig."""
     return datetime.now(UTC).date()
 
 
 def daily_seed(day: date) -> int:
+    """Seed des Tages: SHA-256 über Salt und ISO-Datum, auf `SEED_BITS` gekürzt."""
     digest = hashlib.sha256(f"{DAILY_SEED_SALT}:{day.isoformat()}".encode()).digest()
     return int.from_bytes(digest[:8], "big") % (1 << SEED_BITS)
 
 
 def daily_replay_name(day: date) -> str:
+    """Name des Tagesrekords im `ReplayStore`: `daily-<datum>`."""
     return f"{DAILY_REPLAY_PREFIX}{day.isoformat()}"

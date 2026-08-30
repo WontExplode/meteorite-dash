@@ -46,10 +46,13 @@ class SimulationView(Protocol):
     coins_collected: int
 
     @property
-    def light_years(self) -> float: ...
+    def light_years(self) -> float:
+        """Zurückgelegte Lichtjahre."""
 
 
 class Director(Protocol):
+    """Protokoll für Schwierigkeits-Directors (Rampe #32, adaptiv #33)."""
+
     def params(self, sim: SimulationView, rng: random.Random) -> DifficultyParams:
         """Wird jeden Tick gerufen; `rng` ist der eigene Stream `<seed>:director`."""
 
@@ -61,4 +64,5 @@ class ConstantDirector:
         self._params = params or DifficultyParams()
 
     def params(self, sim: SimulationView, rng: random.Random) -> DifficultyParams:
+        """Liefert immer dieselben Stellgrößen; `sim` und `rng` bleiben ungenutzt."""
         return self._params

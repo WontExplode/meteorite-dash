@@ -1,3 +1,5 @@
+"""Timergesteuerter Spawner über gewichtete Tabellen (datengetrieben, seedbar)."""
+
 import random
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -11,6 +13,8 @@ type Acceptor[T] = Callable[[T], bool]
 
 @dataclass(frozen=True)
 class SpawnEntry[T]:
+    """Tabellenzeile: relatives Gewicht plus Fabrik `(rng, area) -> T`."""
+
     weight: float
     factory: Factory[T]
 
@@ -42,10 +46,12 @@ class Spawner[T]:
         self._next_at = self._roll_interval()
 
     def set_table(self, table: Sequence[SpawnEntry[T]]) -> None:
+        """Ersetzt Tabelle und Gewichte; der Timer läuft weiter."""
         self._table = list(table)
         self._weights = [entry.weight for entry in self._table]
 
     def _roll_interval(self) -> float:
+        """Würfelt das nächste Spawn-Intervall aus `interval_range`."""
         low, high = self._interval_range
         return self._rng.uniform(low, high)
 

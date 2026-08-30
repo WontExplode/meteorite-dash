@@ -1,3 +1,9 @@
+"""App: initialisiert pygame, baut den `GameContext` und fährt die Szenen-Schleife.
+
+Jede Szene gibt beim Verlassen eine `Transition` zurück, die hier auf die
+nächste Szene abgebildet wird.
+"""
+
 import pygame
 
 from meteorite_dash.assets import AssetLoader
@@ -27,6 +33,8 @@ _GAME_TRANSITIONS = (Transition.START_GAME, Transition.START_DAILY)
 
 
 class App:
+    """Einstiegsobjekt: Fenster, Ressourcen, Speicherstand und Szenenwechsel."""
+
     def __init__(self) -> None:
         pygame.init()
         screen = pygame.display.set_mode(WINDOW_SIZE, pygame.RESIZABLE)
@@ -47,6 +55,11 @@ class App:
         )
 
     def run(self) -> None:
+        """Szenen-Schleife bis `Transition.QUIT`; räumt Musik und pygame immer auf.
+
+        Die Menümusik läuft über Hauptmenü, Schiffsauswahl und Shop hinweg
+        durch und startet erst nach einem Lauf neu.
+        """
         transition = Transition.MAIN_MENU
         menu_music_playing = False
         try:
@@ -64,6 +77,7 @@ class App:
             pygame.quit()
 
     def _create_scene(self, transition: Transition) -> Scene:
+        """Mappt eine `Transition` auf die nächste Szene; Daily Run bekommt den Tages-Seed."""
         if transition is Transition.MAIN_MENU:
             return MainMenu(self.context)
         if transition is Transition.SHIP_SELECTION:
