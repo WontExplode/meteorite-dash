@@ -81,6 +81,7 @@ src/meteorite_dash/
   simulation.py        Deterministischer Spielkern (fester Tick, Seed-Streams, Events)
   inputs.py            InputFrame: Eingaben als Bitmaske pro Tick
   difficulty.py        Director-Vertrag (DifficultyParams) für den Schwierigkeitsgrad
+  adaptive_difficulty.py  Adaptiver Free-Director (Regelkern, noch nicht verdrahtet)
   headless.py          Simulation ohne Fenster abspielen (Tests, Replay-Prüfung)
   replay.py            Replay-Format, Recorder und Ablage (JSON)
   ghost.py             Ghost: Replay als zweite Simulation im Gleichschritt
