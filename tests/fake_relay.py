@@ -17,7 +17,9 @@ def _as_int(value: object) -> int:
 
 
 class FakeRelay:
-    def __init__(self) -> None:
+    def __init__(self, *, flood: int = 0) -> None:
+        # `flood` > 0: bösartiges Relay — so viele Events auf jedes `REQ`, ohne `EOSE`.
+        self.flood = flood
         self.events: dict[tuple[str, int, str], Event] = {}
         self.port = 0
         self.received: list[list[object]] = []
@@ -61,9 +63,21 @@ class FakeRelay:
                 await ws.send(json.dumps(["OK", event["id"], True, ""]))
             elif message[0] == "REQ":
                 sub, query = message[1], message[2]
+                if self.flood:
+                    await self._flood(ws, sub)
+                    continue
                 for event in self._matching(query):
                     await ws.send(json.dumps(["EVENT", sub, event]))
                 await ws.send(json.dumps(["EOSE", sub]))
+
+    async def _flood(self, ws: ServerConnection, sub: object) -> None:
+        """Ignoriert `limit` und schickt Events ohne `EOSE`; der Client muss deckeln.
+        Bricht ab, sobald er die Verbindung schließt."""
+        try:
+            for index in range(self.flood):
+                await ws.send(json.dumps(["EVENT", sub, {"id": f"{index:064x}"}]))
+        except Exception:  # Client hat gedeckelt und aufgelegt
+            pass
 
     def _store(self, event: Event) -> None:
         tags = event["tags"]

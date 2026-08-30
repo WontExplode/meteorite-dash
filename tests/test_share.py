@@ -1,6 +1,7 @@
 """Lauf per Code weitergeben: Share-Event, Suche, Code-Eingabe, Rennen und Zuschauen."""
 
 import json
+import threading
 from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
@@ -32,7 +33,13 @@ from meteorite_dash.exchange import (
 from meteorite_dash.headless import scripted_inputs
 from meteorite_dash.identity import Identity, IdentityStore
 from meteorite_dash.inputs import InputFrame
-from meteorite_dash.nostr import RelayClient, build_share_event, parse_run_event, share_tag
+from meteorite_dash.nostr import (
+    Event,
+    RelayClient,
+    build_share_event,
+    parse_run_event,
+    share_tag,
+)
 from meteorite_dash.phrase import phrase_for_hash
 from meteorite_dash.replay import Recorder, Replay, ReplayStore, RunMode
 from meteorite_dash.scenes.base import Transition
@@ -155,6 +162,62 @@ def test_lookup_rejects_tampered_and_old_runs(relay: FakeRelay, tmp_path: Path) 
     old = replace(_record(input_seed=9, ticks=300), sim_version=SIM_VERSION + 1)
     phrase_old, _ = cheater.share_now(old)
     assert honest.lookup_now(phrase_old).message == LOOKUP_VERSION
+
+
+class _GatedClient(RelayClient):
+    """Hält jedes `publish` auf, bis das Tor offen ist — so bleibt ein Share-Thread
+    im Test zuverlässig „in flight"."""
+
+    def __init__(self) -> None:
+        super().__init__(["ws://127.0.0.1:1"], timeout=1.0)
+        self.gate = threading.Event()
+        self.calls = 0
+
+    def publish(self, event: Event) -> int:
+        self.calls += 1
+        assert self.gate.wait(10.0), "Tor wurde nie geöffnet"
+        return 1
+
+
+def test_share_skips_a_second_thread_for_the_same_run(tmp_path: Path) -> None:
+    """Mehrfaches `C` auf dem Death-Screen sendet denselben Lauf nur einmal und
+    überschreibt den laufenden Thread nicht."""
+    client = _GatedClient()
+    exchange = RunExchange(Identity.generate(), ReplayStore(tmp_path), client=client)
+    run = _record(ticks=300)
+    phrase = exchange.share(run)
+    thread = exchange._share_thread
+    assert exchange.share(run) == phrase
+    assert exchange._share_thread is thread  # kein zweiter Thread
+    client.gate.set()
+    exchange.wait_idle(10.0)
+    assert client.calls == 1
+
+    # Ein anderer Lauf teilt sofort, derselbe Lauf wieder, sobald der Thread durch ist.
+    other = _record(input_seed=7, ticks=240)
+    assert exchange.share(other) != phrase
+    exchange.wait_idle(10.0)
+    assert exchange.share(run) == phrase
+    exchange.wait_idle(10.0)
+    assert client.calls == 3
+
+
+def test_death_screen_shares_once_when_c_is_held(context: GameContext, tmp_path: Path) -> None:
+    """Gedrückt gehaltenes `C` (Key-Repeat) schickt den Lauf trotzdem nur einmal los."""
+    client = _GatedClient()
+    exchange = RunExchange(Identity.generate(), ReplayStore(tmp_path), client=client)
+    context.replays = exchange.store
+    context.exchange = exchange
+    context.state.last_replay = _record(ticks=300)
+    death = DeathScene(context)
+    assert death.can_share()
+    for _ in range(5):
+        death.handle_event(_keydown(pygame.K_c))
+        assert death._transition is None  # bleibt auf dem Screen
+    client.gate.set()
+    exchange.wait_idle(10.0)
+    assert client.calls == 1
+    assert "GETEILT (1/1 RELAYS)" in death._share_line()
 
 
 def test_background_share_and_lookup(relay: FakeRelay, tmp_path: Path) -> None:

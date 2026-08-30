@@ -396,8 +396,10 @@ Briefkasten, die Simulation ist der Richter.
   und dass der `d`-Tag zum Inhalt passt). `RelayClient` (`websockets`)
   spricht alle `NOSTR_RELAYS` parallel, je Verbindung `NOSTR_TIMEOUT`;
   `publish` zählt `OK true`, `fetch` sammelt bis `EOSE` und dedupliziert.
-  Jeder Netzfehler wird geloggt und zählt als „Relay nicht erreichbar“ —
-  nie eine Exception nach außen.
+  Je Verbindung werden höchstens `NOSTR_MAX_EVENTS_PER_RELAY` Events
+  angenommen — ein Relay darf den `limit` im Filter ignorieren, uns aber
+  nicht bis zum Timeout volllaufen lassen. Jeder Netzfehler wird geloggt und
+  zählt als „Relay nicht erreichbar“ — nie eine Exception nach außen.
 - `exchange.py`: `RunExchange(identity, store)` ist der Trichter.
   `import_runs(seed)`: holen → `parse_run_event` → eigene überspringen →
   `SIM_VERSION`/Seed/`NOSTR_MAX_TICKS` prüfen → weiteste zuerst
@@ -445,7 +447,10 @@ Relay der Briefkasten, die Simulation der Richter.
   aus dem Hash) — ein Relay kann unter einer Phrase keinen anderen Lauf
   unterschieben.
 - `exchange.py`: `share(replay)` (Thread) / `share_now` → `share_status`
-  „CODE: … — GETEILT (n/m RELAYS)“. `start_lookup(phrase)` (Thread) /
+  „CODE: … — GETEILT (n/m RELAYS)“. `share` startet wie `prefetch` keinen
+  zweiten Thread, solange schon einer zu genau diesem Lauf läuft
+  (`_share_hash`) — gedrückt gehaltenes `C` sendet trotzdem nur einmal.
+  `start_lookup(phrase)` (Thread) /
   `lookup_now` → `Lookup(phrase, done, replay, message)`: erst lokal
   (`share-<w1-w2-w3>.json`), sonst Relays; neuester passender Lauf, der
   `headless.verify` besteht, wird gespeichert (`author` = Pubkey).
@@ -691,7 +696,8 @@ Relay der Briefkasten, die Simulation der Richter.
   `App()` ohne Exchange baut. Netz-Tests starten einen `FakeRelay`
   (`websockets.serve` auf 127.0.0.1, ersetzbare Events, `REQ`/`EOSE`) und
   baut `RunExchange(..., client=RelayClient([relay.url]))` explizit;
-  „Relay tot“ wird mit `ws://127.0.0.1:1` geprüft.
+  „Relay tot“ wird mit `ws://127.0.0.1:1` geprüft, „Relay spammt“ mit
+  `FakeRelay(flood=n)` (Events ohne `EOSE`).
 - Neue Spiel-Logik braucht einen Test. Reine Funktionen bevorzugen, die ohne
   laufenden Loop prüfbar sind (siehe vorhandene Spawner-/Entity-/Player-Tests).
 
@@ -725,9 +731,10 @@ realistischen Punkte:
   erfinden.
 - **Nostr (`nostr.py`, `exchange.py`):** Relays sind fremde Server, Events
   fremde Daten. Eingehend: `parse_run_event` prüft Form, ID, Signatur und
-  Größe (`NOSTR_MAX_CONTENT_CHARS`), `import_runs` deckelt Anzahl
-  (`NOSTR_MAX_RUNS`) und Länge (`NOSTR_MAX_TICKS`) und spielt jeden Lauf
-  nach, bevor er gespeichert wird — ein Relay kann Läufe verschweigen, aber
+  Größe (`NOSTR_MAX_CONTENT_CHARS`), `RelayClient` deckelt die Events je
+  Verbindung (`NOSTR_MAX_EVENTS_PER_RELAY`, zusätzlich zum `limit` im Filter
+  `NOSTR_MAX_RUNS`), `import_runs` deckelt die Länge (`NOSTR_MAX_TICKS`) und
+  spielt jeden Lauf nach, bevor er gespeichert wird — ein Relay kann Läufe verschweigen, aber
   keinen erfinden. Ausgehend: nur Pubkey + Replay, keine Systemdaten. Der
   private Schlüssel (`identity.json`) verlässt den Rechner nie; nicht loggen.
   Die Relay-Liste steht in `config.py` — nur `wss://`, keine Laufzeit-Konfig

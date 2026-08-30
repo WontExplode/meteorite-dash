@@ -17,6 +17,7 @@ from fake_relay import FakeRelay
 from meteorite_dash import sharecode
 from meteorite_dash.config import (
     IDENTITY_FILENAME,
+    NOSTR_MAX_EVENTS_PER_RELAY,
     NOSTR_MAX_TICKS,
     NOSTR_REPLAY_PREFIX,
     NOSTR_RUN_KIND,
@@ -240,6 +241,21 @@ def test_relay_client_survives_unreachable_relay(relay: FakeRelay) -> None:
     only_dead = RelayClient([dead], timeout=1.0)
     assert only_dead.publish(event) == 0
     assert only_dead.fetch(run_filter(SEED)).relays_ok == 0
+
+
+def test_relay_client_caps_events_from_a_flooding_relay() -> None:
+    """Ein Relay, das `limit` ignoriert und ohne `EOSE` weitersendet, darf uns nicht
+    volllaufen lassen: nach `NOSTR_MAX_EVENTS_PER_RELAY` ist Schluss — vor dem Timeout."""
+    flooder = FakeRelay(flood=NOSTR_MAX_EVENTS_PER_RELAY * 3).start()
+    try:
+        client = RelayClient([flooder.url], timeout=10.0)
+        started = time.monotonic()
+        result = client.fetch(run_filter(SEED))
+        assert time.monotonic() - started < 9.0  # gedeckelt, nicht ausgesessen
+        assert result.relays_ok == 1  # Relay hat geantwortet, die Events zählen
+        assert len(result.events) == NOSTR_MAX_EVENTS_PER_RELAY
+    finally:
+        flooder.stop()
 
 
 # --- Exchange ---------------------------------------------------------------------------

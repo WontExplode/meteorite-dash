@@ -27,6 +27,7 @@ from meteorite_dash import sharecode
 from meteorite_dash.config import (
     NOSTR_APP_TAG,
     NOSTR_MAX_CONTENT_CHARS,
+    NOSTR_MAX_EVENTS_PER_RELAY,
     NOSTR_MAX_RUNS,
     NOSTR_RUN_KIND,
     NOSTR_SHARE_EXPIRY_SECONDS,
@@ -250,7 +251,9 @@ class RelayClient:
 
     async def _fetch_one(self, url: str, query: Filter) -> list[Event] | None:
         """`None` = Relay nicht erreichbar; sonst die Events bis `EOSE` (oder bis zum
-        Timeout, dann das bis dahin Erhaltene)."""
+        Timeout, dann das bis dahin Erhaltene). Nach `NOSTR_MAX_EVENTS_PER_RELAY`
+        Events ist Schluss — ein Relay, das den `limit` im Filter ignoriert, soll uns
+        nicht bis zum Timeout mit Events volllaufen lassen."""
         request = json.dumps(["REQ", _SUBSCRIPTION_ID, query], separators=(",", ":"))
         events: list[Event] = []
         try:
@@ -265,6 +268,9 @@ class RelayClient:
                         continue
                     if reply[0] == "EVENT" and len(reply) >= 3 and isinstance(reply[2], dict):
                         events.append(reply[2])
+                        if len(events) >= NOSTR_MAX_EVENTS_PER_RELAY:
+                            log.info("Relay %s (fetch): Deckel bei %d Events", url, len(events))
+                            break
                     elif reply[0] in ("EOSE", "CLOSED"):
                         break
                 await ws.send(json.dumps(["CLOSE", _SUBSCRIPTION_ID]))

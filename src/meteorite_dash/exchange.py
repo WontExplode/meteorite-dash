@@ -115,6 +115,7 @@ class RunExchange:
         self._fetch_result: ImportResult | None = None
         self._publish_thread: threading.Thread | None = None
         self._share_thread: threading.Thread | None = None
+        self._share_hash: str | None = None
         self._lookup_thread: threading.Thread | None = None
 
     # --- Holen ---------------------------------------------------------------------
@@ -228,8 +229,16 @@ class RunExchange:
     # --- Code teilen / holen -------------------------------------------------------
 
     def share(self, replay: Replay) -> str:
-        """Lauf unter seiner Phrase veröffentlichen (Hintergrund); liefert die Phrase."""
+        """Lauf unter seiner Phrase veröffentlichen (Hintergrund); liefert die Phrase.
+
+        Wie `prefetch`: läuft schon ein Thread zu genau diesem Lauf, bleibt es bei
+        ihm — mehrfaches `C` auf dem Death-Screen sendet den Lauf nicht mehrfach
+        und überschreibt den laufenden Thread nicht."""
         phrase = phrase_for_hash(replay.state_hash)
+        thread = self._share_thread
+        if thread is not None and thread.is_alive() and self._share_hash == replay.state_hash:
+            return phrase
+        self._share_hash = replay.state_hash
         self.share_status = f"CODE: {phrase} — {SHARE_SHARING}"
         self._share_thread = threading.Thread(
             target=self._share_worker, args=(replay,), name="nostr-share", daemon=True
