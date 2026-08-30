@@ -25,6 +25,8 @@ immer mehr zurückgelegte Lichtjahre.
   (`METEORITE_DASH_SEED` erzwingt einen), headless nachspielbar
 - Replays: jeder Lauf wird als `last.json` / `best.json` aufgezeichnet;
   `uv run meteorite-dash --verify datei.json` spielt ihn nach und prüft ihn
+- Ghost: der beste gespeicherte Lauf zum selben Seed fliegt halbtransparent
+  mit, das HUD zeigt den Vorsprung
 - Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
 
 ## Steuerung
@@ -64,6 +66,7 @@ src/meteorite_dash/
   difficulty.py        Director-Vertrag (DifficultyParams) für den Schwierigkeitsgrad
   headless.py          Simulation ohne Fenster abspielen (Tests, Replay-Prüfung)
   replay.py            Replay-Format, Recorder und Ablage (JSON)
+  ghost.py             Ghost: Replay als zweite Simulation im Gleichschritt
   mathutil.py          Plattformstabiler Sinus/Abstand für die Simulation
   entities.py          Gegner, Hindernisse und Munitions-Pickups
   projectiles.py       Spieler-Projektile
@@ -123,4 +126,5 @@ git config core.hooksPath .githooks
   Game-Over-Screen.
 - Replays liegen unter `replays/` neben `progress.json`. Eine Datei an
   Freunde schicken und `uv run meteorite-dash --verify datei.json` beweist den
-  Lauf Tick für Tick.
+  Lauf Tick für Tick. Liegt ein fremdes Replay im Ordner, erscheint es bei
+  gleichem Seed (`METEORITE_DASH_SEED`) als Ghost.

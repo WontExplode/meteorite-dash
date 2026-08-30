@@ -7,6 +7,10 @@ from meteorite_dash.config import (
     COIN_BONUS_TOP_RIGHT,
     COIN_COLOR,
     COINS_TOP_RIGHT,
+    GHOST_ALPHA,
+    GHOST_HUD_COLOR,
+    GHOST_HUD_TOP_RIGHT,
+    GHOST_TINT,
     HP_HUD_TOP_LEFT,
     MAX_STEPS_PER_FRAME,
     REPLAY_BEST_NAME,
@@ -22,11 +26,12 @@ from meteorite_dash.config import (
     WEAPON_HUD_TOP_LEFT,
 )
 from meteorite_dash.context import GameContext
+from meteorite_dash.ghost import Ghost
 from meteorite_dash.inputs import InputFrame, from_pressed
 from meteorite_dash.render import RenderContext
 from meteorite_dash.replay import Recorder, Replay
 from meteorite_dash.scenes.base import Scene, Transition
-from meteorite_dash.score import format_coins
+from meteorite_dash.score import format_coins, format_light_years
 from meteorite_dash.simulation import EventKind, RunConfig, SimEvent, Simulation, pick_seed
 
 # Float-Akkumulator: knapp unter SIM_DT zählt noch als voller Tick, sonst frisst
@@ -42,11 +47,21 @@ class GameScene(Scene):
     zeichnen. Spielregeln leben in `simulation.py`.
     """
 
-    def __init__(self, context: GameContext, *, seed: int | None = None) -> None:
+    def __init__(
+        self,
+        context: GameContext,
+        *,
+        seed: int | None = None,
+        ghost: Replay | None = None,
+    ) -> None:
         super().__init__(context)
         self.seed = seed if seed is not None else pick_seed()
         self.sim = Simulation(self.run_config(self.seed))
         self.recorder = Recorder(self.sim.config)
+        # Ghost: bester gespeicherter Lauf zum selben Seed (oder explizit übergeben).
+        ghost_replay = ghost if ghost is not None else self.find_ghost(self.seed)
+        self.ghost = Ghost(ghost_replay) if ghost_replay is not None else None
+        self._ghost_images: dict[tuple[int, int], pygame.Surface] = {}
         self._accumulator = 0.0
         # Flanken (Waffenwechsel) aus Events, bis zum nächsten Tick gesammelt.
         self._pending = InputFrame.NONE
@@ -58,6 +73,21 @@ class GameScene(Scene):
         spec = state.selected_ship
         equipped = tuple(acc.id for acc in state.progress.equipped_accessories(spec))
         return RunConfig(seed, spec.name, equipped)
+
+    def find_ghost(self, seed: int) -> Replay | None:
+        store = self.context.replays
+        return store.best_for_seed(seed) if store is not None else None
+
+    def ghost_image(self, size: tuple[int, int]) -> pygame.Surface:
+        """Halbtransparente Kopie des Ghost-Schiffs, pro Fenstergröße gecacht."""
+        assert self.ghost is not None
+        image = self._ghost_images.get(size)
+        if image is None:
+            sprite = self.ghost.replay.config.spec.sprite
+            image = self.context.assets.load_ship(sprite, size, GHOST_TINT).copy()
+            image.set_alpha(GHOST_ALPHA)
+            self._ghost_images[size] = image
+        return image
 
     def ship_image(self, size: tuple[int, int]) -> pygame.Surface:
         """Schiffssprite in Fenstergröße (gecacht), mit der gewählten Färbung."""
@@ -106,6 +136,8 @@ class GameScene(Scene):
         """Genau ein Simulations-Tick plus Reaktion der Szene auf die Events."""
         if not self.sim.is_over:
             self.recorder.record(inputs)
+        if self.ghost is not None:
+            self.ghost.step()
         events = self.sim.step(inputs)
         for event in events:
             self._on_event(event)
@@ -149,12 +181,19 @@ class GameScene(Scene):
             formation.draw(ctx)
         for projectile in self.sim.projectiles:
             projectile.draw(ctx)
+        self._draw_ghost(ctx)
         self._draw_player(ctx)
         self._draw_weapon_hud()
         self._draw_hp_hud()
         self._draw_shield_hud()
         self._draw_score()
         pygame.display.flip()
+
+    def _draw_ghost(self, ctx: RenderContext) -> None:
+        if self.ghost is None or self.ghost.finished:
+            return
+        target = ctx.rect(self.ghost.rect)
+        ctx.surface.blit(self.ghost_image(target.size), target)
 
     def _draw_player(self, ctx: RenderContext) -> None:
         target = ctx.rect(self.sim.player.rect)
@@ -207,6 +246,19 @@ class GameScene(Scene):
         self.context.screen.blit(
             coins_text, coins_text.get_rect(topright=vp.point(*COINS_TOP_RIGHT))
         )
+
+        if self.ghost is not None:
+            delta = self.ghost.delta(self.sim.light_years)
+            sign = "+" if delta >= 0 else "-"
+            ghost_text = font.render(
+                f"GHOST {format_light_years(self.ghost.light_years)} {sign}{abs(delta):.0f}",
+                True,
+                GHOST_HUD_COLOR,
+            )
+            ghost_text.set_alpha(SCORE_ALPHA)
+            self.context.screen.blit(
+                ghost_text, ghost_text.get_rect(topright=vp.point(*GHOST_HUD_TOP_RIGHT))
+            )
 
         if self._bonus_notice_ttl > 0:
             bonus_text = font.render(self._bonus_notice, True, COIN_COLOR)

@@ -82,6 +82,9 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   vergleicht Endzustand + Hash; `uv run meteorite-dash --verify datei.json`
   macht das von der Kommandozeile. Golden-Regressionstest in
   `tests/test_replay.py` mit `tests/replays/golden-*.json`.
+- **Ghost** (Issue #34): `ghost.py` spielt den besten gespeicherten Lauf zum
+  selben Seed als zweite `Simulation` im Gleichschritt nach; `GameScene`
+  zeichnet nur sein Schiff halbtransparent und zeigt `GHOST <ly> ±Δ` im HUD.
 - Strikte Typprüfung, Linting, Tests, CI.
 
 **Noch NICHT vorhanden** (aus dem Spec — meist als GitHub-Issue getrackt):
@@ -91,7 +94,7 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
 - **Steigende Schwierigkeit** über die Zeit (Vertrag in `difficulty.py`,
   Umsetzung Issues #32/#33 — nicht Teil von #34).
-- Ghost und Daily Run (Issue #34, Folge-PRs auf Simulation + Replay).
+- Daily Run mit gemeinsamem Seed (Issue #34, Folge-PR auf Ghost).
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
   (Issue #10), Spieler-Stats (Issue #13), iOS/Android-Port (Issue #5).
 
@@ -286,6 +289,25 @@ Replays zu brechen:
   stimmen nach jeder Interaktion“. Nach bewusster Regeländerung:
   `SIM_VERSION` erhöhen und `UPDATE_GOLDEN=1 uv run pytest tests/test_replay.py
   -k golden`.
+
+### Ghost (Issue #34)
+
+- `ghost.py`: `Ghost(replay)` = eigene `Simulation(replay.config)` + Iterator
+  über `replay.inputs()`. `step()` pro Tick, `finished` wenn Eingaben
+  aufgebraucht oder tot, danach `consistent` (Snapshot + Hash == Aufzeichnung)
+  — jeder Ghost-Lauf ist damit ein Determinismus-Test im Spiel. `delta(ly)` =
+  Vorsprung des Spielers.
+- Bewusst **Re-Simulation statt Positionsliste**: Datei bleibt klein, Ghost-
+  Score läuft live mit. Die Ghost-Welt divergiert nach der ersten Abweichung
+  (Hunter, Treffer, Münzen) — deshalb wird nur das Schiff gezeichnet.
+- `GameScene(context, seed=…, ghost=…)`: ohne `ghost` sucht `find_ghost` über
+  `ReplayStore.best_for_seed(seed)` (gleiche `SIM_VERSION`). `step()` rückt
+  Ghost und Spieler gemeinsam vor; der Ghost fasst die Spieler-Simulation nie
+  an. Zeichnen: `ghost_image(size)` = getöntes Schiff (`GHOST_TINT`) mit
+  `GHOST_ALPHA`, pro Größe gecacht; Ghost hinter dem Spieler, verschwindet mit
+  `finished`. HUD `GHOST <ly> ±Δ` über `GHOST_HUD_TOP_RIGHT`.
+- Ghost gegen Freunde: fremdes Replay in den `replays/`-Ordner legen und mit
+  `METEORITE_DASH_SEED=<seed>` denselben Lauf starten.
 
 ### Entities & Spawner
 
