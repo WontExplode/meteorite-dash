@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from meteorite_dash.config import SIM_VERSION
 from meteorite_dash.difficulty import Director
 from meteorite_dash.inputs import InputFrame
+from meteorite_dash.mode_directors import director_for_kind, director_version_for_kind
 from meteorite_dash.replay import Replay
 from meteorite_dash.simulation import RunConfig, SimEvent, Simulation, Snapshot
 
@@ -75,8 +76,11 @@ class Verification:
 
     @property
     def version_matches(self) -> bool:
-        """True, wenn das Replay mit der aktuellen `SIM_VERSION` aufgezeichnet wurde."""
-        return self.replay.sim_version == SIM_VERSION
+        """True bei passender gemeinsamer Simulations- und Director-Regelversion."""
+        return (
+            self.replay.sim_version == SIM_VERSION
+            and self.replay.director_version == director_version_for_kind(self.replay.director_kind)
+        )
 
     @property
     def ok(self) -> bool:
@@ -89,8 +93,9 @@ class Verification:
 
 
 def run_replay(replay: Replay, *, director: Director | None = None) -> Trace:
-    """Spielt die Eingaben eines Replays mit dessen `RunConfig` nach."""
-    return run(replay.config, replay.inputs(), director=director)
+    """Spielt ein Replay mit seiner aufgezeichneten oder explizit gesetzten Strategie nach."""
+    replay_director = director if director is not None else director_for_kind(replay.director_kind)
+    return run(replay.config, replay.inputs(), director=replay_director)
 
 
 def verify(replay: Replay) -> Verification:

@@ -11,10 +11,12 @@ import pytest
 
 from meteorite_dash.config import REPLAY_BEST_NAME, REPLAY_LAST_NAME, SIM_VERSION
 from meteorite_dash.context import GameContext
+from meteorite_dash.difficulty import DirectorKind
 from meteorite_dash.entities import Meteorite
 from meteorite_dash.headless import Trace, format_trace, run_replay, scripted_inputs, verify
 from meteorite_dash.inputs import InputFrame
 from meteorite_dash.main import main
+from meteorite_dash.mode_directors import director_version_for_kind
 from meteorite_dash.replay import Recorder, Replay, ReplayStore
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.simulation import RunConfig, Simulation
@@ -86,6 +88,18 @@ def test_replay_json_roundtrip() -> None:
     assert restored == replay
 
 
+def test_legacy_replay_defaults_to_constant_director() -> None:
+    data = _record(CONFIG, scripted_inputs(1, 60)).to_dict()
+    del data["director"]
+    del data["director_version"]
+
+    restored = Replay.from_dict(data)
+
+    assert restored is not None
+    assert restored.director_kind is DirectorKind.CONSTANT
+    assert restored.director_version == director_version_for_kind(DirectorKind.CONSTANT)
+
+
 @pytest.mark.parametrize(
     "mutate",
     [
@@ -102,6 +116,8 @@ def test_replay_json_roundtrip() -> None:
         lambda d: {**d, "config": {**d["config"], "seed": True}},  # bool-als-int
         lambda d: {**d, "state_hash": "nope"},
         lambda d: {**d, "mode": "weekly"},
+        lambda d: {**d, "director": "chaos"},
+        lambda d: {**d, "director_version": 0},
         lambda d: {**d, "final": {**d["final"], "hp": "voll"}},
     ],
 )
@@ -169,6 +185,9 @@ def test_verify_rejects_tampering() -> None:
     old = replace(replay, sim_version=SIM_VERSION + 1)
     assert not verify(old).version_matches
     assert not verify(old).ok
+    old_director = replace(replay, director_version=replay.director_version + 1)
+    assert not verify(old_director).version_matches
+    assert not verify(old_director).ok
 
 
 def test_format_trace_lists_every_interaction() -> None:
@@ -203,6 +222,7 @@ def test_scene_recording_replays_bit_identical(context: GameContext) -> None:
     for frame in scripted_inputs(8, 1200):
         scene.step(frame)
     replay = scene.recorder.finish(scene.sim)
+    assert replay.director_kind is DirectorKind.ADAPTIVE
     assert replay.ticks == scene.sim.tick
     assert run_replay(replay).state_hash == scene.sim.state_hash()
     assert verify(replay).ok

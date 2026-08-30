@@ -8,22 +8,31 @@ from meteorite_dash.context import GameContext
 from meteorite_dash.ghost import Ghost
 from meteorite_dash.headless import scripted_inputs
 from meteorite_dash.inputs import InputFrame
-from meteorite_dash.replay import Recorder, Replay, ReplayStore
+from meteorite_dash.replay import Recorder, Replay, ReplayStore, RunMode
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.simulation import RunConfig, Simulation
 
 CONFIG = RunConfig(seed=9001, ship="Allrounder")
 
 
-def _record(config: RunConfig = CONFIG, input_seed: int = 3, ticks: int = 900) -> Replay:
+def _record(
+    config: RunConfig = CONFIG,
+    input_seed: int = 3,
+    ticks: int = 900,
+    mode: RunMode = RunMode.FREE,
+) -> Replay:
     sim = Simulation(config)
-    recorder = Recorder(config)
+    recorder = Recorder(config, mode=mode)
     for frame in scripted_inputs(input_seed, ticks):
         if sim.is_over:
             break
         recorder.record(frame)
         sim.step(frame)
     return recorder.finish(sim)
+
+
+def _daily_record(config: RunConfig = CONFIG, input_seed: int = 3, ticks: int = 900) -> Replay:
+    return _record(config, input_seed, ticks, RunMode.DAILY)
 
 
 def test_ghost_replays_in_lockstep_and_confirms_consistency() -> None:
@@ -63,25 +72,41 @@ def test_ghost_delta_is_player_minus_ghost() -> None:
 def test_scene_picks_best_replay_for_seed(context: GameContext, tmp_path: Path) -> None:
     store = ReplayStore(tmp_path)
     context.replays = store
-    store.save("short", _record(ticks=120))
-    store.save("long", _record(ticks=1200))
-    store.save("other", _record(replace(CONFIG, seed=1), ticks=2400))
-    store.save("old", replace(_record(ticks=3000), sim_version=SIM_VERSION + 1))
+    store.save("short", _daily_record(ticks=120))
+    store.save("long", _daily_record(ticks=1200))
+    store.save("other", _daily_record(replace(CONFIG, seed=1), ticks=2400))
+    store.save("old", replace(_daily_record(ticks=3000), sim_version=SIM_VERSION + 1))
 
-    scene = GameScene(context, seed=CONFIG.seed)
+    scene = GameScene(context, seed=CONFIG.seed, mode=RunMode.DAILY)
     assert scene.ghost is not None
     assert scene.ghost.replay == store.load("long")
-    assert GameScene(context, seed=777).ghost is None
-    assert GameScene(context, seed=777, ghost=store.load("short")).ghost is not None
+    assert GameScene(context, seed=777, mode=RunMode.DAILY).ghost is None
+    assert (
+        GameScene(
+            context,
+            seed=CONFIG.seed,
+            mode=RunMode.DAILY,
+            ghost=store.load("short"),
+        ).ghost
+        is not None
+    )
 
 
-def test_scene_without_store_has_no_ghost(context: GameContext) -> None:
+def test_free_scene_never_loads_or_accepts_ghost(context: GameContext, tmp_path: Path) -> None:
+    replay = _daily_record()
+    context.replays = ReplayStore(tmp_path)
+    context.replays.save("daily", replay)
     assert GameScene(context, seed=CONFIG.seed).ghost is None
+    assert GameScene(context, seed=CONFIG.seed, ghost=replay).ghost is None
+
+
+def test_daily_scene_without_store_has_no_ghost(context: GameContext) -> None:
+    assert GameScene(context, seed=CONFIG.seed, mode=RunMode.DAILY).ghost is None
 
 
 def test_scene_steps_ghost_alongside_player(context: GameContext) -> None:
-    replay = _record(ticks=300)
-    scene = GameScene(context, seed=CONFIG.seed, ghost=replay)
+    replay = _daily_record(ticks=300)
+    scene = GameScene(context, seed=CONFIG.seed, mode=RunMode.DAILY, ghost=replay)
     assert scene.ghost is not None
     for _ in range(50):
         scene.step(InputFrame.NONE)
@@ -93,8 +118,13 @@ def test_scene_steps_ghost_alongside_player(context: GameContext) -> None:
 
 
 def test_ghost_never_touches_player_simulation(context: GameContext) -> None:
-    with_ghost = GameScene(context, seed=CONFIG.seed, ghost=_record())
-    without = GameScene(context, seed=CONFIG.seed)
+    with_ghost = GameScene(
+        context,
+        seed=CONFIG.seed,
+        mode=RunMode.DAILY,
+        ghost=_daily_record(),
+    )
+    without = GameScene(context, seed=CONFIG.seed, mode=RunMode.DAILY)
     for frame in scripted_inputs(5, 400):
         with_ghost.step(frame)
         without.step(frame)
@@ -102,7 +132,12 @@ def test_ghost_never_touches_player_simulation(context: GameContext) -> None:
 
 
 def test_scene_draws_translucent_ghost(context: GameContext) -> None:
-    scene = GameScene(context, seed=CONFIG.seed, ghost=_record())
+    scene = GameScene(
+        context,
+        seed=CONFIG.seed,
+        mode=RunMode.DAILY,
+        ghost=_daily_record(),
+    )
     scene.step(InputFrame.NONE)
     scene.draw()
     image = scene.ghost_image((64, 64))

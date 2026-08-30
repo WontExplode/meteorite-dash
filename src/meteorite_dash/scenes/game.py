@@ -26,6 +26,7 @@ from meteorite_dash.config import (
     SHIELD_HUD_COLOR,
     SHIELD_HUD_TOP_LEFT,
     SIM_DT,
+    SIM_VERSION,
     TEXT_COLOR,
     WEAPON_HUD_FONT_SIZE,
     WEAPON_HUD_TOP_LEFT,
@@ -34,6 +35,11 @@ from meteorite_dash.context import GameContext
 from meteorite_dash.ghost import Ghost
 from meteorite_dash.identity import short_pubkey
 from meteorite_dash.inputs import InputFrame, from_pressed
+from meteorite_dash.mode_directors import (
+    director_for_kind,
+    director_kind_for_mode,
+    director_version_for_kind,
+)
 from meteorite_dash.render import RenderContext
 from meteorite_dash.replay import Recorder, Replay, RunMode
 from meteorite_dash.scenes.base import Scene, Transition
@@ -71,21 +77,30 @@ class GameScene(Scene):
         self.spectate = spectate
         if spectate is not None:
             self.seed, self.mode, self.label = spectate.config.seed, spectate.mode, spectate.label
-            self.sim = Simulation(spectate.config)
+            config = spectate.config
         else:
             self.seed = seed if seed is not None else pick_seed()
             self.mode = mode
             self.label = label
-            self.sim = Simulation(self.run_config(self.seed))
+            config = self.run_config(self.seed)
+        director_kind = director_kind_for_mode(self.mode)
+        self.sim = Simulation(config, director=director_for_kind(director_kind))
         self._spectate_inputs: Iterator[InputFrame] | None = (
             spectate.inputs() if spectate is not None else None
         )
-        self.recorder = Recorder(self.sim.config, mode=self.mode, label=self.label)
-        # Ghost: bester gespeicherter Lauf zum selben Seed (oder explizit übergeben).
-        if spectate is not None:
-            ghost_replay = None
-        else:
-            ghost_replay = ghost if ghost is not None else self.find_ghost(self.seed)
+        self.recorder = Recorder(
+            self.sim.config,
+            mode=self.mode,
+            label=self.label,
+            director_kind=director_kind,
+            director_version=director_version_for_kind(director_kind),
+        )
+        # Ghosts gehören nur zum wiederholbaren Daily Run, beim Zuschauen nie.
+        ghost_replay = None
+        if spectate is None and self.mode is RunMode.DAILY:
+            candidate = ghost if ghost is not None else self.find_ghost(self.seed)
+            if candidate is not None and self._is_compatible_ghost(candidate):
+                ghost_replay = candidate
         self.ghost = Ghost(ghost_replay) if ghost_replay is not None else None
         self._ghost_images: dict[tuple[int, int], pygame.Surface] = {}
         self._accumulator = 0.0
@@ -106,9 +121,29 @@ class GameScene(Scene):
         return RunConfig(seed, spec.name, equipped)
 
     def find_ghost(self, seed: int) -> Replay | None:
-        """Bester gespeicherter Lauf zum Seed; `None` ohne `ReplayStore` oder Rekord."""
+        """Kompatiblen Daily-Rekord zum Seed finden; Free lädt bewusst keinen Ghost."""
+        if self.mode is not RunMode.DAILY:
+            return None
         store = self.context.replays
-        return store.best_for_seed(seed) if store is not None else None
+        if store is None:
+            return None
+        director_kind = director_kind_for_mode(self.mode)
+        return store.best_for_seed(
+            seed,
+            mode=self.mode,
+            director_kind=director_kind,
+            director_version=director_version_for_kind(director_kind),
+        )
+
+    def _is_compatible_ghost(self, replay: Replay) -> bool:
+        director_kind = director_kind_for_mode(self.mode)
+        return (
+            replay.config.seed == self.seed
+            and replay.mode is self.mode
+            and replay.sim_version == SIM_VERSION
+            and replay.director_kind is director_kind
+            and replay.director_version == director_version_for_kind(director_kind)
+        )
 
     def ghost_image(self, size: tuple[int, int]) -> pygame.Surface:
         """Halbtransparente Kopie des Ghost-Schiffs, pro Fenstergröße gecacht."""

@@ -41,7 +41,12 @@ from meteorite_dash.config import (
     SPAWN_INTERVAL_RANGE,
     WAVE_ENEMY_WEIGHT,
 )
-from meteorite_dash.difficulty import ConstantDirector, DifficultyParams, Director
+from meteorite_dash.difficulty import (
+    ConstantDirector,
+    DifficultyParams,
+    Director,
+    StatefulDirector,
+)
 from meteorite_dash.entities import (
     Entity,
     collect_pickups,
@@ -215,7 +220,7 @@ class Simulation:
 
     def state_key(self) -> tuple[object, ...]:
         """Kompletter Zustand inklusive RNG-Streams, kanonisch und verlustfrei."""
-        return (
+        state = (
             self.tick,
             self.is_over,
             self.player.state_key(),
@@ -233,6 +238,9 @@ class Simulation:
             self._director_rng.getstate(),
             self.difficulty,
         )
+        if isinstance(self.director, StatefulDirector):
+            return (*state, self.director.state_key())
+        return state
 
     def state_hash(self) -> str:
         """SHA-256 über `state_key()` — beweist Gleichheit zweier Läufe."""

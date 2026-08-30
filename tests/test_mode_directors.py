@@ -5,9 +5,12 @@ from meteorite_dash.config import (
     ADAPTIVE_DIRECTOR_VERSION,
     CONSTANT_DIRECTOR_VERSION,
 )
-from meteorite_dash.difficulty import ConstantDirector
+from meteorite_dash.difficulty import ConstantDirector, DirectorKind
 from meteorite_dash.mode_directors import (
+    director_for_kind,
     director_for_mode,
+    director_kind_for_mode,
+    director_version_for_kind,
     director_version_for_mode,
 )
 from meteorite_dash.replay import RunMode
@@ -32,5 +35,11 @@ def test_daily_mode_keeps_fresh_constant_directors() -> None:
 
 
 def test_director_versions_are_separate_per_mode() -> None:
+    assert director_kind_for_mode(RunMode.FREE) is DirectorKind.ADAPTIVE
+    assert director_kind_for_mode(RunMode.DAILY) is DirectorKind.CONSTANT
     assert director_version_for_mode(RunMode.FREE) == ADAPTIVE_DIRECTOR_VERSION
     assert director_version_for_mode(RunMode.DAILY) == CONSTANT_DIRECTOR_VERSION
+    assert director_version_for_kind(DirectorKind.ADAPTIVE) == ADAPTIVE_DIRECTOR_VERSION
+    assert director_version_for_kind(DirectorKind.CONSTANT) == CONSTANT_DIRECTOR_VERSION
+    assert isinstance(director_for_kind(DirectorKind.ADAPTIVE), AdaptiveDirector)
+    assert isinstance(director_for_kind(DirectorKind.CONSTANT), ConstantDirector)
