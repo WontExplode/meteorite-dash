@@ -1,6 +1,7 @@
 """Lauf per Code weitergeben: Share-Event, Suche, Code-Eingabe, Rennen und Zuschauen."""
 
 import json
+import threading
 from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
@@ -172,6 +173,38 @@ def test_background_share_and_lookup(relay: FakeRelay, tmp_path: Path) -> None:
     bob.wait_idle(10.0)
     assert bob.lookup.done
     assert bob.lookup.replay is not None
+
+
+def test_share_does_not_restart_for_same_run_while_in_flight(
+    relay: FakeRelay, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mehrfaches `C` auf dem Death-Screen (`DeathScene.share`) darf keinen zweiten
+    Hintergrund-Thread für denselben Lauf anstoßen, solange der erste noch läuft."""
+    exchange = _exchange(relay, tmp_path)
+    run = _record(ticks=300)
+    started = threading.Event()
+    release = threading.Event()
+    calls = 0
+
+    def slow_share_now(replay: Replay) -> tuple[str, int]:
+        nonlocal calls
+        calls += 1
+        started.set()
+        release.wait(5.0)
+        return phrase_for_hash(replay.state_hash), 1
+
+    monkeypatch.setattr(exchange, "share_now", slow_share_now)
+    phrase = exchange.share(run)
+    assert started.wait(5.0)
+    in_flight_thread = exchange._share_thread
+
+    again = exchange.share(run)
+
+    assert again == phrase
+    assert exchange._share_thread is in_flight_thread
+    release.set()
+    exchange.wait_idle(5.0)
+    assert calls == 1
 
 
 # --- Code-Eingabe ----------------------------------------------------------------------

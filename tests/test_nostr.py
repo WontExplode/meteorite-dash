@@ -242,6 +242,23 @@ def test_relay_client_survives_unreachable_relay(relay: FakeRelay) -> None:
     assert only_dead.fetch(run_filter(SEED)).relays_ok == 0
 
 
+def test_relay_client_caps_events_per_fetch(
+    relay: FakeRelay, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Härtung: ein Relay, das `limit`/EOSE ignoriert und mehr Events streamt als
+    erlaubt, darf den Client nicht unbegrenzt fluten (`NOSTR_MAX_EVENTS_PER_FETCH`)."""
+    import meteorite_dash.nostr as nostr_module
+
+    monkeypatch.setattr(nostr_module, "NOSTR_MAX_EVENTS_PER_FETCH", 3)
+    client = RelayClient([relay.url], timeout=5.0)
+    for _ in range(6):
+        event = build_run_event(Identity.generate(), _record(ticks=120), created_at=1)
+        assert client.publish(event) == 1
+    result = client.fetch(run_filter(SEED))
+    assert result.relays_ok == 1
+    assert len(result.events) == 3
+
+
 # --- Exchange ---------------------------------------------------------------------------
 
 

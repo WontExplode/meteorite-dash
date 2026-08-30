@@ -275,6 +275,8 @@ NOSTR_FETCH_TIMEOUT = 3.0
 # Relays liefern die *neuesten* N Events, nicht die besten — deshalb großzügig;
 # geprüft wird weiteste-zuerst im Hintergrund.
 NOSTR_MAX_RUNS = 100
+# Härtung gegen ein Relay, das `limit`/EOSE ignoriert und unbegrenzt Events streamt.
+NOSTR_MAX_EVENTS_PER_FETCH = 500
 NOSTR_MAX_TICKS = 30 * 60 * SIM_TICKS_PER_SECOND  # längere fremde Läufe werden ignoriert
 NOSTR_MAX_CONTENT_CHARS = 64_000  # Share-Code-Länge, ab der ein Event verworfen wird
 NOSTR_REPLAY_PREFIX = "nostr-"  # Ablage fremder Läufe: `nostr-<seed>-<pubkey8>`
