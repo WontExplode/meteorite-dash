@@ -5,6 +5,8 @@ import pygame
 from meteorite_dash.assets import AssetLoader
 from meteorite_dash.audio import MusicPlayer
 from meteorite_dash.config import MIN_WINDOW_SIZE, REFERENCE_SIZE
+from meteorite_dash.persistence import SaveStore
+from meteorite_dash.progress import Progress
 from meteorite_dash.ships import SHIPS, ShipSpec
 from meteorite_dash.starfield import StarField
 from meteorite_dash.viewport import Viewport
@@ -14,6 +16,9 @@ from meteorite_dash.viewport import Viewport
 class GameState:
     selected_ship_index: int = 0
     final_light_years: float = 0.0
+    final_coins: int = 0
+    # Persistenter Fortschritt: Münz-Guthaben, Freischaltungen, Ausrüstung (Issue #14).
+    progress: Progress = field(default_factory=Progress)
 
     @property
     def selected_ship(self) -> ShipSpec:
@@ -33,12 +38,18 @@ class GameContext:
     viewport: Viewport = field(
         default_factory=lambda: Viewport(REFERENCE_SIZE[0], REFERENCE_SIZE[1])
     )
+    # Ohne Store (Tests) bleibt der Fortschritt im Speicher.
+    store: SaveStore | None = None
     _is_fullscreen: bool = field(default=False, init=False)
     _windowed_size: tuple[int, int] = field(default=REFERENCE_SIZE, init=False)
 
     @property
     def is_fullscreen(self) -> bool:
         return self._is_fullscreen
+
+    def save_progress(self) -> None:
+        if self.store is not None:
+            self.store.save(self.state.progress)
 
     def apply_resize(self, size: tuple[int, int]) -> None:
         if self._is_fullscreen:

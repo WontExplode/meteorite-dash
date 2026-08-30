@@ -23,3 +23,7 @@ class DistanceScore:
 
     def formatted(self) -> str:
         return format_light_years(self.light_years)
+
+
+def format_coins(coins: int) -> str:
+    return f"{coins:04d}"

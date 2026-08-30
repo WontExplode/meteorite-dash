@@ -2,7 +2,7 @@ from typing import Literal, NamedTuple
 
 WindowSize = tuple[int, int]
 Color = tuple[int, int, int]
-MenuAction = Literal["start", "ship", "quit"]
+MenuAction = Literal["start", "ship", "shop", "quit"]
 
 
 class MeteoriteVariant(NamedTuple):
@@ -10,6 +10,14 @@ class MeteoriteVariant(NamedTuple):
     images: tuple[str, str]
     hp: int
     contact_damage: int
+
+
+class CoinPatternSpec(NamedTuple):
+    """Ein Münz-Muster: Name (Layout in `coins.py`), Spawn-Gewicht, Bonus bei Komplettierung."""
+
+    name: str
+    weight: float
+    bonus: int
 
 
 WINDOW_SIZE: WindowSize = (800, 600)
@@ -28,6 +36,8 @@ STAT_BAR_COLOR: Color = (60, 60, 80)
 DEATH_BORDER_COLOR: Color = (255, 80, 80)
 DEATH_HIGHLIGHT_COLOR: Color = (255, 210, 80)
 DEATH_MUTED_COLOR: Color = (120, 120, 150)
+MUTED_TEXT_COLOR: Color = (120, 120, 150)
+OWNED_TEXT_COLOR: Color = (140, 255, 160)
 
 MENU_FONT_NAME = "arial"
 MENU_FONT_SIZE = 42
@@ -39,6 +49,7 @@ DEATH_MESSAGE_FONT_SIZE = 24
 MENU_ITEMS: tuple[tuple[str, MenuAction], ...] = (
     ("Start", "start"),
     ("Raumschiff auswählen", "ship"),
+    ("Shop", "shop"),
     ("Beenden", "quit"),
 )
 
@@ -87,6 +98,9 @@ SPAWN_INTERVAL_RANGE: tuple[float, float] = (0.6, 1.4)
 METEORITE_WEIGHT = 8.0
 WAVE_ENEMY_WEIGHT = 2.0
 HUNTER_ENEMY_WEIGHT = 0.5
+# Spawn-Würfe, die ein `accept`-Prädikat ablehnt, werden so oft wiederholt;
+# danach fällt der Spawn aus.
+SPAWN_MAX_ATTEMPTS = 5
 
 AMMO_PICKUP_WEIGHT = 1.5
 
@@ -113,3 +127,57 @@ SCORE_LIGHT_YEARS_PER_SECOND = 12.0
 SCORE_FONT_SIZE = 24
 SCORE_TOP_RIGHT: WindowSize = (776, 24)
 SCORE_ALPHA = 175
+
+# --- Münzen (Collectibles, Issue #14) ---
+COIN_COLOR: Color = (255, 205, 60)
+COIN_RIM_COLOR: Color = (190, 130, 20)
+COIN_RADIUS = 12
+COIN_SPEED = 220.0
+COIN_VALUE = 1
+# Abstände innerhalb eines Musters (Referenz-px): horizontal zwischen Münzen,
+# vertikal zwischen Reihen bei mehrzeiligen Mustern (Raute).
+COIN_SPACING = 40.0
+COIN_ROW_SPACING = 48.0
+COIN_WAVE_AMPLITUDE = 70.0
+COIN_ARC_HEIGHT = 100.0
+COIN_ZIGZAG_STEP = 30.0
+# Dreh-Animation: Umdrehungen pro Sekunde und Phasenversatz je Münze im Muster.
+COIN_SPIN_HZ = 1.5
+COIN_SPIN_PHASE_STEP = 0.4
+COIN_MIN_SPIN_WIDTH = 0.3  # Anteil des Durchmessers bei Kantenansicht
+COIN_SPAWN_INTERVAL_RANGE: tuple[float, float] = (2.0, 4.5)
+# Mindestabstand (Referenz-px) zwischen Münzen und Gefahren beim Spawn. Münzen
+# und Meteoriten sind gleich schnell — eine Überlappung bliebe sonst dauerhaft.
+COIN_HAZARD_CLEARANCE = 12
+COIN_PATTERNS: tuple[CoinPatternSpec, ...] = (
+    CoinPatternSpec("line", 4.0, 3),
+    CoinPatternSpec("wave", 3.0, 5),
+    CoinPatternSpec("arc", 3.0, 5),
+    CoinPatternSpec("zigzag", 2.0, 6),
+    CoinPatternSpec("diamond", 1.5, 8),
+)
+COINS_TOP_RIGHT: WindowSize = (776, 52)
+COIN_BONUS_TOP_RIGHT: WindowSize = (776, 80)
+COIN_BONUS_NOTICE_SECONDS = 1.2
+
+# --- Shop, Zubehör & Fortschritt (Issue #14) ---
+# Speicherort: `METEORITE_DASH_SAVE_DIR` überschreibt das plattformübliche
+# Nutzer-Datenverzeichnis (XDG / AppData / Application Support).
+SAVE_DIR_ENV = "METEORITE_DASH_SAVE_DIR"
+SAVE_APP_DIR = "meteorite-dash"
+SAVE_FILENAME = "progress.json"
+SAVE_FORMAT_VERSION = 1
+
+# Zubehör-Effekte. Preise und Beschreibungen stehen im Katalog in `accessories.py`.
+SHIELD_CHARGES = 1  # blockierte Kollisionen pro Lauf
+MAGNET_RADIUS = 140.0  # Referenz-px um die Schiffsmitte
+MAGNET_PULL_SPEED = 520.0  # Referenz-px/s, muss COIN_SPEED deutlich übersteigen
+AMMO_RESERVE_BONUS = 3  # zusätzliche Schüsse im Standard-Magazin
+ARMOR_HP_BONUS = 30  # zusätzliche Hüllenpunkte
+
+WALLET_TOP_RIGHT: WindowSize = (776, 24)
+SHIELD_HUD_TOP_LEFT: WindowSize = (24, 80)
+SHIELD_HUD_COLOR: Color = (120, 200, 255)
+SHOP_FEEDBACK_SECONDS = 2.5
+SHOP_TAB_FONT_SIZE = 28
+LOCKED_PREVIEW_ALPHA = 90

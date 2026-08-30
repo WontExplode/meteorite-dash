@@ -124,19 +124,23 @@ def test_main_menu_actions_map_to_transitions(context: GameContext) -> None:
 
 def test_ship_selection_navigation_wraps(context: GameContext) -> None:
     selection = ShipSelection(context)
-    assert context.state.selected_ship_index == 0
+    assert selection.cursor == 0
 
     selection.handle_event(_keydown(pygame.K_LEFT))
-    assert context.state.selected_ship_index == len(SHIPS) - 1
-
-    selection.handle_event(_keydown(pygame.K_RIGHT))
+    assert selection.cursor == len(SHIPS) - 1
+    # Der Cursor darf über gesperrte Schiffe laufen, die Auswahl bleibt unberührt.
     assert context.state.selected_ship_index == 0
 
+    selection.handle_event(_keydown(pygame.K_RIGHT))
+    assert selection.cursor == 0
 
-def test_ship_selection_confirm_returns_to_menu(context: GameContext) -> None:
+
+def test_ship_selection_escape_returns_without_change(context: GameContext) -> None:
     selection = ShipSelection(context)
+    selection.handle_event(_keydown(pygame.K_RIGHT))
     selection.handle_event(_keydown(pygame.K_ESCAPE))
     assert selection._transition is Transition.MAIN_MENU
+    assert context.state.selected_ship_index == 0
 
 
 def test_music_player_track_cycle(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -363,6 +367,40 @@ def test_spawner_multiple_spawns_in_one_update() -> None:
     assert len(spawner.update(3.5)) == 3
 
 
+def test_spawner_retries_rejected_candidates() -> None:
+    spawner = Spawner([SpawnEntry(1.0, _fake_factory)], (800, 600), random.Random(0), (1.0, 1.0))
+    seen: list[Meteorite] = []
+
+    def accept(candidate: Meteorite) -> bool:
+        seen.append(candidate)
+        return len(seen) == 2
+
+    spawned = spawner.update(1.0, accept=accept)
+    assert len(seen) == 2
+    assert spawned == [seen[1]]
+
+
+def test_spawner_skips_spawn_after_max_attempts() -> None:
+    spawner = Spawner(
+        [SpawnEntry(1.0, _fake_factory)],
+        (800, 600),
+        random.Random(0),
+        (1.0, 1.0),
+        max_attempts=3,
+    )
+    attempts = 0
+
+    def reject(candidate: Meteorite) -> bool:
+        nonlocal attempts
+        attempts += 1
+        return False
+
+    assert spawner.update(1.0, accept=reject) == []
+    assert attempts == 3
+    # Timer läuft normal weiter: der nächste Wurf ist wieder frei.
+    assert len(spawner.update(1.0)) == 1
+
+
 def test_game_scene_collision_opens_death_screen(context: GameContext) -> None:
     scene = GameScene(context)
     scene.score.light_years = 42.0
@@ -504,6 +542,8 @@ def test_game_scene_fires_projectile(
 ) -> None:
     monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys({pygame.K_SPACE}))
     scene = GameScene(context)
+    # Spawner stumm: ein zufällig gespawnter Meteorit könnte das Projektil verbrauchen.
+    monkeypatch.setattr(scene.spawner, "update", lambda dt, accept=None: [])
     scene.update(1.0)
     assert len(scene.projectiles) == 1
     assert scene.loadout.active.ammo == STANDARD_WEAPON.max_ammo - 1
