@@ -435,6 +435,27 @@ def test_scene_swap_edge_is_consumed_once(context: GameContext) -> None:
     assert scene.sim.loadout.active_index == 1
 
 
+def test_scene_toggles_hidden_difficulty_debug_hud(context: GameContext) -> None:
+    scene = GameScene(context, seed=1)
+    assert not scene._show_difficulty_debug
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F3))
+
+    assert scene._show_difficulty_debug
+    lines = scene._difficulty_debug_lines()
+    assert lines[0] == "DEBUG FREE ADAPTIVE"
+    assert lines[1] == "TICK 000000"
+    assert lines[2] == "SPEED x1.000 SPAWN x1.000"
+    assert lines[3] == "HP 100/100 AMMO 7/7"
+    state_hash = scene.sim.state_hash()
+    context.apply_resize((1280, 720))
+    scene.draw()
+    assert scene.sim.state_hash() == state_hash
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F3))
+    assert not scene._show_difficulty_debug
+
+
 def _drive(scene: GameScene, ticks: int) -> str:
     for index, frame in enumerate(scripted_inputs(11, ticks)):
         scene.step(frame)

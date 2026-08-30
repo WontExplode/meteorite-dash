@@ -8,6 +8,10 @@ from meteorite_dash.config import (
     COIN_COLOR,
     COINS_TOP_RIGHT,
     DAILY_REPLAY_PREFIX,
+    DIFFICULTY_DEBUG_HUD_COLOR,
+    DIFFICULTY_DEBUG_HUD_FONT_SIZE,
+    DIFFICULTY_DEBUG_HUD_LINE_SPACING,
+    DIFFICULTY_DEBUG_HUD_TOP_LEFT,
     GHOST_ALPHA,
     GHOST_HUD_COLOR,
     GHOST_HUD_TOP_RIGHT,
@@ -89,6 +93,7 @@ class GameScene(Scene):
         self._pending = InputFrame.NONE
         self._bonus_notice = ""
         self._bonus_notice_ttl = 0.0
+        self._show_difficulty_debug = False
 
     def run_config(self, seed: int) -> RunConfig:
         state = self.context.state
@@ -152,6 +157,8 @@ class GameScene(Scene):
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 self.finish(Transition.MAIN_MENU)
+            elif event.key == pygame.K_F3:
+                self._show_difficulty_debug = not self._show_difficulty_debug
             elif event.key == pygame.K_r:
                 self._pending |= InputFrame.SWAP_WEAPON
 
@@ -240,6 +247,7 @@ class GameScene(Scene):
         self._draw_hp_hud()
         self._draw_shield_hud()
         self._draw_score()
+        self._draw_difficulty_debug()
         pygame.display.flip()
 
     def _draw_ghost(self, ctx: RenderContext) -> None:
@@ -281,6 +289,32 @@ class GameScene(Scene):
         weapon_text.set_alpha(SCORE_ALPHA)
         weapon_rect = weapon_text.get_rect(topleft=vp.point(*WEAPON_HUD_TOP_LEFT))
         self.context.screen.blit(weapon_text, weapon_rect)
+
+    def _difficulty_debug_lines(self) -> tuple[str, ...]:
+        active = self.sim.loadout.active
+        player = self.sim.player
+        difficulty = self.sim.difficulty
+        return (
+            (f"DEBUG {self.mode.value.upper()} {self.recorder.director_kind.value.upper()}"),
+            f"TICK {self.sim.tick:06d}",
+            (
+                f"SPEED x{difficulty.speed_multiplier:.3f} "
+                f"SPAWN x{difficulty.spawn_interval_multiplier:.3f}"
+            ),
+            (f"HP {player.hp}/{player.max_hp} AMMO {active.ammo}/{active.spec.max_ammo}"),
+        )
+
+    def _draw_difficulty_debug(self) -> None:
+        if not self._show_difficulty_debug:
+            return
+        vp = self.context.viewport
+        font = vp.font(DIFFICULTY_DEBUG_HUD_FONT_SIZE)
+        left, top = DIFFICULTY_DEBUG_HUD_TOP_LEFT
+        for index, line in enumerate(self._difficulty_debug_lines()):
+            text = font.render(line, True, DIFFICULTY_DEBUG_HUD_COLOR)
+            text.set_alpha(SCORE_ALPHA)
+            position = vp.point(left, top + index * DIFFICULTY_DEBUG_HUD_LINE_SPACING)
+            self.context.screen.blit(text, text.get_rect(topleft=position))
 
     def _draw_score(self) -> None:
         vp = self.context.viewport
