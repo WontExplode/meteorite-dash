@@ -203,7 +203,7 @@ SEED_ENV = "METEORITE_DASH_SEED"
 # Alle Zeiten werden vom Director mit SIM_TICKS_PER_SECOND in feste Ticks
 # übersetzt. Die Werte beschreiben den Regelkern; Balancing erfolgt hier.
 CONSTANT_DIRECTOR_VERSION = 1
-ADAPTIVE_DIRECTOR_VERSION = 1
+ADAPTIVE_DIRECTOR_VERSION = 2
 
 DIFFICULTY_START_GRACE_SECONDS = 8.0
 DIFFICULTY_DAMAGE_HOLD_SECONDS = 6.0
