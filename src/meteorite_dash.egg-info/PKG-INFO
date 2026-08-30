@@ -4,6 +4,7 @@ Version: 0.1.0
 Summary: A small PyGame-CE based game about dodging incoming meteorites, shooting debris and attacking enemies.
 Requires-Python: >=3.13
 Description-Content-Type: text/markdown
+Requires-Dist: interrogate>=1.7.0
 Requires-Dist: pygame-ce>=2.5.7
 
 # Meteorite Dash
@@ -14,20 +15,39 @@ immer mehr zurückgelegte Lichtjahre.
 
 ## Features
 
-- Hauptmenü mit Schiffsauswahl
+- Hauptmenü mit Start, Daily Run, Schiffsauswahl und Shop
 - vertikale Raumschiffsteuerung
+- Standardwaffe mit 7 Schüssen und Munitions-Pickups
+- zerstörbare Meteoriten und Gegner mit HP; Spieler-HP aus Schiffsrumpf
 - Meteoriten in vier Größen mit zufälligen Farbvarianten
 - Gegner mit unterschiedlichen Bewegungsmustern
 - scrollendes Sternenfeld als Hintergrund
 - Lightyears-Score als HUD-Anzeige
+- sammelbare Münzen in Mustern (Linie, Welle, Bogen, Zickzack, Raute); Muster
+  komplett eingesammelt gibt Bonus, eigener Münz-Score im HUD
+- Shop: Münzen aus allen Läufen werden gespeichert und kaufen Schiffe,
+  Zubehör (Schild, Magnet, Extra-Munition, Panzerung) und Schiffsfarben
+- Zubehör wird pro Schiff in dessen Zubehörplätze gelegt und wirkt im Lauf
 - Game-Over-Screen mit finalem Score
 - dynamische Fenstergröße und Vollbild über einen gemeinsamen `Viewport`
-- Menü-Musik, Game-Playlist und Game-Over-Sound
+- deterministische Simulation: fester Zeitschritt, Seed pro Lauf
+  (`METEORITE_DASH_SEED` erzwingt einen), headless nachspielbar
+- Replays: jeder Lauf wird als `last.json` / `best.json` aufgezeichnet;
+  `uv run meteorite-dash --verify datei.json` spielt ihn nach und prüft ihn
+- Ghost: der beste gespeicherte Lauf zum selben Seed fliegt halbtransparent
+  mit, das HUD zeigt den Vorsprung
+- Daily Run: ein gemeinsamer Seed pro Tag für alle Spieler (ohne Server); der
+  Tagesrekord fliegt als Ghost mit, der Game-Over-Screen zeigt den Vergleich
+- Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
 
 ## Steuerung
 
 - `Pfeil hoch` / `Pfeil runter`: Raumschiff bewegen oder Menüpunkt wechseln
-- `Pfeil links` / `Pfeil rechts`: Raumschiff in der Schiffsauswahl wechseln
+- `Pfeil links` / `Pfeil rechts`: Raumschiff in der Schiffsauswahl wechseln,
+  Reiter im Shop wechseln
+- `Enter` im Shop: kaufen, ausrüsten/ablegen oder Farbe wählen
+- `Space`: schießen (im Spiel)
+- `R`: Waffe wechseln (im Spiel, wenn mehrere Waffen vorhanden)
 - `Enter` / `Space`: Menüauswahl bestätigen
 - `Escape`: im Spiel zurück ins Hauptmenü
 - `F` / `F11`: Vollbild umschalten
@@ -47,17 +67,36 @@ src/meteorite_dash/
   app.py               App-Loop und Szenenwechsel
   context.py           Geteilter Zustand, Resize und Vollbild
   viewport.py          Skalierung für dynamische Fenstergrößen
+  render.py            RenderContext: Referenzraum -> Fensterpixel beim Zeichnen
   config.py            Zentrale Konstanten
   assets.py            Asset-Pfade und Bild-Caching
   audio.py             Musik und Sounds
   score.py             Lightyears-Score
-  entities.py          Gegner und Hindernisse
+  simulation.py        Deterministischer Spielkern (fester Tick, Seed-Streams, Events)
+  inputs.py            InputFrame: Eingaben als Bitmaske pro Tick
+  difficulty.py        Director-Vertrag (DifficultyParams) für den Schwierigkeitsgrad
+  headless.py          Simulation ohne Fenster abspielen (Tests, Replay-Prüfung)
+  replay.py            Replay-Format, Recorder und Ablage (JSON)
+  ghost.py             Ghost: Replay als zweite Simulation im Gleichschritt
+  daily.py             Tages-Seed für den Daily Run
+  mathutil.py          Plattformstabiler Sinus/Abstand für die Simulation
+  entities.py          Gegner, Hindernisse und Munitions-Pickups
+  projectiles.py       Spieler-Projektile
+  weapons.py           Waffen-Loadout und Munitionslogik
+  combat.py            Projektil- und Kollisionsschaden
+  ships.py             Schiffsdatenblätter, Slot-Limits, Preise und Farben
+  accessories.py       Zubehör-Katalog (Schild, Magnet, Extra-Munition, Panzerung)
+  progress.py          Guthaben, Freischaltungen, Ausrüstung (Shop-Regeln)
+  persistence.py       JSON-Speicherstand im Nutzer-Datenverzeichnis
+  coins.py             Münzen, Muster-Layouts und Formationen
   spawner.py           Timergesteuertes Spawning
   starfield.py         Bewegter Sternenhintergrund
   scenes/
     base.py            Basis-Szene mit gemeinsamer Loop
     main_menu.py       Hauptmenü
     ship_selection.py  Schiffsauswahl
+    shop.py            Shop (Schiffe, Zubehör, Farben)
+    widgets.py         Geteilte Zeichen-Helfer (Münz-Guthaben)
     game.py            Spielszene
     death.py           Game-Over-Screen
 ```
@@ -85,6 +124,21 @@ git config core.hooksPath .githooks
 
 - Das Projekt nutzt `pygame-ce`, importiert im Code aber weiterhin `pygame`.
 - Assets liegen unter `src/meteorite_dash/assets/`.
-- Neue Positionen, Größen und Schriften sollten über `Viewport` skaliert werden,
-  damit Resize und Vollbild funktionieren.
+- Die Spiellogik rechnet im festen Referenzraum 800×600; erst beim Zeichnen
+  skaliert der `RenderContext` auf das Fenster. Neue Positionen, Größen und
+  Schriften gehen über `Viewport`/`RenderContext`, damit Resize und Vollbild
+  funktionieren.
 - Tests laufen headless mit Dummy-Video- und Dummy-Audiotreiber.
+- Der Spielfortschritt liegt als `progress.json` im Nutzer-Datenverzeichnis
+  (Linux: `~/.local/share/meteorite-dash/`, Windows: `%APPDATA%`, macOS:
+  `~/Library/Application Support`). `METEORITE_DASH_SAVE_DIR` überschreibt
+  den Ordner.
+- `METEORITE_DASH_SEED=1234` startet jeden Lauf mit demselben Seed — gleiche
+  Eingaben ergeben dann exakt dieselbe Runde. Der Seed steht auch auf dem
+  Game-Over-Screen.
+- Replays liegen unter `replays/` neben `progress.json`. Eine Datei an
+  Freunde schicken und `uv run meteorite-dash --verify datei.json` beweist den
+  Lauf Tick für Tick. Liegt ein fremdes Replay im Ordner, erscheint es bei
+  gleichem Seed (`METEORITE_DASH_SEED`) als Ghost.
+- Der Daily-Seed hängt am UTC-Datum; der Tagesrekord liegt als
+  `replays/daily-<datum>.json`.
