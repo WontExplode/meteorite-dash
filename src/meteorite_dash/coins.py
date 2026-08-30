@@ -46,10 +46,17 @@ class Pickup(NamedTuple):
 
     @property
     def total(self) -> int:
+        """Münzwert plus Bonus."""
         return self.coins + self.bonus
 
 
 class Coin(Entity):
+    """Einzelne Münze: harmlose `Entity`, prozedural gezeichnet, ohne Bild-Asset.
+
+    `spin_phase` versetzt die Dreh-Animation, damit Münzen eines Musters nicht
+    synchron blinken. Die Animationszeit liegt im `state_key`.
+    """
+
     def __init__(
         self,
         rect: pygame.Rect,
@@ -65,13 +72,16 @@ class Coin(Entity):
 
     @property
     def damages_player(self) -> bool:
+        """Münzen schaden nie; Berührung sammelt ein."""
         return False
 
     def update(self, dt: float, player_y: int, speed_scale: float = 1.0) -> None:
+        """Bewegt wie `Entity` und zählt die Zeit für die Dreh-Animation hoch."""
         super().update(dt, player_y, speed_scale)
         self._elapsed += dt
 
     def state_key(self) -> tuple[object, ...]:
+        """Ergänzt den Basiszustand um Wert und Animationszeit."""
         return (*super().state_key(), self.value, self._elapsed.hex())
 
     def pull_toward(self, target: tuple[int, int], step: float) -> None:
@@ -88,6 +98,7 @@ class Coin(Entity):
         self.rect.y = round(self._y)
 
     def draw(self, ctx: RenderContext) -> None:
+        """Zeichnet die Münze als rotierende Gold-Scheibe (Ellipse mit Rand)."""
         # Dreh-Animation: Ellipsenbreite folgt |cos|, Höhe bleibt konstant. Die
         # Mindestbreite hält die Kante sichtbar, statt zum Strich zu werden.
         target = ctx.rect(self.rect)
@@ -104,11 +115,13 @@ class Coin(Entity):
 
 
 def _line(rng: random.Random) -> list[Offset]:
+    """Gerade Reihe aus 6 bis 10 Münzen."""
     count = rng.randint(6, 10)
     return [(i * COIN_SPACING, 0.0) for i in range(count)]
 
 
 def _wave(rng: random.Random) -> list[Offset]:
+    """Volle Sinuswelle über 8 bis 12 Münzen."""
     count = rng.randint(8, 12)
     return [
         (i * COIN_SPACING, COIN_WAVE_AMPLITUDE * det_sin(2 * math.pi * i / (count - 1)))
@@ -117,6 +130,7 @@ def _wave(rng: random.Random) -> list[Offset]:
 
 
 def _arc(rng: random.Random) -> list[Offset]:
+    """Halbbogen aus 6 bis 9 Münzen, zufällig nach oben oder unten gewölbt."""
     count = rng.randint(6, 9)
     direction = rng.choice((-1.0, 1.0))
     return [
@@ -126,6 +140,7 @@ def _arc(rng: random.Random) -> list[Offset]:
 
 
 def _zigzag(rng: random.Random) -> list[Offset]:
+    """Zwei Zacken mit 2 bis 3 Stufen je Flanke, Richtung zufällig."""
     # Zwei Zacken: `steps` Münzen hoch, `steps` runter, wiederholt.
     steps = rng.randint(2, 3)
     direction = rng.choice((-1.0, 1.0))
@@ -138,6 +153,7 @@ def _zigzag(rng: random.Random) -> list[Offset]:
 
 
 def _diamond(rng: random.Random) -> list[Offset]:
+    """Raute aus fünf Spalten (1-2-3-2-1 Münzen), ohne Zufall."""
     columns = (1, 2, 3, 2, 1)
     offsets: list[Offset] = []
     for col, rows in enumerate(columns):
@@ -156,6 +172,7 @@ LAYOUTS: dict[str, LayoutFn] = {
 
 
 def layout_for(name: str) -> LayoutFn:
+    """Layout-Funktion zum Muster-Namen; `ValueError` bei unbekanntem Namen."""
     try:
         return LAYOUTS[name]
     except KeyError:
@@ -181,9 +198,11 @@ class CoinFormation:
 
     @property
     def is_finished(self) -> bool:
+        """True, sobald keine Münze mehr übrig ist (eingesammelt oder verpasst)."""
         return not self.coins
 
     def update(self, dt: float, player_y: int, speed_scale: float = 1.0) -> None:
+        """Bewegt alle Münzen; links hinausgeflogene zählen als verpasst."""
         remaining: list[Coin] = []
         for coin in self.coins:
             coin.update(dt, player_y, speed_scale)
@@ -200,6 +219,11 @@ class CoinFormation:
                 coin.pull_toward(target, step)
 
     def collect(self, player_rect: pygame.Rect) -> Pickup:
+        """Sammelt Münzen ein, die `player_rect` berühren.
+
+        Der Bonus fällt genau einmal: beim letzten Einsammeln, wenn keine Münze
+        verpasst wurde.
+        """
         value = 0
         remaining: list[Coin] = []
         for coin in self.coins:
@@ -213,10 +237,12 @@ class CoinFormation:
         return Pickup(value, self.bonus if completed else 0)
 
     def draw(self, ctx: RenderContext) -> None:
+        """Zeichnet alle verbliebenen Münzen."""
         for coin in self.coins:
             coin.draw(ctx)
 
     def state_key(self) -> tuple[object, ...]:
+        """Kanonischer Zustand: Münzen, Bonus und Zähler."""
         return (
             tuple(coin.state_key() for coin in self.coins),
             self.bonus,
@@ -226,6 +252,7 @@ class CoinFormation:
 
 
 def coin_rects(formations: Iterable[CoinFormation]) -> list[pygame.Rect]:
+    """Hitboxen aller Münzen der Formationen (Spawn-Ausschluss gegen Gefahren)."""
     return [coin.rect for formation in formations for coin in formation.coins]
 
 

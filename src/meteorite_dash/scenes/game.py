@@ -1,3 +1,5 @@
+"""Spiel-Szene: Fixstep-Loop um `Simulation`, Eingabe-Übersetzung, Ghost und HUD."""
+
 import pygame
 
 from meteorite_dash.audio import GAME_MUSIC_ENDED
@@ -96,12 +98,14 @@ class GameScene(Scene):
         self._show_difficulty_debug = False
 
     def run_config(self, seed: int) -> RunConfig:
+        """`RunConfig` aus Seed, gewähltem Schiff und dessen ausgerüstetem Zubehör."""
         state = self.context.state
         spec = state.selected_ship
         equipped = tuple(acc.id for acc in state.progress.equipped_accessories(spec))
         return RunConfig(seed, spec.name, equipped)
 
     def find_ghost(self, seed: int) -> Replay | None:
+        """Kompatiblen Daily-Rekord zum Seed finden; Free lädt bewusst keinen Ghost."""
         if self.mode is not RunMode.DAILY:
             return None
         store = self.context.replays
@@ -143,15 +147,18 @@ class GameScene(Scene):
         return self.context.assets.load_ship(spec.sprite, size, tint)
 
     def on_enter(self) -> None:
+        """Startet die Spiel-Playlist."""
         self.context.music.start_game_playlist()
 
     def on_exit(self) -> None:
+        """Stoppt die Musik, schreibt gesammelte Münzen ins Guthaben und speichert."""
         self.context.music.stop()
         # Guthaben auch bei Abbruch (Escape) gutschreiben und sichern.
         self.context.state.progress.add_coins(self.sim.coins_collected)
         self.context.save_progress()
 
     def handle_event(self, event: pygame.event.Event) -> None:
+        """Track-Ende schaltet weiter; Escape bricht ab, `R` merkt den Waffenwechsel vor."""
         if event.type == GAME_MUSIC_ENDED:
             self.context.music.advance_track()
         elif event.type == pygame.KEYDOWN:
@@ -163,6 +170,11 @@ class GameScene(Scene):
                 self._pending |= InputFrame.SWAP_WEAPON
 
     def update(self, dt: float) -> None:
+        """Wandzeit in feste Ticks umrechnen, `step` bis zu `MAX_STEPS_PER_FRAME`-mal.
+
+        Sternenfeld und Bonus-Hinweis laufen mit Wandzeit weiter (Deko). Bleibt
+        Zeit übrig, weil das Limit griff, verfällt sie statt aufgeholt zu werden.
+        """
         # Deko läuft mit Wandzeit; nur die Simulation tickt fest.
         self.context.starfield.update(dt)
         self._bonus_notice_ttl = max(0.0, self._bonus_notice_ttl - dt)
@@ -193,6 +205,11 @@ class GameScene(Scene):
         return events
 
     def _on_event(self, event: SimEvent) -> None:
+        """Reagiert auf ein `SimEvent`.
+
+        Schuss-Sound, Bonus-Hinweis; bei `DEATH` Endstand in `GameState` schreiben,
+        Replay ablegen und zum Death-Screen wechseln.
+        """
         if event.kind is EventKind.FIRED and event.sound is not None:
             self.context.music.play_sound_effect(event.sound)
         elif event.kind is EventKind.COIN_BONUS:
@@ -229,6 +246,7 @@ class GameScene(Scene):
         return replay
 
     def draw(self) -> None:
+        """Zeichnet Sternenfeld, Gefahren, Münzen, Projektile, Ghost, Spieler und HUD."""
         screen = self.context.screen
         ctx = RenderContext(screen, self.context.viewport, self.context.assets)
         screen.fill(BACKGROUND_COLOR)
@@ -251,16 +269,19 @@ class GameScene(Scene):
         pygame.display.flip()
 
     def _draw_ghost(self, ctx: RenderContext) -> None:
+        """Ghost-Schiff hinter dem Spieler, solange der Ghost-Lauf nicht beendet ist."""
         if self.ghost is None or self.ghost.finished:
             return
         target = ctx.rect(self.ghost.rect)
         ctx.surface.blit(self.ghost_image(target.size), target)
 
     def _draw_player(self, ctx: RenderContext) -> None:
+        """Spielerschiff an der Simulationsposition, in Fenstergröße."""
         target = ctx.rect(self.sim.player.rect)
         ctx.surface.blit(self.ship_image(target.size), target)
 
     def _draw_shield_hud(self) -> None:
+        """`SCHILD xN` oben links, nur solange Ladungen übrig sind."""
         if self.sim.shield_charges <= 0:
             return
         vp = self.context.viewport
@@ -270,6 +291,7 @@ class GameScene(Scene):
         self.context.screen.blit(text, text.get_rect(topleft=vp.point(*SHIELD_HUD_TOP_LEFT)))
 
     def _draw_hp_hud(self) -> None:
+        """`HP <aktuell>/<max>` oben links."""
         vp = self.context.viewport
         font = vp.font(WEAPON_HUD_FONT_SIZE)
         player = self.sim.player
@@ -278,6 +300,7 @@ class GameScene(Scene):
         self.context.screen.blit(hp_text, hp_text.get_rect(topleft=vp.point(*HP_HUD_TOP_LEFT)))
 
     def _draw_weapon_hud(self) -> None:
+        """Aktive Waffe mit Munition oben links."""
         vp = self.context.viewport
         font = vp.font(WEAPON_HUD_FONT_SIZE)
         active = self.sim.loadout.active
@@ -317,6 +340,7 @@ class GameScene(Scene):
             self.context.screen.blit(text, text.get_rect(topleft=position))
 
     def _draw_score(self) -> None:
+        """Lightyears, Münzen, Ghost-Vergleich und Bonus-Hinweis oben rechts."""
         vp = self.context.viewport
         font = vp.font(SCORE_FONT_SIZE)
 

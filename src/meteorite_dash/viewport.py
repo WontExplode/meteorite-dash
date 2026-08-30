@@ -1,3 +1,9 @@
+"""Viewport: Abbildung des 800x600-Referenzraums auf das echte Fenster.
+
+Positionen werden pro Achse gestreckt, Größen und Schriften einheitlich
+höhen-gebunden skaliert. Bei `REFERENCE_SIZE` ist alles Identität.
+"""
+
 import pygame
 
 from meteorite_dash.config import MENU_FONT_NAME, REFERENCE_SIZE
@@ -23,21 +29,26 @@ class Viewport:
 
     @property
     def width(self) -> int:
+        """Fensterbreite in Pixeln."""
         return self._width
 
     @property
     def height(self) -> int:
+        """Fensterhöhe in Pixeln."""
         return self._height
 
     @property
     def size(self) -> tuple[int, int]:
+        """Fenstergröße als (Breite, Höhe)."""
         return (self._width, self._height)
 
     @property
     def center_x(self) -> int:
+        """Horizontale Fenstermitte in Pixeln."""
         return self._width // 2
 
     def resize(self, width: int, height: int) -> None:
+        """Übernimmt die neue Fenstergröße; der Font-Cache bleibt gültig (Key = Pixelgröße)."""
         self._width = width
         self._height = height
 
@@ -45,10 +56,12 @@ class Viewport:
 
     @property
     def scale_x(self) -> float:
+        """Streckfaktor der x-Achse (Fensterbreite / Referenzbreite)."""
         return self._width / REF_W
 
     @property
     def scale_y(self) -> float:
+        """Streckfaktor der y-Achse (Fensterhöhe / Referenzhöhe)."""
         return self._height / REF_H
 
     @property
@@ -76,6 +89,7 @@ class Viewport:
         return round(ref_y * self.scale_y)
 
     def point(self, ref_x: float, ref_y: float) -> tuple[int, int]:
+        """Referenzpunkt als Fensterkoordinate (`px`, `py`)."""
         return (self.px(ref_x), self.py(ref_y))
 
     def s(self, ref_value: float) -> int:

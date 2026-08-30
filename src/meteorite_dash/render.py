@@ -16,6 +16,8 @@ from meteorite_dash.viewport import Viewport
 
 @dataclass(frozen=True)
 class RenderContext:
+    """Zeichenziel plus `Viewport`; wird jedem `draw(ctx)` übergeben."""
+
     surface: pygame.Surface
     viewport: Viewport
     # Ohne Loader (Tests) zeichnen Entities ihre Fallback-Formen.
@@ -32,6 +34,7 @@ class RenderContext:
         )
 
     def image(self, filename: str, size: tuple[int, int]) -> pygame.Surface | None:
+        """Sprite in Fenstergröße aus dem Asset-Cache; None ohne Loader (Fallback-Form)."""
         if self.assets is None:
             return None
         return self.assets.load_image(filename, size)

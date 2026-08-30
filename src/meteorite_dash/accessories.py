@@ -1,8 +1,8 @@
 """Zubehör-Katalog (Issue #14): kaufbare Ausrüstung für die `ShipSpec.accessory_slots`.
 
 Ein Zubehör wird einmal gekauft und kann danach auf jedem Schiff mit freiem
-Platz ausgerüstet werden. Die Effekte selbst wendet `GameScene` beim Aufbau
-des Laufs an; die Stärke der Effekte steht in `config.py`.
+Platz ausgerüstet werden. Die Effekte selbst wendet `Simulation.__init__` aus
+der `RunConfig` an; die Stärke der Effekte steht in `config.py`.
 """
 
 from dataclasses import dataclass
@@ -12,6 +12,8 @@ from meteorite_dash.config import AMMO_RESERVE_BONUS, ARMOR_HP_BONUS, SHIELD_CHA
 
 
 class AccessoryKind(Enum):
+    """Zubehör-Arten; der Wert ist zugleich die persistente ID."""
+
     SHIELD = "shield"
     MAGNET = "magnet"
     AMMO_RESERVE = "ammo_reserve"
@@ -20,6 +22,8 @@ class AccessoryKind(Enum):
 
 @dataclass(frozen=True)
 class AccessorySpec:
+    """Katalog-Eintrag eines Zubehörs: Art, Anzeigename, Beschreibung und Preis."""
+
     kind: AccessoryKind
     name: str
     description: str
@@ -31,6 +35,7 @@ class AccessorySpec:
 
     @property
     def id(self) -> str:
+        """Persistente ID (der `AccessoryKind`-Wert)."""
         return self.kind.value
 
 

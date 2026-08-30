@@ -143,15 +143,16 @@ uv run ruff format .         # formatieren
 uv run ruff check .          # linten
 uv run mypy                  # Typprüfung (strict, über src + tests)
 uv run pytest                # Tests
+uv run interrogate           # Docstring-Abdeckung (fail-under in pyproject.toml)
 ```
 
-Pre-commit-Hook einmalig aktivieren (führt alle vier Checks vor jedem Commit aus):
+Pre-commit-Hook einmalig aktivieren (führt alle fünf Checks vor jedem Commit aus):
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-**Alle vier Checks müssen grün sein**, bevor committet/gepusht wird — die CI
+**Alle fünf Checks müssen grün sein**, bevor committet/gepusht wird — die CI
 (`.github/workflows/ci.yml`) erzwingt dasselbe bei Push auf `main` und bei jedem
 PR. `ruff format` läuft in CI als `--check` (kein Auto-Format), also lokal
 formatieren.

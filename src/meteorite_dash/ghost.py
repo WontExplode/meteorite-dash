@@ -19,6 +19,12 @@ from meteorite_dash.simulation import Simulation
 
 
 class Ghost:
+    """Zweite `Simulation`, die ein Replay Tick für Tick nachspielt.
+
+    `finished` wird True, wenn die Eingaben aufgebraucht sind oder der Ghost
+    stirbt; erst dann steht `consistent` fest.
+    """
+
     def __init__(self, replay: Replay) -> None:
         self.replay = replay
         self.sim = Simulation(replay.config, director=director_for_kind(replay.director_kind))
@@ -29,10 +35,12 @@ class Ghost:
 
     @property
     def rect(self) -> pygame.Rect:
+        """Hitbox des Ghost-Schiffs im Referenzraum."""
         return self.sim.player.rect
 
     @property
     def light_years(self) -> float:
+        """Aktuelle Lichtjahre des Ghosts."""
         return self.sim.light_years
 
     def delta(self, light_years: float) -> float:
@@ -40,6 +48,7 @@ class Ghost:
         return light_years - self.sim.light_years
 
     def step(self) -> None:
+        """Rückt den Ghost um einen Tick vor; nach dem Ende ein No-op."""
         if self.finished:
             return
         frame = next(self._inputs, None)
@@ -51,6 +60,7 @@ class Ghost:
             self._finish()
 
     def _finish(self) -> None:
+        """Beendet den Ghost und prüft Snapshot + Hash gegen die Aufzeichnung."""
         self.finished = True
         self.consistent = (
             self.sim.snapshot() == self.replay.final

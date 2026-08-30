@@ -1,3 +1,5 @@
+"""Hauptmenü: Einträge aus `MENU_ITEMS`, Aktionen über `_ACTION_TRANSITIONS`."""
+
 import pygame
 
 from meteorite_dash.config import (
@@ -24,11 +26,14 @@ _ACTION_TRANSITIONS: dict[MenuAction, Transition] = {
 
 
 class MainMenu(Scene):
+    """Hauptmenü mit Cursor über `MENU_ITEMS`; Enter löst den passenden `Transition` aus."""
+
     def __init__(self, context: GameContext) -> None:
         super().__init__(context)
         self.selected_index = 0
 
     def handle_event(self, event: pygame.event.Event) -> None:
+        """Pfeiltasten bewegen den Cursor zyklisch, Enter/Leertaste bestätigen."""
         if event.type != pygame.KEYDOWN:
             return
         if event.key == pygame.K_UP:
@@ -40,6 +45,7 @@ class MainMenu(Scene):
             self.finish(_ACTION_TRANSITIONS[action])
 
     def draw(self) -> None:
+        """Zeichnet Titel, Menüeinträge, gewähltes Schiff, Tastenhinweis und Wallet."""
         screen = self.context.screen
         vp = self.context.viewport
         screen.fill(BACKGROUND_COLOR)
