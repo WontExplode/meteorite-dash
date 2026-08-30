@@ -23,8 +23,9 @@ immer mehr zurückgelegte Lichtjahre.
 - dynamische Fenstergröße und Vollbild über einen gemeinsamen `Viewport`
 - deterministische Simulation: fester Zeitschritt, Seed pro Lauf
   (`METEORITE_DASH_SEED` erzwingt einen), headless nachspielbar
-- adaptiver Free Mode: schadensfreie Passagen erhöhen die Belastung schrittweise;
-  Schaden, niedrige HP und gehäufte Near Misses sorgen für Entlastung
+- adaptiver Free Mode: schadensfreie Passagen erhöhen Welttempo, Gefahren-Dichte
+  und Lightyears-Fortschritt schrittweise; Schaden, niedrige HP und gehäufte
+  Near Misses sorgen für Entlastung
 - Replays: jeder Lauf wird als `last.json` und modusspezifischer Rekord aufgezeichnet;
   Director-Art und Regelversion werden mitgespeichert, damit
   `uv run meteorite-dash --verify datei.json` ihn korrekt nachspielt
@@ -43,6 +44,7 @@ immer mehr zurückgelegte Lichtjahre.
 - `Enter` / `Space`: Menüauswahl bestätigen
 - `Escape`: im Spiel zurück ins Hauptmenü
 - `F` / `F11`: Vollbild umschalten
+- `F3`: Difficulty-Diagnose mit Modus, Tick, Faktoren, HP und Munition einblenden
 
 ## Entwicklung
 

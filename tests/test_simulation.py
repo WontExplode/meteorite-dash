@@ -22,7 +22,7 @@ from meteorite_dash.config import (
 )
 from meteorite_dash.context import GameContext
 from meteorite_dash.difficulty import ConstantDirector, DifficultyParams, SimulationView
-from meteorite_dash.entities import AmmoPickup, Meteorite
+from meteorite_dash.entities import AmmoPickup, Entity, Meteorite
 from meteorite_dash.headless import Trace, run, scripted_inputs
 from meteorite_dash.inputs import InputFrame
 from meteorite_dash.mathutil import det_hypot, det_sin
@@ -296,6 +296,59 @@ def test_director_speed_multiplier_scales_horizontal_movement() -> None:
     assert slow.entities[0].rect.x == round(700 - 120.0 * SIM_DT)
 
 
+def test_director_speed_multiplier_scales_light_years() -> None:
+    fast = Simulation(
+        RunConfig(SEED, "Allrounder"), director=ConstantDirector(DifficultyParams(2.0))
+    )
+    normal = _sim()
+
+    fast.step(InputFrame.NONE)
+    normal.step(InputFrame.NONE)
+
+    assert fast.light_years == 2.0 * normal.light_years
+    assert fast.score.rate_multiplier == 2.0
+    assert normal.score.rate_multiplier == 1.0
+
+
+def test_coin_cadence_follows_world_speed_not_hazard_density(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sim = Simulation(
+        RunConfig(SEED, "Allrounder"),
+        director=ConstantDirector(DifficultyParams(2.0, 0.6)),
+    )
+    hazard_scales: list[float] = []
+    coin_scales: list[float] = []
+
+    def update_hazards(
+        dt: float,
+        accept: object | None = None,
+        *,
+        interval_scale: float = 1.0,
+    ) -> list[Entity]:
+        del dt, accept
+        hazard_scales.append(interval_scale)
+        return []
+
+    def update_coins(
+        dt: float,
+        accept: object | None = None,
+        *,
+        interval_scale: float = 1.0,
+    ) -> list[CoinFormation]:
+        del dt, accept
+        coin_scales.append(interval_scale)
+        return []
+
+    monkeypatch.setattr(sim.spawner, "update", update_hazards)
+    monkeypatch.setattr(sim.coin_spawner, "update", update_coins)
+
+    sim.step(InputFrame.NONE)
+
+    assert hazard_scales == [0.6]
+    assert coin_scales == [0.5]
+
+
 def test_spawner_interval_scale_densifies_spawns() -> None:
     def factory(rng: random.Random, area: tuple[int, int]) -> int:
         return 1
@@ -380,6 +433,27 @@ def test_scene_swap_edge_is_consumed_once(context: GameContext) -> None:
     scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_r))
     scene.update(2 * SIM_DT)
     assert scene.sim.loadout.active_index == 1
+
+
+def test_scene_toggles_hidden_difficulty_debug_hud(context: GameContext) -> None:
+    scene = GameScene(context, seed=1)
+    assert not scene._show_difficulty_debug
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F3))
+
+    assert scene._show_difficulty_debug
+    lines = scene._difficulty_debug_lines()
+    assert lines[0] == "DEBUG FREE ADAPTIVE"
+    assert lines[1] == "TICK 000000"
+    assert lines[2] == "SPEED x1.000 INTERVAL x1.000"
+    assert lines[3] == "HP 100/100 AMMO 7/7"
+    state_hash = scene.sim.state_hash()
+    context.apply_resize((1280, 720))
+    scene.draw()
+    assert scene.sim.state_hash() == state_hash
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F3))
+    assert not scene._show_difficulty_debug
 
 
 def _drive(scene: GameScene, ticks: int) -> str:
