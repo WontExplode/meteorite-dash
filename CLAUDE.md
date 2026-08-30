@@ -99,6 +99,10 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   `nostr-<seed>-<pubkey8>.json` in den `ReplayStore` → der weiteste fliegt als
   Ghost mit. Identität = zufälliger Schlüssel in `identity.json`
   (`identity.py`). `METEORITE_DASH_OFFLINE=1` schaltet alles ab.
+- **Daily-Bestenliste** (`leaderboard.py`, `scenes/leaderboard.py`): Top 5
+  zum Tages-Seed aus dem `ReplayStore` (bester Lauf je Spieler, „DU“ für
+  eigene), eigener Rang darunter, `R` holt neu von den Relays. Menüpunkt
+  „Daily Bestenliste“, nach einem Daily Run auch per `Tab` vom Death-Screen.
 - Strikte Typprüfung, Linting, Tests, CI.
 
 **Noch NICHT vorhanden** (aus dem Spec — meist als GitHub-Issue getrackt):
@@ -108,9 +112,8 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
 - **Steigende Schwierigkeit** über die Zeit (Vertrag in `difficulty.py`,
   Umsetzung Issues #32/#33 — nicht Teil von #34).
-- Bestenlisten-Ansicht (Tabelle aller Community-Läufe des Tages) und
-  Freunde-Filter nach Pubkey; Share-Code als QR/Text-Import im Spiel
-  (Format steht in `sharecode.py`).
+- Freunde-Filter nach Pubkey in der Bestenliste; Share-Code als QR/Text-Import
+  im Spiel (Format steht in `sharecode.py`).
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
   (Issue #10), Spieler-Stats (Issue #13), iOS/Android-Port (Issue #5).
 
@@ -171,6 +174,7 @@ main.main()                 Entry-Point, ruft App().run()
       ├─ MainMenu            Transition zurück → App wählt nächste Szene
       ├─ ShipSelection
       ├─ ShopScene          Münzen gegen Schiffe, Zubehör, Farben
+      ├─ LeaderboardScene   Daily-Bestenliste aus dem ReplayStore
       ├─ GameScene          Fixstep-Loop um `Simulation` (simulation.py) + Rendering
       └─ DeathScene         Game-Over-Screen mit finalem Lightyears-Score
 ```
@@ -390,6 +394,14 @@ Briefkasten, die Simulation ist der Richter.
   → Death-Screen „REKORD … VON <pubkey8>“ plus Zeile mit `publish_status`.
 - Was das Netz sieht: Pubkey, Seed, Schiff, Zubehör, Eingaben, Endzustand —
   öffentlich und praktisch dauerhaft. Sonst nichts.
+- Bestenliste: `leaderboard.build_leaderboard(store.all(), seed)` — reine
+  Logik, filtert Seed + `SIM_VERSION`, bester Lauf je `author` (eigene
+  Läufe `""` → ein „DU“-Eintrag), Sortierung Lichtjahre ↓, dann älteres
+  Datum, dann Pubkey. `LeaderboardScene` liest nur den Store; `on_enter`/`R`
+  → `exchange.prefetch(seed)`, `update` baut die Liste neu, sobald sich
+  `exchange.status` ändert. Relays liefern die *neuesten* N Events
+  (`NOSTR_MAX_RUNS = 100`), nicht die besten — bei sehr vielen Spielern
+  fehlen alte Bestläufe, das ist die bekannte Lücke.
 
 ### Entities & Spawner
 
@@ -609,7 +621,8 @@ Briefkasten, die Simulation ist der Richter.
   (`test_progress.py`, mit `tmp_path`), Replays (`test_replay.py`, Golden in
   `tests/replays/`), Ghost (`test_ghost.py`), Daily (`test_daily.py`),
   Shop/Zubehör (`test_shop.py`), Skalierung/Resize (`test_viewport.py`),
-  Share-Code (`test_sharecode.py`) und Nostr (`test_nostr.py`) sind getrennt.
+  Share-Code (`test_sharecode.py`), Nostr (`test_nostr.py`) und Bestenliste
+  (`test_leaderboard.py`) sind getrennt.
 - **Kein Netz in Tests:** `conftest.py` setzt `METEORITE_DASH_OFFLINE=1`, damit
   `App()` ohne Exchange baut. `test_nostr.py` startet einen `FakeRelay`
   (`websockets.serve` auf 127.0.0.1, ersetzbare Events, `REQ`/`EOSE`) und

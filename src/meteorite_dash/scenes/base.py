@@ -12,6 +12,7 @@ class Transition(Enum):
     MAIN_MENU = auto()
     START_GAME = auto()
     START_DAILY = auto()
+    LEADERBOARD = auto()
     SHIP_SELECTION = auto()
     SHOP = auto()
     DEATH_SCREEN = auto()

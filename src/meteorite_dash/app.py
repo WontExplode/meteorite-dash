@@ -23,6 +23,7 @@ from meteorite_dash.replay import ReplayStore, RunMode, default_replay_dir
 from meteorite_dash.scenes.base import Scene, Transition
 from meteorite_dash.scenes.death import DeathScene
 from meteorite_dash.scenes.game import GameScene
+from meteorite_dash.scenes.leaderboard import LeaderboardScene
 from meteorite_dash.scenes.main_menu import MainMenu
 from meteorite_dash.scenes.ship_selection import ShipSelection
 from meteorite_dash.scenes.shop import ShopScene
@@ -30,7 +31,12 @@ from meteorite_dash.simulation import pick_seed, seed_forced
 from meteorite_dash.starfield import StarField
 from meteorite_dash.viewport import Viewport
 
-_MENU_TRANSITIONS = (Transition.MAIN_MENU, Transition.SHIP_SELECTION, Transition.SHOP)
+_MENU_TRANSITIONS = (
+    Transition.MAIN_MENU,
+    Transition.SHIP_SELECTION,
+    Transition.SHOP,
+    Transition.LEADERBOARD,
+)
 _GAME_TRANSITIONS = (Transition.START_GAME, Transition.START_DAILY)
 
 
@@ -86,6 +92,8 @@ class App:
             return ShipSelection(self.context)
         if transition is Transition.SHOP:
             return ShopScene(self.context)
+        if transition is Transition.LEADERBOARD:
+            return LeaderboardScene(self.context)
         if transition is Transition.START_GAME:
             seed = pick_seed()
             if seed_forced():

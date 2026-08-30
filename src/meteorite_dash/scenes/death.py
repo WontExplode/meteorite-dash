@@ -34,7 +34,10 @@ class DeathScene(Scene):
 
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type == pygame.KEYDOWN:
-            self.finish(Transition.MAIN_MENU)
+            if event.key == pygame.K_TAB and self.context.state.final_mode is RunMode.DAILY:
+                self.finish(Transition.LEADERBOARD)
+            else:
+                self.finish(Transition.MAIN_MENU)
         elif event.type == pygame.QUIT:
             self.finish(Transition.QUIT)
 
@@ -97,28 +100,33 @@ class DeathScene(Scene):
             True,
             highlight_color,
         )
-        screen.blit(final_score, final_score.get_rect(center=(center_x, vp.py(385))))
+        screen.blit(final_score, final_score.get_rect(center=(center_x, vp.py(380))))
 
         final_coins = score_font.render(
             f"MÜNZEN: {format_coins(state.final_coins)}", True, COIN_COLOR
         )
-        screen.blit(final_coins, final_coins.get_rect(center=(center_x, vp.py(415))))
+        screen.blit(final_coins, final_coins.get_rect(center=(center_x, vp.py(408))))
 
         record_line, record_color = self._record_line()
         if record_line:
             record_text = score_font.render(record_line, True, record_color)
-            screen.blit(record_text, record_text.get_rect(center=(center_x, vp.py(445))))
+            screen.blit(record_text, record_text.get_rect(center=(center_x, vp.py(436))))
 
         seed_text = hint_font.render(f"SEED {state.final_seed}", True, muted_color)
-        screen.blit(seed_text, seed_text.get_rect(center=(center_x, vp.py(472))))
+        screen.blit(seed_text, seed_text.get_rect(center=(center_x, vp.py(462))))
 
         share_line = self._share_line()
         if share_line:
             share_text = hint_font.render(share_line, True, DEATH_MODE_COLOR)
-            screen.blit(share_text, share_text.get_rect(center=(center_x, vp.py(495))))
+            screen.blit(share_text, share_text.get_rect(center=(center_x, vp.py(486))))
 
-        hint = hint_font.render("DRÜCKE EINE BELIEBIGE TASTE", True, TEXT_COLOR)
-        screen.blit(hint, hint.get_rect(center=(center_x, vp.py(520))))
+        hint_line = (
+            "TASTE: MENÜ   TAB: BESTENLISTE"
+            if state.final_mode is RunMode.DAILY
+            else "DRÜCKE EINE BELIEBIGE TASTE"
+        )
+        hint = hint_font.render(hint_line, True, TEXT_COLOR)
+        screen.blit(hint, hint.get_rect(center=(center_x, vp.py(512))))
 
         pygame.display.flip()
 

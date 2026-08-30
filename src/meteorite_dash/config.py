@@ -2,7 +2,7 @@ from typing import Literal, NamedTuple
 
 WindowSize = tuple[int, int]
 Color = tuple[int, int, int]
-MenuAction = Literal["start", "daily", "ship", "shop", "quit"]
+MenuAction = Literal["start", "daily", "leaderboard", "ship", "shop", "quit"]
 
 
 class MeteoriteVariant(NamedTuple):
@@ -49,12 +49,16 @@ DEATH_MESSAGE_FONT_SIZE = 24
 MENU_ITEMS: tuple[tuple[str, MenuAction], ...] = (
     ("Start", "start"),
     ("Daily Run", "daily"),
+    ("Daily Bestenliste", "leaderboard"),
     ("Raumschiff auswählen", "ship"),
     ("Shop", "shop"),
     ("Beenden", "quit"),
 )
 
-MENU_ITEM_SPACING = 56  # Referenz-px zwischen Menüpunkten
+MENU_ITEMS_TOP = 200  # Referenz-y des ersten Menüpunkts
+MENU_ITEM_SPACING = 48  # Referenz-px zwischen Menüpunkten (sechs Einträge im Bild)
+MENU_SELECTED_SHIP_TOP = 508
+MENU_HINT_TOP = 538
 
 MENU_MUSIC = "menumusic.mp3"
 DEATH_SOUND = "gameovermusic.mp3"
@@ -237,7 +241,9 @@ NOSTR_APP_TAG = "meteorite-dash"
 NOSTR_TIMEOUT = 6.0  # Sekunden pro Relay-Verbindung (verbinden + antworten)
 # So lange wartet der Spielstart auf fremde Läufe; danach geht es ohne sie los.
 NOSTR_FETCH_TIMEOUT = 3.0
-NOSTR_MAX_RUNS = 20  # höchstens so viele fremde Läufe pro Seed abholen und prüfen
+# Relays liefern die *neuesten* N Events, nicht die besten — deshalb großzügig;
+# geprüft wird weiteste-zuerst im Hintergrund.
+NOSTR_MAX_RUNS = 100
 NOSTR_MAX_TICKS = 30 * 60 * SIM_TICKS_PER_SECOND  # längere fremde Läufe werden ignoriert
 NOSTR_MAX_CONTENT_CHARS = 64_000  # Share-Code-Länge, ab der ein Event verworfen wird
 NOSTR_REPLAY_PREFIX = "nostr-"  # Ablage fremder Läufe: `nostr-<seed>-<pubkey8>`
@@ -251,5 +257,19 @@ PUBKEY_SHORT_LEN = 8  # Anzeige-Kurzform eines Pubkeys
 # Share-Code: kompaktes Binärformat eines Replays (`sharecode.py`).
 SHARECODE_VERSION = 1
 
-COMMUNITY_STATUS_TOP: int = 472  # Referenz-y der Community-Zeile im Hauptmenü
+COMMUNITY_STATUS_TOP: int = 480  # Referenz-y der Community-Zeile im Hauptmenü
 COMMUNITY_STATUS_COLOR: Color = (150, 210, 255)
+
+# --- Daily-Bestenliste ---
+LEADERBOARD_SIZE = 5
+LEADERBOARD_OWN_LABEL = "DU"
+LEADERBOARD_TITLE_TOP = 80
+LEADERBOARD_SUBTITLE_TOP = 130
+LEADERBOARD_STATUS_TOP = 160
+LEADERBOARD_HEADER_TOP = 200
+LEADERBOARD_ROWS_TOP = 236
+LEADERBOARD_ROW_SPACING = 38
+LEADERBOARD_OWN_TOP = 460
+LEADERBOARD_HINT_TOP = 535
+# Referenz-x der Spalten: Rang, Spieler, Lichtjahre, Schiff
+LEADERBOARD_COLUMNS: tuple[int, int, int, int] = (140, 200, 400, 560)

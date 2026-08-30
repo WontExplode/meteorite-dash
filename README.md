@@ -6,7 +6,7 @@ immer mehr zurückgelegte Lichtjahre.
 
 ## Features
 
-- Hauptmenü mit Start, Daily Run, Schiffsauswahl und Shop
+- Hauptmenü mit Start, Daily Run, Daily Bestenliste, Schiffsauswahl und Shop
 - vertikale Raumschiffsteuerung
 - Standardwaffe mit 7 Schüssen und Munitions-Pickups
 - zerstörbare Meteoriten und Gegner mit HP; Spieler-HP aus Schiffsrumpf
@@ -32,6 +32,7 @@ immer mehr zurückgelegte Lichtjahre.
 - Community-Läufe über Nostr: eigene Rekorde gehen signiert an öffentliche
   Relays, fremde Läufe zum Tages-Seed werden geholt, nachgespielt und
   fliegen als Ghost mit — kein eigener Server, kein Account
+- Daily-Bestenliste: Top 5 zum Tages-Seed mit eigenem Rang, `R` lädt neu
 - Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
 
 ## Steuerung
@@ -43,6 +44,8 @@ immer mehr zurückgelegte Lichtjahre.
 - `Space`: schießen (im Spiel)
 - `R`: Waffe wechseln (im Spiel, wenn mehrere Waffen vorhanden)
 - `Enter` / `Space`: Menüauswahl bestätigen
+- `Tab` auf dem Game-Over-Screen nach einem Daily Run: Bestenliste
+- `R` in der Bestenliste: neu von den Relays laden
 - `Escape`: im Spiel zurück ins Hauptmenü
 - `F` / `F11`: Vollbild umschalten
 
@@ -80,6 +83,7 @@ src/meteorite_dash/
   identity.py          Nostr-Schlüssel pro Installation (identity.json)
   nostr.py             Nostr-Events und Relay-Client (websockets)
   exchange.py          Community-Läufe teilen, holen, prüfen, ablegen
+  leaderboard.py       Bestenliste aus gespeicherten Läufen (Logik)
   mathutil.py          Plattformstabiler Sinus/Abstand für die Simulation
   entities.py          Gegner, Hindernisse und Munitions-Pickups
   projectiles.py       Spieler-Projektile
@@ -97,6 +101,7 @@ src/meteorite_dash/
     main_menu.py       Hauptmenü
     ship_selection.py  Schiffsauswahl
     shop.py            Shop (Schiffe, Zubehör, Farben)
+    leaderboard.py     Daily-Bestenliste
     widgets.py         Geteilte Zeichen-Helfer (Münz-Guthaben)
     game.py            Spielszene
     death.py           Game-Over-Screen
