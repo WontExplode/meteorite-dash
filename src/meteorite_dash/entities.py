@@ -1,3 +1,10 @@
+"""Gegner, Hindernisse und Pickups: `Entity`-Basis, Varianten und Spawn-Fabriken.
+
+Alles hier rechnet im Referenzraum (`REFERENCE_SIZE`) und hält keine Surfaces;
+gezeichnet wird über den `RenderContext`. Die `spawn_*`-Fabriken nehmen einen
+injizierten `random.Random` und sind damit deterministisch testbar.
+"""
+
 import math
 import random
 from abc import ABC, abstractmethod
@@ -46,10 +53,12 @@ class Entity(ABC):
 
     @property
     def damages_player(self) -> bool:
+        """Ob Berührung dem Spieler schadet; Pickups überschreiben mit False."""
         return True
 
     @property
     def is_off_screen(self) -> bool:
+        """True, sobald die Hitbox links aus dem Referenzraum geflogen ist."""
         return self.rect.right < 0
 
     def update(self, dt: float, player_y: int, speed_scale: float = 1.0) -> None:
@@ -74,10 +83,17 @@ class Entity(ABC):
 
     @abstractmethod
     def draw(self, ctx: RenderContext) -> None:
+        """Zeichnet die Entity über den `RenderContext` ins Fenster."""
         raise NotImplementedError
 
 
 class DamageableEntity(Entity):
+    """Entity mit Trefferpunkten und Kollisionsschaden.
+
+    Projektile ziehen über `take_damage` HP ab; bei Berührung kostet sie den
+    Spieler `contact_damage` (siehe `combat.py`).
+    """
+
     def __init__(
         self,
         rect: pygame.Rect,
@@ -92,14 +108,21 @@ class DamageableEntity(Entity):
         self.contact_damage = contact_damage
 
     def take_damage(self, amount: int) -> bool:
+        """Zieht `amount` HP ab; True, wenn die Entity damit zerstört ist."""
         self.hp -= amount
         return self.hp <= 0
 
     def state_key(self) -> tuple[object, ...]:
+        """Ergänzt den Basiszustand um HP und Kollisionsschaden."""
         return (*super().state_key(), self.hp, self.contact_damage)
 
 
 class Meteorite(DamageableEntity):
+    """Meteorit in einer Größe aus `METEORITE_VARIANTS`, fliegt geradeaus.
+
+    Merkt sich nur den Bild-Dateinamen; ohne Bild wird ein Kreis gezeichnet.
+    """
+
     def __init__(
         self,
         rect: pygame.Rect,
@@ -114,9 +137,11 @@ class Meteorite(DamageableEntity):
         self.image_name = image_name
 
     def state_key(self) -> tuple[object, ...]:
+        """Ergänzt den Zustand um die Bildvariante."""
         return (*super().state_key(), self.image_name)
 
     def draw(self, ctx: RenderContext) -> None:
+        """Blittet das Sprite in Fenstergröße; Fallback: Kreis in `METEORITE_COLOR`."""
         target = ctx.rect(self.rect)
         image = ctx.image(self.image_name, target.size) if self.image_name else None
         if image is not None:
@@ -128,6 +153,8 @@ class Meteorite(DamageableEntity):
 
 
 class WaveEnemy(DamageableEntity):
+    """Gegner auf Sinus-Bahn um seine Start-Höhe (`amplitude`, `frequency`)."""
+
     def __init__(
         self,
         rect: pygame.Rect,
@@ -145,19 +172,24 @@ class WaveEnemy(DamageableEntity):
         self._frequency = frequency
 
     def _update_vertical(self, dt: float, player_y: int) -> None:
+        """Sinus über die verstrichene Zeit; `det_sin` hält die Bahn plattformstabil."""
         self._elapsed += dt
         self._y = self._base_y + self._amplitude * det_sin(
             2 * math.pi * self._frequency * self._elapsed
         )
 
     def state_key(self) -> tuple[object, ...]:
+        """Ergänzt den Zustand um die verstrichene Zeit (Phase der Bahn)."""
         return (*super().state_key(), self._elapsed.hex())
 
     def draw(self, ctx: RenderContext) -> None:
+        """Zeichnet ein nach links zeigendes Dreieck in `WAVE_ENEMY_COLOR`."""
         _draw_left_triangle(ctx.surface, ctx.rect(self.rect), WAVE_ENEMY_COLOR)
 
 
 class HunterEnemy(DamageableEntity):
+    """Gegner, der den Spieler vertikal mit `vertical_speed` verfolgt."""
+
     def __init__(
         self,
         rect: pygame.Rect,
@@ -171,6 +203,7 @@ class HunterEnemy(DamageableEntity):
         self._vertical_speed = vertical_speed
 
     def _update_vertical(self, dt: float, player_y: int) -> None:
+        """Nähert sich der Spieler-Höhe mit fester Geschwindigkeit, ohne zu überschießen."""
         target = player_y - self.rect.height / 2  # Ziel-top, damit Center auf player_y zielt
         step = self._vertical_speed * dt
         if abs(target - self._y) <= step:
@@ -181,15 +214,20 @@ class HunterEnemy(DamageableEntity):
             self._y -= step
 
     def draw(self, ctx: RenderContext) -> None:
+        """Zeichnet ein nach links zeigendes Dreieck in `HUNTER_ENEMY_COLOR`."""
         _draw_left_triangle(ctx.surface, ctx.rect(self.rect), HUNTER_ENEMY_COLOR)
 
 
 class AmmoPickup(Entity):
+    """Harmloses Munitions-Pickup; Aufsammeln füllt die Standardwaffe (`Simulation`)."""
+
     @property
     def damages_player(self) -> bool:
+        """Pickups schaden nie."""
         return False
 
     def draw(self, ctx: RenderContext) -> None:
+        """Zeichnet ein abgerundetes Rechteck mit hellem Kern."""
         target = ctx.rect(self.rect)
         radius = max(1, ctx.viewport.s(4))
         pygame.draw.rect(ctx.surface, AMMO_PICKUP_COLOR, target, border_radius=radius)
@@ -200,11 +238,13 @@ class AmmoPickup(Entity):
 
 
 def _draw_left_triangle(surface: pygame.Surface, rect: pygame.Rect, color: Color) -> None:
+    """Dreieck mit Spitze am linken Rand des Rechtecks (Gegner-Silhouette)."""
     points = [(rect.left, rect.centery), (rect.right, rect.top), (rect.right, rect.bottom)]
     pygame.draw.polygon(surface, color, points)
 
 
 def collides_with_any(player_rect: pygame.Rect, entities: Iterable[Entity]) -> bool:
+    """True, wenn der Spieler eine schädliche Entity berührt."""
     return any(
         entity.damages_player and player_rect.colliderect(entity.rect) for entity in entities
     )
@@ -240,6 +280,7 @@ def spawn_meteorite(rng: random.Random, area: tuple[int, int]) -> Meteorite:
 
 
 def spawn_wave_enemy(rng: random.Random, area: tuple[int, int]) -> WaveEnemy:
+    """Wellen-Gegner am rechten Rand auf zufälliger Höhe; `area` ist der Referenzraum."""
     width, height = area
     w, h = ENEMY_SIZE
     y = rng.randint(0, height - h)
@@ -247,6 +288,7 @@ def spawn_wave_enemy(rng: random.Random, area: tuple[int, int]) -> WaveEnemy:
 
 
 def spawn_hunter_enemy(rng: random.Random, area: tuple[int, int]) -> HunterEnemy:
+    """Jäger am rechten Rand auf zufälliger Höhe; `area` ist der Referenzraum."""
     width, height = area
     w, h = ENEMY_SIZE
     y = rng.randint(0, height - h)
@@ -254,6 +296,7 @@ def spawn_hunter_enemy(rng: random.Random, area: tuple[int, int]) -> HunterEnemy
 
 
 def spawn_ammo_pickup(rng: random.Random, area: tuple[int, int]) -> AmmoPickup:
+    """Munitions-Pickup am rechten Rand auf zufälliger Höhe; `area` ist der Referenzraum."""
     width, height = area
     w, h = AMMO_PICKUP_SIZE
     y = rng.randint(0, max(0, height - h))

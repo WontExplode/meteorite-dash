@@ -1,4 +1,8 @@
+"""Lightyears-Score und Zahlenformatierung für HUD und Death-Screen."""
+
+
 def format_light_years(light_years: float) -> str:
+    """Ganze Lichtjahre, sechsstellig mit führenden Nullen."""
     return f"{int(light_years):06d}"
 
 
@@ -16,14 +20,18 @@ class DistanceScore:
         self.rate_multiplier = 1.0
 
     def update(self, dt: float) -> None:
+        """Zählt die Strecke dt-basiert hoch (Rate mal Multiplikator)."""
         self.light_years += dt * self.light_years_per_second * self.rate_multiplier
 
     def set_rate_multiplier(self, multiplier: float) -> None:
+        """Setzt den Multiplikator für spätere Speed-Phasen oder Boss-Abschnitte."""
         self.rate_multiplier = multiplier
 
     def formatted(self) -> str:
+        """Aktueller Stand im HUD-Format (`format_light_years`)."""
         return format_light_years(self.light_years)
 
 
 def format_coins(coins: int) -> str:
+    """Münzzahl vierstellig mit führenden Nullen."""
     return f"{coins:04d}"

@@ -21,6 +21,8 @@ from meteorite_dash.simulation import RunConfig, SimEvent, Simulation, Snapshot
 
 @dataclass(frozen=True)
 class Trace:
+    """Ergebnis eines Headless-Laufs: alle Events plus Endzustand und Hash."""
+
     events: tuple[SimEvent, ...]
     final: Snapshot
     state_hash: str
@@ -67,11 +69,14 @@ def scripted_inputs(seed: int, ticks: int) -> Iterator[InputFrame]:
 
 @dataclass(frozen=True)
 class Verification:
+    """Ergebnis von `verify`: Replay und sein Nachspiel-Trace zum Vergleich."""
+
     replay: Replay
     trace: Trace
 
     @property
     def version_matches(self) -> bool:
+        """True bei passender gemeinsamer Simulations- und Director-Regelversion."""
         return (
             self.replay.sim_version == SIM_VERSION
             and self.replay.director_version == director_version_for_kind(self.replay.director_kind)
@@ -88,11 +93,13 @@ class Verification:
 
 
 def run_replay(replay: Replay, *, director: Director | None = None) -> Trace:
+    """Spielt ein Replay mit seiner aufgezeichneten oder explizit gesetzten Strategie nach."""
     replay_director = director if director is not None else director_for_kind(replay.director_kind)
     return run(replay.config, replay.inputs(), director=replay_director)
 
 
 def verify(replay: Replay) -> Verification:
+    """Spielt `replay` nach und liefert den Vergleich mit dem aufgezeichneten Ende."""
     return Verification(replay, run_replay(replay))
 
 

@@ -1,3 +1,5 @@
+"""Schiffskatalog: `ShipSpec`-Datenblätter (Issue #11) und kaufbare Farben (Issue #14)."""
+
 from dataclasses import dataclass
 
 from meteorite_dash.config import DRAG, Color
@@ -33,6 +35,7 @@ class ShipSpec:
 
     @property
     def is_free(self) -> bool:
+        """True, wenn das Schiff ohne Kauf verfügbar ist (`price == 0`)."""
         return self.price == 0
 
     @property

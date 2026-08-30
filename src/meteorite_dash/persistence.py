@@ -33,6 +33,7 @@ def default_save_dir() -> Path:
 
 
 def default_save_path() -> Path:
+    """Pfad der Speicherdatei im Standard-Datenverzeichnis."""
     return default_save_dir() / SAVE_FILENAME
 
 
@@ -43,6 +44,7 @@ class SaveStore:
         self.path = path
 
     def load(self) -> Progress:
+        """Liest den Fortschritt; fehlende oder kaputte Datei liefert einen frischen."""
         try:
             raw = self.path.read_text(encoding="utf-8")
         except FileNotFoundError:
