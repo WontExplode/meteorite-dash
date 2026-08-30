@@ -13,6 +13,7 @@ from collections.abc import Iterator
 import pygame
 
 from meteorite_dash.inputs import InputFrame
+from meteorite_dash.mode_directors import director_for_kind
 from meteorite_dash.replay import Replay
 from meteorite_dash.simulation import Simulation
 
@@ -26,7 +27,7 @@ class Ghost:
 
     def __init__(self, replay: Replay) -> None:
         self.replay = replay
-        self.sim = Simulation(replay.config)
+        self.sim = Simulation(replay.config, director=director_for_kind(replay.director_kind))
         self._inputs: Iterator[InputFrame] = replay.inputs()
         self.finished = False
         # Erst nach dem letzten Tick bekannt: Endzustand == Aufzeichnung?

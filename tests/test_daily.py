@@ -18,6 +18,7 @@ from meteorite_dash.config import (
 )
 from meteorite_dash.context import GameContext
 from meteorite_dash.daily import daily_replay_name, daily_seed, today_utc
+from meteorite_dash.difficulty import ConstantDirector, DifficultyParams, DirectorKind
 from meteorite_dash.entities import Meteorite
 from meteorite_dash.inputs import InputFrame
 from meteorite_dash.replay import Replay, ReplayStore, RunMode
@@ -87,9 +88,14 @@ def test_app_starts_daily_scene_with_todays_seed(
         assert scene.label == today_utc().isoformat()
         assert scene.seed == daily_seed(today_utc())
         assert scene.recorder.mode is RunMode.DAILY
+        assert scene.recorder.director_kind is DirectorKind.CONSTANT
+        assert isinstance(scene.sim.director, ConstantDirector)
+        scene.step(InputFrame.NONE)
+        assert scene.sim.difficulty == DifficultyParams()
         free = app._create_scene(Transition.START_GAME)
         assert isinstance(free, GameScene)
         assert free.mode is RunMode.FREE
+        assert free.recorder.director_kind is DirectorKind.ADAPTIVE
     finally:
         pygame.quit()
 

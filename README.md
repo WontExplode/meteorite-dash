@@ -23,10 +23,11 @@ immer mehr zurückgelegte Lichtjahre.
 - dynamische Fenstergröße und Vollbild über einen gemeinsamen `Viewport`
 - deterministische Simulation: fester Zeitschritt, Seed pro Lauf
   (`METEORITE_DASH_SEED` erzwingt einen), headless nachspielbar
-- Replays: jeder Lauf wird als `last.json` / `best.json` aufgezeichnet;
-  `uv run meteorite-dash --verify datei.json` spielt ihn nach und prüft ihn
-- Ghost: der beste gespeicherte Lauf zum selben Seed fliegt halbtransparent
-  mit, das HUD zeigt den Vorsprung
+- adaptiver Free Mode: schadensfreie Passagen erhöhen die Belastung schrittweise;
+  Schaden, niedrige HP und gehäufte Near Misses sorgen für Entlastung
+- Replays: jeder Lauf wird als `last.json` und modusspezifischer Rekord aufgezeichnet;
+  Director-Art und Regelversion werden mitgespeichert, damit
+  `uv run meteorite-dash --verify datei.json` ihn korrekt nachspielt
 - Daily Run: ein gemeinsamer Seed pro Tag für alle Spieler (ohne Server); der
   Tagesrekord fliegt als Ghost mit, der Game-Over-Screen zeigt den Vergleich
 - Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
@@ -66,7 +67,7 @@ src/meteorite_dash/
   simulation.py        Deterministischer Spielkern (fester Tick, Seed-Streams, Events)
   inputs.py            InputFrame: Eingaben als Bitmaske pro Tick
   difficulty.py        Director-Vertrag (DifficultyParams) für den Schwierigkeitsgrad
-  adaptive_difficulty.py  Adaptiver Free-Director (Regelkern, noch nicht verdrahtet)
+  adaptive_difficulty.py  Adaptiver Schwierigkeits-Director des Free Mode
   mode_directors.py    Getrennte Director-Auswahl und Regelversion je Spielmodus
   headless.py          Simulation ohne Fenster abspielen (Tests, Replay-Prüfung)
   replay.py            Replay-Format, Recorder und Ablage (JSON)
@@ -126,12 +127,12 @@ git config core.hooksPath .githooks
   (Linux: `~/.local/share/meteorite-dash/`, Windows: `%APPDATA%`, macOS:
   `~/Library/Application Support`). `METEORITE_DASH_SAVE_DIR` überschreibt
   den Ordner.
-- `METEORITE_DASH_SEED=1234` startet jeden Lauf mit demselben Seed — gleiche
-  Eingaben ergeben dann exakt dieselbe Runde. Der Seed steht auch auf dem
-  Game-Over-Screen.
+- `METEORITE_DASH_SEED=1234` startet jeden freien Lauf mit demselben Seed —
+  gleiche Eingaben ergeben dann exakt dieselbe Runde. Der Seed steht auch auf
+  dem Game-Over-Screen.
 - Replays liegen unter `replays/` neben `progress.json`. Eine Datei an
   Freunde schicken und `uv run meteorite-dash --verify datei.json` beweist den
-  Lauf Tick für Tick. Liegt ein fremdes Replay im Ordner, erscheint es bei
-  gleichem Seed (`METEORITE_DASH_SEED`) als Ghost.
+  Lauf Tick für Tick.
 - Der Daily-Seed hängt am UTC-Datum; der Tagesrekord liegt als
-  `replays/daily-<datum>.json`.
+  `replays/daily-<datum>.json` und erscheint nur dort als Ghost. Der adaptive
+  Free Mode lädt bewusst keine Ghosts.

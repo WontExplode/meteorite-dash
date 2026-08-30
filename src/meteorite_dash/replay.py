@@ -1,9 +1,10 @@
 """Replays (Issue #34): Aufzeichnung, JSON-Format und Ablage.
 
-Ein Replay ist `RunConfig` + Eingabefolge (lauflängenkodiert) + Endzustand
-(`Snapshot`, `state_hash`). Mehr braucht es nicht: die Simulation ist
-deterministisch, also entsteht aus Seed und Eingaben derselbe Lauf — als Ghost,
-als Regressionstest oder zur Prüfung eines fremden Laufs (`headless.verify`).
+Ein Replay ist `RunConfig` + Director-Art/-Version + Eingabefolge
+(lauflängenkodiert) + Endzustand (`Snapshot`, `state_hash`). Mehr braucht es
+nicht: die Simulation ist deterministisch, also entsteht aus Seed, Strategie
+und Eingaben derselbe Lauf — als Ghost, als Regressionstest oder zur Prüfung
+eines fremden Laufs (`headless.verify`).
 
 Format: JSON, niemals `pickle`. `Replay.from_dict` parst defensiv wie
 `Progress.from_dict`: falsche Typen, unbekannte Schiffe/Zubehör oder kaputte
@@ -22,7 +23,13 @@ from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 
-from meteorite_dash.config import REPLAY_DIR_NAME, REPLAY_FORMAT_VERSION, SIM_VERSION
+from meteorite_dash.config import (
+    CONSTANT_DIRECTOR_VERSION,
+    REPLAY_DIR_NAME,
+    REPLAY_FORMAT_VERSION,
+    SIM_VERSION,
+)
+from meteorite_dash.difficulty import DirectorKind
 from meteorite_dash.inputs import InputFrame
 from meteorite_dash.persistence import default_save_dir
 from meteorite_dash.simulation import RunConfig, Simulation, Snapshot
@@ -59,6 +66,8 @@ class Replay:
     recorded_at: str = ""  # ISO-Datum (UTC)
     mode: RunMode = RunMode.FREE
     label: str = ""  # z. B. Daily-Datum
+    director_kind: DirectorKind = DirectorKind.CONSTANT
+    director_version: int = CONSTANT_DIRECTOR_VERSION
 
     @property
     def ticks(self) -> int:
@@ -87,6 +96,8 @@ class Replay:
             "recorded_at": self.recorded_at,
             "mode": self.mode.value,
             "label": self.label,
+            "director": self.director_kind.value,
+            "director_version": self.director_version,
             "config": {
                 "seed": self.config.seed,
                 "ship": self.config.ship,
@@ -132,6 +143,9 @@ class Replay:
             state_hash = _as_str(data["state_hash"])
             if not _HASH.match(state_hash):
                 return None
+            director_version = _as_int(data.get("director_version", CONSTANT_DIRECTOR_VERSION))
+            if director_version <= 0:
+                return None
             return cls(
                 config=config,
                 frames=frames,
@@ -141,6 +155,10 @@ class Replay:
                 recorded_at=_as_str(data.get("recorded_at", "")),
                 mode=RunMode(_as_str(data.get("mode", RunMode.FREE.value))),
                 label=_as_str(data.get("label", "")),
+                director_kind=DirectorKind(
+                    _as_str(data.get("director", DirectorKind.CONSTANT.value))
+                ),
+                director_version=director_version,
             )
         except (KeyError, TypeError, ValueError):
             return None
@@ -195,6 +213,8 @@ class Recorder:
     config: RunConfig
     mode: RunMode = RunMode.FREE
     label: str = ""
+    director_kind: DirectorKind = DirectorKind.CONSTANT
+    director_version: int = CONSTANT_DIRECTOR_VERSION
     _frames: list[list[int]] = field(default_factory=list)
 
     @property
@@ -221,6 +241,8 @@ class Recorder:
             recorded_at=datetime.now(UTC).date().isoformat(),
             mode=self.mode,
             label=self.label,
+            director_kind=self.director_kind,
+            director_version=self.director_version,
         )
 
 
@@ -269,12 +291,24 @@ class ReplayStore:
             return []
         return [replay for replay in (self._read(path) for path in paths) if replay is not None]
 
-    def best_for_seed(self, seed: int, *, sim_version: int = SIM_VERSION) -> Replay | None:
-        """Weitester gespeicherter Lauf mit diesem Seed — nur aus derselben Sim-Version."""
+    def best_for_seed(
+        self,
+        seed: int,
+        *,
+        sim_version: int = SIM_VERSION,
+        mode: RunMode | None = None,
+        director_kind: DirectorKind | None = None,
+        director_version: int | None = None,
+    ) -> Replay | None:
+        """Weitester kompatibler Lauf zum Seed; optionale Filter trennen Modi."""
         candidates = [
             replay
             for replay in self.all()
-            if replay.config.seed == seed and replay.sim_version == sim_version
+            if replay.config.seed == seed
+            and replay.sim_version == sim_version
+            and (mode is None or replay.mode is mode)
+            and (director_kind is None or replay.director_kind is director_kind)
+            and (director_version is None or replay.director_version == director_version)
         ]
         return max(candidates, key=lambda replay: replay.light_years, default=None)
 

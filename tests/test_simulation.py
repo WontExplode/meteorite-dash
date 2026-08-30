@@ -7,6 +7,7 @@ from collections.abc import Sequence
 import pygame
 import pytest
 
+from meteorite_dash.adaptive_difficulty import AdaptiveDirector
 from meteorite_dash.coins import Coin, CoinFormation
 from meteorite_dash.config import (
     AMMO_RESERVE_BONUS,
@@ -25,6 +26,8 @@ from meteorite_dash.entities import AmmoPickup, Meteorite
 from meteorite_dash.headless import Trace, run, scripted_inputs
 from meteorite_dash.inputs import InputFrame
 from meteorite_dash.mathutil import det_hypot, det_sin
+from meteorite_dash.mode_directors import director_for_mode
+from meteorite_dash.replay import RunMode
 from meteorite_dash.scenes.base import Transition
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.simulation import (
@@ -327,6 +330,20 @@ def test_director_keeps_replays_bit_identical() -> None:
     assert first.state_hash != _long_run(SEED, input_seed=3, ticks=2000).state_hash
 
 
+def test_state_hash_contains_stateful_director() -> None:
+    first_director = AdaptiveDirector()
+    second_director = AdaptiveDirector()
+    first = Simulation(RunConfig(SEED, "Allrounder"), director=first_director)
+    second = Simulation(RunConfig(SEED, "Allrounder"), director=second_director)
+    first.tick = second.tick = 1
+
+    first_director.params(first, random.Random(0))
+
+    assert first.snapshot() == second.snapshot()
+    assert first.difficulty == second.difficulty
+    assert first.state_hash() != second.state_hash()
+
+
 # --- Szene: fester Zeitschritt, Fensterunabhängigkeit ---------------------------------------
 
 
@@ -380,7 +397,11 @@ def test_scene_is_window_independent_and_matches_headless(context: GameContext) 
         context.apply_resize(size)
         hashes.add(_drive(GameScene(context, seed=SEED), ticks))
     assert len(hashes) == 1
-    headless = run(RunConfig(SEED, "Allrounder"), scripted_inputs(11, ticks))
+    headless = run(
+        RunConfig(SEED, "Allrounder"),
+        scripted_inputs(11, ticks),
+        director=director_for_mode(RunMode.FREE),
+    )
     assert hashes == {headless.state_hash}
 
 

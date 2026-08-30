@@ -29,6 +29,7 @@ def verify_command(path: Path) -> int:
     """Exit-Code 0 = bit-gleich nachgespielt, 1 = Abweichung oder unlesbar."""
     from meteorite_dash.config import SIM_VERSION
     from meteorite_dash.headless import format_trace, verify
+    from meteorite_dash.mode_directors import director_version_for_kind
     from meteorite_dash.replay import Replay
 
     try:
@@ -44,10 +45,13 @@ def verify_command(path: Path) -> int:
     print(format_trace(result.trace))
     print(
         f"seed={replay.config.seed} ship={replay.config.ship} ticks={replay.ticks} "
-        f"sim_version={replay.sim_version} (aktuell {SIM_VERSION})"
+        f"sim_version={replay.sim_version} (aktuell {SIM_VERSION}) "
+        f"director={replay.director_kind.value} "
+        f"director_version={replay.director_version} "
+        f"(aktuell {director_version_for_kind(replay.director_kind)})"
     )
     if not result.version_matches:
-        print("FAIL Replay stammt aus einer anderen Simulations-Version")
+        print("FAIL Replay stammt aus einer anderen Simulations- oder Director-Version")
         return 1
     if result.ok:
         print(f"PASS Endzustand und Hash identisch ({result.trace.state_hash[:16]})")
