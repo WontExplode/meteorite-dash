@@ -2,6 +2,7 @@ README.md
 pyproject.toml
 src/meteorite_dash/__init__.py
 src/meteorite_dash/accessories.py
+src/meteorite_dash/adaptive_difficulty.py
 src/meteorite_dash/app.py
 src/meteorite_dash/assets.py
 src/meteorite_dash/audio.py
@@ -79,6 +80,7 @@ src/meteorite_dash/scenes/main_menu.py
 src/meteorite_dash/scenes/ship_selection.py
 src/meteorite_dash/scenes/shop.py
 src/meteorite_dash/scenes/widgets.py
+tests/test_adaptive_difficulty.py
 tests/test_coins.py
 tests/test_daily.py
 tests/test_ghost.py

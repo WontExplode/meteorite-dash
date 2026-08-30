@@ -77,6 +77,11 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   (HP/Munition/Score/Münzen). `headless.run` spielt Eingabefolgen ohne Fenster
   ab, `state_hash()` beweist Gleichheit. Director-Vertrag (`difficulty.py`) für
   #32/#33 steht.
+- **Adaptiver Director-Regelkern** (Issue #33): `AdaptiveDirector`
+  (`adaptive_difficulty.py`) schätzt aus sicheren Passagen, schadensfreier Zeit,
+  Schaden, Near Misses, HP und Munition eine individuelle Belastungsgrenze.
+  Sein vollständiger Zustand ist über `state_key()` reproduzierbar. Die
+  produktive Verdrahtung ausschließlich in den Free Mode steht noch aus.
 - **Replays** (Issue #34): `Recorder` zeichnet jeden Lauf als `Replay`
   (`RunConfig` + Eingaben, RLE) auf; nach dem Tod landet er als `last.json` /
   `best.json` im `ReplayStore`. `headless.verify` spielt ein Replay nach und
@@ -97,8 +102,9 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Sammelbare Sterne** für Punkte (`StarField` ist nur Deko, nicht einsammelbar).
 - **Spezialwaffen-Pickups** (Loadout und Slot-Limit sind vorbereitet).
 - **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
-- **Steigende Schwierigkeit** über die Zeit (Vertrag in `difficulty.py`,
-  Umsetzung Issues #32/#33 — nicht Teil von #34).
+- **Produktive Schwierigkeitssteuerung:** Der adaptive Regelkern ist vorhanden,
+  wird aber noch nicht in den Free Mode injiziert. Die feste Daily-Zeitrampe
+  bleibt eine getrennte Aufgabe des zweiten Modus.
 - Server-Anbindung für Daily-Bestenlisten (Issue #34 „+ Server funktion“):
   Replay-Datei ist die Upload-Einheit, `headless.verify` die Prüfung.
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
@@ -260,10 +266,16 @@ Replays zu brechen:
   + Anwendung in `step`.
 - Erlaubte Eingaben: alles aus `SimulationView` (Tick, Spieler, Loadout,
   Entities, Münzen, Lightyears) und `rng`. Verboten: Wandzeit, FPS, Fenster,
-  `random` ohne Seed. Dann ist der Director automatisch replay-fähig
-  (Test-Muster: `test_director_keeps_replays_bit_identical`).
+  `random` ohne Seed. Zustandsbehaftete Implementierungen liefern zusätzlich
+  einen kanonischen `StatefulDirector.state_key()`; die Simulation muss ihn
+  bei der produktiven Verdrahtung in ihren Hash aufnehmen.
 - `ConstantDirector` ist der Platzhalter; Rampe (#32) und adaptiver Teil (#33)
   ersetzen ihn über `Simulation(director=…)` und erhöhen `SIM_VERSION`.
+- `AdaptiveDirector` lebt bewusst separat in `adaptive_difficulty.py`: sichere
+  Passagen und schadensfreies Spielen erhöhen `mastery`; Schaden und gehäufte
+  Near Misses erhöhen `stress`. Die Intensität steigt geglättet und fällt
+  schneller, mit Start-Schonzeit, Damage-Hold und Low-HP-Cap. Seine Parameter
+  stehen als `DIFFICULTY_*`-Konstanten in `config.py`.
 
 ### Replays (Issue #34)
 
@@ -510,8 +522,9 @@ Replays zu brechen:
   `projectiles.py`, Integration in `Simulation.step` (+ passender `EventKind`),
   Sound/HUD in `GameScene._on_event`.
 - **Director (#32/#33):** Klasse mit `params(sim, rng) -> DifficultyParams`
-  (Protokoll in `difficulty.py`), über `Simulation(director=…)` einhängen,
-  `SIM_VERSION` erhöhen, Replay-Test nach dem Muster
+  (Protokoll in `difficulty.py`), bei internem Zustand zusätzlich
+  `StatefulDirector.state_key()`, über `Simulation(director=…)` einhängen,
+  Replay-/Versionsauswirkung prüfen und mit einem Headless-Test nach dem Muster
   `test_director_keeps_replays_bit_identical`.
 - **Szene/Screen** (z. B. Game-Over, Issue #15): `Scene`-Subklasse +
   `Transition` + Verdrahtung in `App._create_scene`; Menüpunkte in

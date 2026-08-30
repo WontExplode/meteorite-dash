@@ -3,19 +3,22 @@
 Der Director selbst ist nicht Teil dieses Moduls — nur die Schnittstelle, an
 die er sich halten muss, damit Replays bit-gleich bleiben:
 
-- Er ist eine **reine Funktion aus Sim-Zustand und eigenem RNG-Stream**. Er liest
-  nie Wandzeit, FPS, Fenstergröße oder ungeseedeten Zufall.
+- Seine Entscheidungen hängen nur von Sim-Zustand, eigenem reproduzierbarem
+  Zustand und eigenem RNG-Stream ab. Er liest nie Wandzeit, FPS, Fenstergröße
+  oder ungeseedeten Zufall.
 - Er wird **jeden Tick** aus `Simulation.step` gefragt und liefert
   `DifficultyParams`; Kadenz ("nur alle N Ticks neu bewerten") zählt er selbst
   über `sim.tick`, nie über Sekunden Wandzeit.
 - Beinahe-Kollisionen, Munition, HP usw. liest er aus `SimulationView` — alles
   Zustand, der bei gleichen Eingaben identisch entsteht.
+- Ein zustandsbehafteter Director implementiert zusätzlich `StatefulDirector`,
+  damit sein Zustand in den Simulationshash aufgenommen werden kann.
 - Regeländerungen am Director sind Sim-Regeländerungen: `SIM_VERSION` erhöhen.
 """
 
 import random
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from meteorite_dash.entities import Entity
 from meteorite_dash.player import Player
@@ -52,6 +55,13 @@ class SimulationView(Protocol):
 class Director(Protocol):
     def params(self, sim: SimulationView, rng: random.Random) -> DifficultyParams:
         """Wird jeden Tick gerufen; `rng` ist der eigene Stream `<seed>:director`."""
+
+
+@runtime_checkable
+class StatefulDirector(Protocol):
+    """Optionaler vollständiger Zustand eines Directors für Replay-Hashes."""
+
+    def state_key(self) -> tuple[object, ...]: ...
 
 
 class ConstantDirector:
