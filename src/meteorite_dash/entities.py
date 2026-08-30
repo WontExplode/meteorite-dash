@@ -27,6 +27,7 @@ from meteorite_dash.config import (
     WAVE_FREQUENCY,
     Color,
 )
+from meteorite_dash.mathutil import det_sin
 from meteorite_dash.render import RenderContext
 
 
@@ -51,11 +52,22 @@ class Entity(ABC):
     def is_off_screen(self) -> bool:
         return self.rect.right < 0
 
-    def update(self, dt: float, player_y: int) -> None:
-        self._x -= self.speed_x * dt
+    def update(self, dt: float, player_y: int, speed_scale: float = 1.0) -> None:
+        """`speed_scale` kommt vom Schwierigkeits-Director (`DifficultyParams`)."""
+        self._x -= self.speed_x * speed_scale * dt
         self._update_vertical(dt, player_y)
         self.rect.x = round(self._x)
         self.rect.y = round(self._y)
+
+    def state_key(self) -> tuple[object, ...]:
+        """Kanonischer Zustand für den Simulations-Hash (Floats als Hex, verlustfrei)."""
+        return (
+            type(self).__name__,
+            tuple(self.rect),
+            self._x.hex(),
+            self._y.hex(),
+            self.speed_x.hex(),
+        )
 
     def _update_vertical(self, dt: float, player_y: int) -> None:  # noqa: B027  (optional hook)
         """Standard: keine vertikale Bewegung; Subklassen überschreiben dies."""
@@ -83,6 +95,9 @@ class DamageableEntity(Entity):
         self.hp -= amount
         return self.hp <= 0
 
+    def state_key(self) -> tuple[object, ...]:
+        return (*super().state_key(), self.hp, self.contact_damage)
+
 
 class Meteorite(DamageableEntity):
     def __init__(
@@ -97,6 +112,9 @@ class Meteorite(DamageableEntity):
         super().__init__(rect, speed_x, hp=hp, contact_damage=contact_damage)
         # Nur der Dateiname: die Surface holt der RenderContext in Fenstergröße.
         self.image_name = image_name
+
+    def state_key(self) -> tuple[object, ...]:
+        return (*super().state_key(), self.image_name)
 
     def draw(self, ctx: RenderContext) -> None:
         target = ctx.rect(self.rect)
@@ -128,9 +146,12 @@ class WaveEnemy(DamageableEntity):
 
     def _update_vertical(self, dt: float, player_y: int) -> None:
         self._elapsed += dt
-        self._y = self._base_y + self._amplitude * math.sin(
+        self._y = self._base_y + self._amplitude * det_sin(
             2 * math.pi * self._frequency * self._elapsed
         )
+
+    def state_key(self) -> tuple[object, ...]:
+        return (*super().state_key(), self._elapsed.hex())
 
     def draw(self, ctx: RenderContext) -> None:
         _draw_left_triangle(ctx.surface, ctx.rect(self.rect), WAVE_ENEMY_COLOR)

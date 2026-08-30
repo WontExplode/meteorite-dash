@@ -28,6 +28,7 @@ from meteorite_dash.entities import (
     spawn_ammo_pickup,
     spawn_meteorite,
 )
+from meteorite_dash.inputs import InputFrame, from_pressed
 from meteorite_dash.player import Player
 from meteorite_dash.projectiles import Projectile, spawn_projectile
 from meteorite_dash.render import RenderContext
@@ -234,17 +235,17 @@ def test_ship_spec_rejects_invalid_values() -> None:
 def test_player_accelerates_under_thrust() -> None:
     player = _player(300)
 
-    player.update(0.1, FakeKeys({pygame.K_UP}))
+    player.update(0.1, InputFrame.UP)
     assert player.velocity < 0
     assert player.rect.y < 300
 
 
 def test_player_drifts_after_release() -> None:
     player = _player(300)
-    player.update(0.1, FakeKeys({pygame.K_UP}))
+    player.update(0.1, InputFrame.UP)
     y_after_thrust = player.rect.y
 
-    player.update(0.1, FakeKeys(set()))
+    player.update(0.1, InputFrame.NONE)
     assert player.velocity < 0  # Trägheit: ohne Schub noch in Bewegung
     assert player.rect.y < y_after_thrust
 
@@ -253,15 +254,15 @@ def test_heavier_ship_accelerates_slower() -> None:
     light = _player(300, _spec(mass=0.5))
     heavy = _player(300, _spec(mass=2.5))
 
-    light.update(0.1, FakeKeys({pygame.K_DOWN}))
-    heavy.update(0.1, FakeKeys({pygame.K_DOWN}))
+    light.update(0.1, InputFrame.DOWN)
+    heavy.update(0.1, InputFrame.DOWN)
     assert light.velocity > heavy.velocity > 0
 
 
 def test_player_stops_at_top() -> None:
     player = _player(5)
 
-    player.update(0.5, FakeKeys({pygame.K_UP}))
+    player.update(0.5, InputFrame.UP)
     assert player.rect.y == 0
     assert player.velocity == 0
 
@@ -269,7 +270,7 @@ def test_player_stops_at_top() -> None:
 def test_player_stops_at_bottom() -> None:
     player = _player(600 - 64 - 5)
 
-    player.update(0.5, FakeKeys({pygame.K_DOWN}))
+    player.update(0.5, InputFrame.DOWN)
     assert player.rect.y == 600 - 64
     assert player.velocity == 0
 
@@ -420,36 +421,42 @@ def test_spawner_skips_spawn_after_max_attempts() -> None:
 
 def test_game_scene_collision_opens_death_screen(context: GameContext) -> None:
     scene = GameScene(context)
-    scene.score.light_years = 42.0
-    scene.entities.append(_meteorite(scene.player.rect.copy(), speed_x=0.0, contact_damage=999))
-    scene.update(0.016)
+    scene.sim.score.light_years = 42.0
+    scene.sim.entities.append(
+        _meteorite(scene.sim.player.rect.copy(), speed_x=0.0, contact_damage=999)
+    )
+    scene.step(InputFrame.NONE)
     assert scene._transition is Transition.DEATH_SCREEN
     assert context.state.final_light_years > 42.0
 
 
-def test_game_scene_collision_reduces_hp_before_death(
-    context: GameContext,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys(set()))
+def test_game_scene_collision_reduces_hp_before_death(context: GameContext) -> None:
     scene = GameScene(context)
-    scene.entities.append(_meteorite(scene.player.rect.copy(), speed_x=0.0, contact_damage=30))
-    scene.update(0.016)
+    scene.sim.entities.append(
+        _meteorite(scene.sim.player.rect.copy(), speed_x=0.0, contact_damage=30)
+    )
+    scene.step(InputFrame.NONE)
     assert scene._transition is None
-    assert scene.player.hp == scene.player.max_hp - 30
+    assert scene.sim.player.hp == scene.sim.player.max_hp - 30
 
 
 def test_game_scene_removes_off_screen_entities(context: GameContext) -> None:
     scene = GameScene(context)
-    scene.entities.append(_meteorite(pygame.Rect(-100, 300, 44, 44), speed_x=0.0))
-    scene.update(0.016)
-    assert scene.entities == []
+    scene.sim.entities.append(_meteorite(pygame.Rect(-100, 300, 44, 44), speed_x=0.0))
+    scene.step(InputFrame.NONE)
+    assert scene.sim.entities == []
 
 
 def test_game_scene_updates_score(context: GameContext) -> None:
     scene = GameScene(context)
     scene.update(0.5)
-    assert scene.score.light_years > 0
+    assert scene.sim.score.light_years > 0
+
+
+def test_from_pressed_maps_held_keys() -> None:
+    assert from_pressed(FakeKeys({pygame.K_UP, pygame.K_SPACE})) == InputFrame.UP | InputFrame.FIRE
+    assert from_pressed(FakeKeys({pygame.K_DOWN})) == InputFrame.DOWN
+    assert from_pressed(FakeKeys(set())) == InputFrame.NONE
 
 
 def test_weapon_loadout_starts_with_full_standard_ammo() -> None:
@@ -554,30 +561,20 @@ def test_spawn_ammo_pickup_uses_reference_size() -> None:
     assert pickup.rect.left == 800
 
 
-def test_game_scene_fires_projectile(
-    context: GameContext,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys({pygame.K_SPACE}))
+def test_game_scene_fires_projectile(context: GameContext) -> None:
     scene = GameScene(context)
-    # Spawner stumm: ein zufällig gespawnter Meteorit könnte das Projektil verbrauchen.
-    monkeypatch.setattr(scene.spawner, "update", lambda dt, accept=None: [])
-    scene.update(1.0)
-    assert len(scene.projectiles) == 1
-    assert scene.loadout.active.ammo == STANDARD_WEAPON.max_ammo - 1
+    scene.step(InputFrame.FIRE)
+    assert len(scene.sim.projectiles) == 1
+    assert scene.sim.loadout.active.ammo == STANDARD_WEAPON.max_ammo - 1
 
 
-def test_game_scene_ammo_pickup_refills_standard(
-    context: GameContext,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys(set()))
+def test_game_scene_ammo_pickup_refills_standard(context: GameContext) -> None:
     scene = GameScene(context)
-    scene.loadout.fire()
-    scene.loadout.fire()
-    scene.entities.append(AmmoPickup(scene.player.rect.copy(), speed_x=0.0))
-    scene.update(0.016)
-    assert scene.loadout.active.ammo == STANDARD_WEAPON.max_ammo
+    scene.sim.loadout.fire()
+    scene.sim.loadout.fire()
+    scene.sim.entities.append(AmmoPickup(scene.sim.player.rect.copy(), speed_x=0.0))
+    scene.step(InputFrame.NONE)
+    assert scene.sim.loadout.active.ammo == STANDARD_WEAPON.max_ammo
 
 
 def test_player_starts_with_ship_hp() -> None:
@@ -654,19 +651,14 @@ def test_game_scene_plays_weapon_sound_on_shot(
         "play_sound_effect",
         lambda filename: played.append(filename),
     )
-    monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys({pygame.K_SPACE}))
     scene = GameScene(context)
-    scene.update(1.0)
+    scene.step(InputFrame.FIRE)
     assert played == ["standard-gun.mp3"]
 
 
-def test_game_scene_projectile_destroys_meteorite(
-    context: GameContext,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys({pygame.K_SPACE}))
+def test_game_scene_projectile_destroys_meteorite(context: GameContext) -> None:
     scene = GameScene(context)
-    scene.entities.append(_meteorite(pygame.Rect(110, 120, 44, 44), hp=10))
-    scene.update(0.016)
-    assert scene.entities == []
-    assert scene.projectiles == []
+    scene.sim.entities.append(_meteorite(pygame.Rect(110, 120, 44, 44), hp=10))
+    scene.step(InputFrame.FIRE)
+    assert scene.sim.entities == []
+    assert scene.sim.projectiles == []

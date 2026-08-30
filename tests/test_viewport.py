@@ -143,17 +143,17 @@ def test_spawn_factories_work_in_reference_space() -> None:
 def test_game_scene_simulation_ignores_window_size(context: GameContext) -> None:
     context.apply_resize((1600, 1200))  # scale == 2.0
     scene = GameScene(context)
-    assert scene.player.rect.size == PLAYER_SIZE
-    assert scene.player.rect.topleft == (50, 100)
-    assert scene.spawner.area == REFERENCE_SIZE
+    assert scene.sim.player.rect.size == PLAYER_SIZE
+    assert scene.sim.player.rect.topleft == (50, 100)
+    assert scene.sim.spawner.area == REFERENCE_SIZE
 
     # Erst der RenderContext skaliert; die Szene selbst kennt keine Fensterpixel.
     ctx = RenderContext(context.screen, context.viewport)
-    assert ctx.rect(scene.player.rect) == pygame.Rect(100, 200, 128, 128)
+    assert ctx.rect(scene.sim.player.rect) == pygame.Rect(100, 200, 128, 128)
 
     # Resize während des Laufs lässt die Simulation unberührt.
-    scene.player.set_vertical_position(500)
+    scene.sim.player.set_vertical_position(500)
     context.apply_resize((800, 600))
     scene.on_resize((800, 600))
-    assert scene.player.rect.y == 500
+    assert scene.sim.player.rect.y == 500
     scene.draw()

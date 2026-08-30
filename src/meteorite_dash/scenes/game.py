@@ -1,94 +1,59 @@
-import functools
-import random
-
 import pygame
 
-from meteorite_dash.accessories import AccessoryKind
 from meteorite_dash.audio import GAME_MUSIC_ENDED
-from meteorite_dash.coins import CoinFormation, coin_rects, is_clear, spawn_coin_formation
-from meteorite_dash.combat import absorb_contact, apply_contact_damage, resolve_projectile_hits
 from meteorite_dash.config import (
-    AMMO_PICKUP_WEIGHT,
-    AMMO_RESERVE_BONUS,
-    ARMOR_HP_BONUS,
     BACKGROUND_COLOR,
     COIN_BONUS_NOTICE_SECONDS,
     COIN_BONUS_TOP_RIGHT,
     COIN_COLOR,
-    COIN_HAZARD_CLEARANCE,
-    COIN_PATTERNS,
-    COIN_SPAWN_INTERVAL_RANGE,
     COINS_TOP_RIGHT,
     HP_HUD_TOP_LEFT,
-    HUNTER_ENEMY_WEIGHT,
-    MAGNET_PULL_SPEED,
-    MAGNET_RADIUS,
-    METEORITE_WEIGHT,
-    PLAYER_START_POSITION,
-    REFERENCE_SIZE,
+    MAX_STEPS_PER_FRAME,
     SCORE_ALPHA,
     SCORE_FONT_SIZE,
-    SCORE_LIGHT_YEARS_PER_SECOND,
     SCORE_TOP_RIGHT,
-    SHIELD_CHARGES,
     SHIELD_HUD_COLOR,
     SHIELD_HUD_TOP_LEFT,
-    SPAWN_INTERVAL_RANGE,
+    SIM_DT,
     TEXT_COLOR,
-    WAVE_ENEMY_WEIGHT,
     WEAPON_HUD_FONT_SIZE,
     WEAPON_HUD_TOP_LEFT,
 )
 from meteorite_dash.context import GameContext
-from meteorite_dash.entities import (
-    Entity,
-    collect_pickups,
-    spawn_ammo_pickup,
-    spawn_hunter_enemy,
-    spawn_meteorite,
-    spawn_wave_enemy,
-)
-from meteorite_dash.player import KeyStates, Player
-from meteorite_dash.projectiles import Projectile, spawn_projectile
+from meteorite_dash.inputs import InputFrame, from_pressed
 from meteorite_dash.render import RenderContext
 from meteorite_dash.scenes.base import Scene, Transition
-from meteorite_dash.score import DistanceScore, format_coins
-from meteorite_dash.spawner import SpawnEntry, Spawner
-from meteorite_dash.weapons import WeaponLoadout
+from meteorite_dash.score import format_coins
+from meteorite_dash.simulation import EventKind, RunConfig, SimEvent, Simulation, pick_seed
 
-# Spawn-Tabellen sind fensterunabhängig: alle Fabriken arbeiten im Referenzraum.
-SPAWN_TABLE: tuple[SpawnEntry[Entity], ...] = (
-    SpawnEntry(METEORITE_WEIGHT, spawn_meteorite),
-    SpawnEntry(WAVE_ENEMY_WEIGHT, spawn_wave_enemy),
-    SpawnEntry(HUNTER_ENEMY_WEIGHT, spawn_hunter_enemy),
-    SpawnEntry(AMMO_PICKUP_WEIGHT, spawn_ammo_pickup),
-)
-COIN_TABLE: tuple[SpawnEntry[CoinFormation], ...] = tuple(
-    SpawnEntry(pattern.weight, functools.partial(spawn_coin_formation, pattern=pattern))
-    for pattern in COIN_PATTERNS
-)
+# Float-Akkumulator: knapp unter SIM_DT zählt noch als voller Tick, sonst frisst
+# Rundung bei exakten Vielfachen einen Schritt.
+_STEP_EPSILON = 1e-9
 
 
 class GameScene(Scene):
-    """Spiel-Loop. Die Spiellogik läuft im Referenzraum (`REFERENCE_SIZE`);
-    Fenstergröße und Vollbild betreffen nur das Zeichnen über den `RenderContext`."""
+    """Spiel-Loop um die deterministische `Simulation`.
 
-    def __init__(self, context: GameContext) -> None:
+    Die Szene macht nur drei Dinge: Wandzeit in feste Ticks umrechnen, Tastatur
+    in `InputFrame`s übersetzen und den Zustand über den `RenderContext`
+    zeichnen. Spielregeln leben in `simulation.py`.
+    """
+
+    def __init__(self, context: GameContext, *, seed: int | None = None) -> None:
         super().__init__(context)
-        self.entities: list[Entity] = []
-        self.projectiles: list[Projectile] = []
-        # Münzen leben getrennt von `entities`: Berührung sammelt ein, schadet nicht.
-        self.formations: list[CoinFormation] = []
-        self.coins_collected = 0
-        self.score = DistanceScore(SCORE_LIGHT_YEARS_PER_SECOND)
-        self.loadout: WeaponLoadout
-        self._shoot_cooldown = 0.0
-        # Zubehör-Effekte (Issue #14), gesetzt in `_build` aus dem Fortschritt.
-        self.shield_charges = 0
-        self.magnet_enabled = False
+        self.seed = seed if seed is not None else pick_seed()
+        self.sim = Simulation(self.run_config(self.seed))
+        self._accumulator = 0.0
+        # Flanken (Waffenwechsel) aus Events, bis zum nächsten Tick gesammelt.
+        self._pending = InputFrame.NONE
         self._bonus_notice = ""
         self._bonus_notice_ttl = 0.0
-        self._build()
+
+    def run_config(self, seed: int) -> RunConfig:
+        state = self.context.state
+        spec = state.selected_ship
+        equipped = tuple(acc.id for acc in state.progress.equipped_accessories(spec))
+        return RunConfig(seed, spec.name, equipped)
 
     def ship_image(self, size: tuple[int, int]) -> pygame.Surface:
         """Schiffssprite in Fenstergröße (gecacht), mit der gewählten Färbung."""
@@ -96,28 +61,13 @@ class GameScene(Scene):
         tint = self.context.state.progress.ship_tint(spec)
         return self.context.assets.load_ship(spec.sprite, size, tint)
 
-    def _build(self) -> None:
-        spec = self.context.state.selected_ship
-        equipped = {acc.kind for acc in self.context.state.progress.equipped_accessories(spec)}
-        extra_hp = ARMOR_HP_BONUS if AccessoryKind.ARMOR in equipped else 0
-        self.player = Player(PLAYER_START_POSITION, spec, extra_hp=extra_hp)
-        ammo_bonus = AMMO_RESERVE_BONUS if AccessoryKind.AMMO_RESERVE in equipped else 0
-        self.loadout = WeaponLoadout(spec.weapon_slots, standard_ammo_bonus=ammo_bonus)
-        self.shield_charges = SHIELD_CHARGES if AccessoryKind.SHIELD in equipped else 0
-        self.magnet_enabled = AccessoryKind.MAGNET in equipped
-        self.projectiles = []
-        self._shoot_cooldown = 0.0
-        rng = random.Random()
-        self.spawner = Spawner(SPAWN_TABLE, REFERENCE_SIZE, rng, SPAWN_INTERVAL_RANGE)
-        self.coin_spawner = Spawner(COIN_TABLE, REFERENCE_SIZE, rng, COIN_SPAWN_INTERVAL_RANGE)
-
     def on_enter(self) -> None:
         self.context.music.start_game_playlist()
 
     def on_exit(self) -> None:
         self.context.music.stop()
         # Guthaben auch bei Abbruch (Escape) gutschreiben und sichern.
-        self.context.state.progress.add_coins(self.coins_collected)
+        self.context.state.progress.add_coins(self.sim.coins_collected)
         self.context.save_progress()
 
     def handle_event(self, event: pygame.event.Event) -> None:
@@ -127,91 +77,57 @@ class GameScene(Scene):
             if event.key == pygame.K_ESCAPE:
                 self.finish(Transition.MAIN_MENU)
             elif event.key == pygame.K_r:
-                self.loadout.cycle_weapon()
+                self._pending |= InputFrame.SWAP_WEAPON
 
     def update(self, dt: float) -> None:
-        keys = pygame.key.get_pressed()
-        self.player.update(dt, keys)
+        # Deko läuft mit Wandzeit; nur die Simulation tickt fest.
         self.context.starfield.update(dt)
-        self.score.update(dt)
-        self._update_shooting(dt, keys)
-
-        self.entities.extend(self.spawner.update(dt, accept=self._accept_entity))
-        player_y = self.player.rect.centery
-        for entity in self.entities:
-            entity.update(dt, player_y)
-        self.entities = [entity for entity in self.entities if not entity.is_off_screen]
-
-        for projectile in self.projectiles:
-            projectile.update(dt)
-        self.projectiles = [p for p in self.projectiles if not p.is_off_screen]
-
-        if collect_pickups(self.player.rect, self.entities):
-            self.loadout.refill_standard()
-
-        self._update_coins(dt, player_y)
-
-        resolve_projectile_hits(self.projectiles, self.entities)
-
-        if self.shield_charges > 0 and absorb_contact(self.player.rect, self.entities):
-            self.shield_charges -= 1
-        else:
-            self.player.hp = apply_contact_damage(self.player.rect, self.player.hp, self.entities)
-        if self.player.hp <= 0:
-            self.context.state.final_light_years = self.score.light_years
-            self.context.state.final_coins = self.coins_collected
-            self.finish(Transition.DEATH_SCREEN)
-
-    def _update_shooting(self, dt: float, keys: KeyStates) -> None:
-        self._shoot_cooldown = max(0.0, self._shoot_cooldown - dt)
-        if not keys[pygame.K_SPACE] or self._shoot_cooldown > 0.0:
-            return
-        fired_spec = self.loadout.active.spec
-        if not self.loadout.fire():
-            return
-        self.projectiles.append(spawn_projectile(self.player, damage=fired_spec.damage))
-        self._shoot_cooldown = fired_spec.fire_cooldown
-        if fired_spec.sound is not None:
-            self.context.music.play_sound_effect(fired_spec.sound)
-
-    def _hazard_rects(self) -> list[pygame.Rect]:
-        return [entity.rect for entity in self.entities if entity.damages_player]
-
-    def _accept_entity(self, entity: Entity) -> bool:
-        """Gefahren spawnen nicht in ein Münz-Muster: gleich schnell → sonst dauerhaft verdeckt."""
-        if not entity.damages_player:
-            return True
-        return is_clear([entity.rect], coin_rects(self.formations), COIN_HAZARD_CLEARANCE)
-
-    def _accept_formation(self, formation: CoinFormation) -> bool:
-        return is_clear(coin_rects([formation]), self._hazard_rects(), COIN_HAZARD_CLEARANCE)
-
-    def _update_coins(self, dt: float, player_y: int) -> None:
-        self.formations.extend(self.coin_spawner.update(dt, accept=self._accept_formation))
-        for formation in self.formations:
-            formation.update(dt, player_y)
-            if self.magnet_enabled:
-                formation.attract(self.player.rect.center, MAGNET_RADIUS, MAGNET_PULL_SPEED * dt)
-            pickup = formation.collect(self.player.rect)
-            self.coins_collected += pickup.total
-            if pickup.bonus:
-                self._bonus_notice = f"BONUS +{pickup.bonus}"
-                self._bonus_notice_ttl = COIN_BONUS_NOTICE_SECONDS
-        self.formations = [f for f in self.formations if not f.is_finished]
         self._bonus_notice_ttl = max(0.0, self._bonus_notice_ttl - dt)
+
+        held = from_pressed(pygame.key.get_pressed())
+        self._accumulator += dt
+        steps = 0
+        while self._accumulator >= SIM_DT - _STEP_EPSILON and steps < MAX_STEPS_PER_FRAME:
+            self._accumulator -= SIM_DT
+            steps += 1
+            self.step(held | self._pending)
+            self._pending = InputFrame.NONE
+            if self.sim.is_over:
+                break
+        if steps >= MAX_STEPS_PER_FRAME:
+            # Hänger: Rest verfällt, statt in einer Todesspirale aufzuholen.
+            self._accumulator = 0.0
+
+    def step(self, inputs: InputFrame) -> list[SimEvent]:
+        """Genau ein Simulations-Tick plus Reaktion der Szene auf die Events."""
+        events = self.sim.step(inputs)
+        for event in events:
+            self._on_event(event)
+        return events
+
+    def _on_event(self, event: SimEvent) -> None:
+        if event.kind is EventKind.FIRED and event.sound is not None:
+            self.context.music.play_sound_effect(event.sound)
+        elif event.kind is EventKind.COIN_BONUS:
+            self._bonus_notice = f"BONUS +{event.value}"
+            self._bonus_notice_ttl = COIN_BONUS_NOTICE_SECONDS
+        elif event.kind is EventKind.DEATH:
+            self.context.state.final_light_years = self.sim.light_years
+            self.context.state.final_coins = self.sim.coins_collected
+            self.finish(Transition.DEATH_SCREEN)
 
     def draw(self) -> None:
         screen = self.context.screen
         ctx = RenderContext(screen, self.context.viewport, self.context.assets)
         screen.fill(BACKGROUND_COLOR)
         self.context.starfield.draw(screen)
-        for entity in self.entities:
+        for entity in self.sim.entities:
             entity.draw(ctx)
         # Münzen über den Gefahren: Collectibles bleiben sichtbar, auch wenn ein
         # langsamerer Gegner kurz überholt wird.
-        for formation in self.formations:
+        for formation in self.sim.formations:
             formation.draw(ctx)
-        for projectile in self.projectiles:
+        for projectile in self.sim.projectiles:
             projectile.draw(ctx)
         self._draw_player(ctx)
         self._draw_weapon_hud()
@@ -221,30 +137,30 @@ class GameScene(Scene):
         pygame.display.flip()
 
     def _draw_player(self, ctx: RenderContext) -> None:
-        target = ctx.rect(self.player.rect)
+        target = ctx.rect(self.sim.player.rect)
         ctx.surface.blit(self.ship_image(target.size), target)
 
     def _draw_shield_hud(self) -> None:
-        if self.shield_charges <= 0:
+        if self.sim.shield_charges <= 0:
             return
         vp = self.context.viewport
         font = vp.font(WEAPON_HUD_FONT_SIZE)
-        text = font.render(f"SCHILD x{self.shield_charges}", True, SHIELD_HUD_COLOR)
+        text = font.render(f"SCHILD x{self.sim.shield_charges}", True, SHIELD_HUD_COLOR)
         text.set_alpha(SCORE_ALPHA)
         self.context.screen.blit(text, text.get_rect(topleft=vp.point(*SHIELD_HUD_TOP_LEFT)))
 
     def _draw_hp_hud(self) -> None:
         vp = self.context.viewport
         font = vp.font(WEAPON_HUD_FONT_SIZE)
-        hp_text = font.render(f"HP {self.player.hp}/{self.player.max_hp}", True, TEXT_COLOR)
+        player = self.sim.player
+        hp_text = font.render(f"HP {player.hp}/{player.max_hp}", True, TEXT_COLOR)
         hp_text.set_alpha(SCORE_ALPHA)
-        hp_rect = hp_text.get_rect(topleft=vp.point(*HP_HUD_TOP_LEFT))
-        self.context.screen.blit(hp_text, hp_rect)
+        self.context.screen.blit(hp_text, hp_text.get_rect(topleft=vp.point(*HP_HUD_TOP_LEFT)))
 
     def _draw_weapon_hud(self) -> None:
         vp = self.context.viewport
         font = vp.font(WEAPON_HUD_FONT_SIZE)
-        active = self.loadout.active
+        active = self.sim.loadout.active
         weapon_text = font.render(
             f"{active.spec.name} {active.ammo}/{active.spec.max_ammo}",
             True,
@@ -258,13 +174,15 @@ class GameScene(Scene):
         vp = self.context.viewport
         font = vp.font(SCORE_FONT_SIZE)
 
-        score_text = font.render(f"LIGHTYRS {self.score.formatted()}", True, TEXT_COLOR)
+        score_text = font.render(f"LIGHTYRS {self.sim.score.formatted()}", True, TEXT_COLOR)
         score_text.set_alpha(SCORE_ALPHA)
         self.context.screen.blit(
             score_text, score_text.get_rect(topright=vp.point(*SCORE_TOP_RIGHT))
         )
 
-        coins_text = font.render(f"COINS {format_coins(self.coins_collected)}", True, COIN_COLOR)
+        coins_text = font.render(
+            f"COINS {format_coins(self.sim.coins_collected)}", True, COIN_COLOR
+        )
         coins_text.set_alpha(SCORE_ALPHA)
         self.context.screen.blit(
             coins_text, coins_text.get_rect(topright=vp.point(*COINS_TOP_RIGHT))

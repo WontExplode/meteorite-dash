@@ -102,6 +102,12 @@ class WeaponLoadout:
         self._weapons.append(WeaponInstance(spec, spec.max_ammo))
         return True
 
+    def state_key(self) -> tuple[object, ...]:
+        return (
+            self.active_index,
+            tuple((weapon.spec.kind.value, weapon.ammo) for weapon in self._weapons),
+        )
+
     def _remove_active(self) -> None:
         if self.active.spec.permanent:
             return

@@ -1,14 +1,8 @@
-from typing import Protocol
-
 import pygame
 
 from meteorite_dash.config import DRAG, PLAYER_SIZE, REFERENCE_SIZE
+from meteorite_dash.inputs import InputFrame
 from meteorite_dash.ships import ShipSpec
-
-
-class KeyStates(Protocol):
-    def __getitem__(self, key: int) -> bool:
-        pass
 
 
 class Player:
@@ -35,11 +29,11 @@ class Player:
         self.velocity = 0.0  # px/s, vertikal; negativ = aufwärts
         self._y = float(position[1])  # Float-Position für verlustfreies Integrieren
 
-    def update(self, dt: float, keys: KeyStates) -> None:
+    def update(self, dt: float, inputs: InputFrame) -> None:
         direction = 0
-        if keys[pygame.K_UP]:
+        if InputFrame.UP in inputs:
             direction -= 1
-        if keys[pygame.K_DOWN]:
+        if InputFrame.DOWN in inputs:
             direction += 1
 
         # Linearer Widerstand: F = direction * thrust - DRAG * v, dann a = F / m.
@@ -62,3 +56,7 @@ class Player:
         Rect synchron."""
         self._y = float(y)
         self.rect.y = round(self._y)
+
+    def state_key(self) -> tuple[object, ...]:
+        """Kanonischer Zustand für den Simulations-Hash (Floats als Hex, verlustfrei)."""
+        return (tuple(self.rect), self._y.hex(), self.velocity.hex(), self.hp, self.max_hp)

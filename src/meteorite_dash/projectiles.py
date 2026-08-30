@@ -30,6 +30,9 @@ class Projectile:
     def draw(self, ctx: RenderContext) -> None:
         pygame.draw.rect(ctx.surface, PROJECTILE_COLOR, ctx.rect(self.rect))
 
+    def state_key(self) -> tuple[object, ...]:
+        return (tuple(self.rect), self._x.hex(), self.speed_x.hex(), self.damage)
+
 
 def spawn_projectile(player: Player, *, damage: int) -> Projectile:
     width, height = PROJECTILE_SIZE

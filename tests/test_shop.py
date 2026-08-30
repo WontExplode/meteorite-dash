@@ -19,6 +19,7 @@ from meteorite_dash.config import (
 )
 from meteorite_dash.context import GameContext
 from meteorite_dash.entities import Entity, Meteorite
+from meteorite_dash.inputs import InputFrame
 from meteorite_dash.persistence import SaveStore
 from meteorite_dash.player import Player
 from meteorite_dash.progress import Progress
@@ -40,14 +41,6 @@ MAGNET = ACCESSORIES_BY_ID["magnet"]
 ARMOR = ACCESSORIES_BY_ID["armor"]
 AMMO_RESERVE = ACCESSORIES_BY_ID["ammo_reserve"]
 GOLD = TINTS_BY_ID["gold"]
-
-
-class FakeKeys:
-    def __init__(self, pressed: set[int]) -> None:
-        self._pressed = pressed
-
-    def __getitem__(self, key: int) -> bool:
-        return key in self._pressed
 
 
 def _keydown(key: int) -> pygame.event.Event:
@@ -383,52 +376,50 @@ def _equip(context: GameContext, *ids: str) -> None:
 
 def test_game_scene_without_accessories_uses_base_values(context: GameContext) -> None:
     scene = GameScene(context)
-    assert scene.player.max_hp == ALLROUNDER.hp
-    assert scene.loadout.active.ammo == STANDARD_WEAPON_MAX_AMMO
-    assert scene.shield_charges == 0
-    assert scene.magnet_enabled is False
+    assert scene.sim.player.max_hp == ALLROUNDER.hp
+    assert scene.sim.loadout.active.ammo == STANDARD_WEAPON_MAX_AMMO
+    assert scene.sim.shield_charges == 0
+    assert scene.sim.magnet_enabled is False
 
 
 def test_game_scene_applies_armor_and_ammo_reserve(context: GameContext) -> None:
     _equip(context, ARMOR.id, AMMO_RESERVE.id)
     scene = GameScene(context)
-    assert scene.player.max_hp == BRAWLER.hp + ARMOR_HP_BONUS
-    assert scene.loadout.active.ammo == STANDARD_WEAPON_MAX_AMMO + AMMO_RESERVE_BONUS
+    assert scene.sim.player.max_hp == BRAWLER.hp + ARMOR_HP_BONUS
+    assert scene.sim.loadout.active.ammo == STANDARD_WEAPON_MAX_AMMO + AMMO_RESERVE_BONUS
 
 
-def test_game_scene_shield_blocks_first_hit(
-    context: GameContext, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys(set()))
+def test_game_scene_shield_blocks_first_hit(context: GameContext) -> None:
     _equip(context, SHIELD.id)
     scene = GameScene(context)
-    assert scene.shield_charges == SHIELD_CHARGES
+    assert scene.sim.shield_charges == SHIELD_CHARGES
 
-    scene.entities.append(Meteorite(scene.player.rect.copy(), 0.0, hp=10, contact_damage=40))
-    scene.update(0.016)
-    assert scene.player.hp == scene.player.max_hp
-    assert scene.entities == []
-    assert scene.shield_charges == SHIELD_CHARGES - 1
+    scene.sim.entities.append(
+        Meteorite(scene.sim.player.rect.copy(), 0.0, hp=10, contact_damage=40)
+    )
+    scene.step(InputFrame.NONE)
+    assert scene.sim.player.hp == scene.sim.player.max_hp
+    assert scene.sim.entities == []
+    assert scene.sim.shield_charges == SHIELD_CHARGES - 1
 
-    scene.shield_charges = 0
-    scene.entities.append(Meteorite(scene.player.rect.copy(), 0.0, hp=10, contact_damage=40))
-    scene.update(0.016)
-    assert scene.player.hp == scene.player.max_hp - 40
+    scene.sim.shield_charges = 0
+    scene.sim.entities.append(
+        Meteorite(scene.sim.player.rect.copy(), 0.0, hp=10, contact_damage=40)
+    )
+    scene.step(InputFrame.NONE)
+    assert scene.sim.player.hp == scene.sim.player.max_hp - 40
     scene.draw()
 
 
-def test_game_scene_magnet_pulls_nearby_coins(
-    context: GameContext, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys(set()))
+def test_game_scene_magnet_pulls_nearby_coins(context: GameContext) -> None:
     _equip(context, MAGNET.id)
     scene = GameScene(context)
-    assert scene.magnet_enabled
-    player_center = scene.player.rect.center
+    assert scene.sim.magnet_enabled
+    player_center = scene.sim.player.rect.center
     coin = _coin(player_center[0] + 90, player_center[1] - COIN_RADIUS)
-    scene.formations.append(CoinFormation([coin], bonus=0))
+    scene.sim.formations.append(CoinFormation([coin], bonus=0))
     start_x = coin.rect.centerx
-    scene.update(0.016)
+    scene.step(InputFrame.NONE)
     assert coin.rect.centerx < start_x
 
 
@@ -437,8 +428,8 @@ def test_game_scene_uses_progress_tint(context: GameContext) -> None:
     progress.owned_tints.add(GOLD.id)
     progress.apply_tint(ALLROUNDER, GOLD)
     scene = GameScene(context)
-    expected = context.assets.load_ship(ALLROUNDER.sprite, scene.player.rect.size, GOLD.color)
-    assert scene.ship_image(scene.player.rect.size) is expected
+    expected = context.assets.load_ship(ALLROUNDER.sprite, scene.sim.player.rect.size, GOLD.color)
+    assert scene.ship_image(scene.sim.player.rect.size) is expected
 
 
 def test_game_scene_exit_saves_wallet(context: GameContext, tmp_path: Path) -> None:
@@ -446,7 +437,7 @@ def test_game_scene_exit_saves_wallet(context: GameContext, tmp_path: Path) -> N
     context.store = SaveStore(path)
     context.state.progress.coins = 10
     scene = GameScene(context)
-    scene.coins_collected = 7
+    scene.sim.coins_collected = 7
     scene.on_exit()
     assert SaveStore(path).load().coins == 17
 
