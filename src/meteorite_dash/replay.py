@@ -66,6 +66,8 @@ class Replay:
     recorded_at: str = ""  # ISO-Datum (UTC)
     mode: RunMode = RunMode.FREE
     label: str = ""  # z. B. Daily-Datum
+    # Pubkey des Spielers bei importierten Community-Läufen, sonst leer (eigener Lauf).
+    author: str = ""
     director_kind: DirectorKind = DirectorKind.CONSTANT
     director_version: int = CONSTANT_DIRECTOR_VERSION
 
@@ -96,6 +98,7 @@ class Replay:
             "recorded_at": self.recorded_at,
             "mode": self.mode.value,
             "label": self.label,
+            "author": self.author,
             "director": self.director_kind.value,
             "director_version": self.director_version,
             "config": {
@@ -155,6 +158,7 @@ class Replay:
                 recorded_at=_as_str(data.get("recorded_at", "")),
                 mode=RunMode(_as_str(data.get("mode", RunMode.FREE.value))),
                 label=_as_str(data.get("label", "")),
+                author=_as_str(data.get("author", "")),
                 director_kind=DirectorKind(
                     _as_str(data.get("director", DirectorKind.CONSTANT.value))
                 ),

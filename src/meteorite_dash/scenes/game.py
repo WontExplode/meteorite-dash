@@ -1,5 +1,7 @@
 """Spiel-Szene: Fixstep-Loop um `Simulation`, Eingabe-Übersetzung, Ghost und HUD."""
 
+from collections.abc import Iterator
+
 import pygame
 
 from meteorite_dash.audio import GAME_MUSIC_ENDED
@@ -34,7 +36,9 @@ from meteorite_dash.config import (
     WEAPON_HUD_TOP_LEFT,
 )
 from meteorite_dash.context import GameContext
+from meteorite_dash.difficulty import DirectorKind
 from meteorite_dash.ghost import Ghost
+from meteorite_dash.identity import short_pubkey
 from meteorite_dash.inputs import InputFrame, from_pressed
 from meteorite_dash.mode_directors import (
     director_for_kind,
@@ -58,6 +62,15 @@ class GameScene(Scene):
     Die Szene macht nur drei Dinge: Wandzeit in feste Ticks umrechnen, Tastatur
     in `InputFrame`s übersetzen und den Zustand über den `RenderContext`
     zeichnen. Spielregeln leben in `simulation.py`.
+
+    Mit `spectate=` läuft sie als Zuschauer: Eingaben kommen aus dem Replay
+    statt von der Tastatur, nichts wird aufgezeichnet, gutgeschrieben oder
+    geteilt; am Ende zeigt der Death-Screen „REPLAY VON …“.
+
+    Die Director-Art folgt dem Modus (`mode_directors`); `director_kind=`
+    überschreibt sie für ein Rennen gegen einen fremden Lauf, Zuschauen nimmt
+    immer die im Replay aufgezeichnete Art. So gelten für Spieler und Ghost
+    dieselben Regeln.
     """
 
     def __init__(
@@ -68,23 +81,37 @@ class GameScene(Scene):
         ghost: Replay | None = None,
         mode: RunMode = RunMode.FREE,
         label: str = "",
+        spectate: Replay | None = None,
+        director_kind: DirectorKind | None = None,
     ) -> None:
         super().__init__(context)
-        self.seed = seed if seed is not None else pick_seed()
-        self.mode = mode
-        self.label = label
-        director_kind = director_kind_for_mode(mode)
-        self.sim = Simulation(self.run_config(self.seed), director=director_for_kind(director_kind))
+        self.spectate = spectate
+        if spectate is not None:
+            self.seed, self.mode, self.label = spectate.config.seed, spectate.mode, spectate.label
+            config = spectate.config
+            director_kind = spectate.director_kind
+        else:
+            self.seed = seed if seed is not None else pick_seed()
+            self.mode = mode
+            self.label = label
+            config = self.run_config(self.seed)
+            if director_kind is None:
+                director_kind = director_kind_for_mode(self.mode)
+        self.director_kind = director_kind
+        self.sim = Simulation(config, director=director_for_kind(director_kind))
+        self._spectate_inputs: Iterator[InputFrame] | None = (
+            spectate.inputs() if spectate is not None else None
+        )
         self.recorder = Recorder(
             self.sim.config,
-            mode=mode,
-            label=label,
+            mode=self.mode,
+            label=self.label,
             director_kind=director_kind,
             director_version=director_version_for_kind(director_kind),
         )
-        # Ghosts gehören nur zum wiederholbaren Daily Run.
+        # Ghost nur unter denselben Regeln (Seed, Modus, Director), beim Zuschauen nie.
         ghost_replay = None
-        if mode is RunMode.DAILY:
+        if spectate is None:
             candidate = ghost if ghost is not None else self.find_ghost(self.seed)
             if candidate is not None and self._is_compatible_ghost(candidate):
                 ghost_replay = candidate
@@ -95,6 +122,10 @@ class GameScene(Scene):
         self._pending = InputFrame.NONE
         self._bonus_notice = ""
         self._bonus_notice_ttl = 0.0
+        # Neuer Lauf: Stand des Teilens vom letzten Lauf gilt nicht mehr.
+        if context.exchange is not None:
+            context.exchange.publish_status = ""
+            context.exchange.share_status = ""
         self._show_difficulty_debug = False
 
     def run_config(self, seed: int) -> RunConfig:
@@ -105,28 +136,28 @@ class GameScene(Scene):
         return RunConfig(seed, spec.name, equipped)
 
     def find_ghost(self, seed: int) -> Replay | None:
-        """Kompatiblen Daily-Rekord zum Seed finden; Free lädt bewusst keinen Ghost."""
-        if self.mode is not RunMode.DAILY:
-            return None
+        """Weitesten Lauf zum Seed mit denselben Regeln (Modus, Director, Version) finden.
+
+        Im Daily ist das der Tagesrekord, im Free nur bei erzwungenem Seed
+        relevant (eigener Bestlauf oder Community-Läufe zu diesem Seed).
+        """
         store = self.context.replays
         if store is None:
             return None
-        director_kind = director_kind_for_mode(self.mode)
         return store.best_for_seed(
             seed,
             mode=self.mode,
-            director_kind=director_kind,
-            director_version=director_version_for_kind(director_kind),
+            director_kind=self.director_kind,
+            director_version=director_version_for_kind(self.director_kind),
         )
 
     def _is_compatible_ghost(self, replay: Replay) -> bool:
-        director_kind = director_kind_for_mode(self.mode)
         return (
             replay.config.seed == self.seed
             and replay.mode is self.mode
             and replay.sim_version == SIM_VERSION
-            and replay.director_kind is director_kind
-            and replay.director_version == director_version_for_kind(director_kind)
+            and replay.director_kind is self.director_kind
+            and replay.director_version == director_version_for_kind(self.director_kind)
         )
 
     def ghost_image(self, size: tuple[int, int]) -> pygame.Surface:
@@ -141,9 +172,13 @@ class GameScene(Scene):
         return image
 
     def ship_image(self, size: tuple[int, int]) -> pygame.Surface:
-        """Schiffssprite in Fenstergröße (gecacht), mit der gewählten Färbung."""
-        spec = self.context.state.selected_ship
-        tint = self.context.state.progress.ship_tint(spec)
+        """Schiffssprite in Fenstergröße (gecacht), mit der gewählten Färbung —
+        im Zuschauer-Modus das Schiff des Replays in seiner Standardfarbe."""
+        spec = self.sim.config.spec
+        if self.spectate is not None:
+            tint = spec.tint
+        else:
+            tint = self.context.state.progress.ship_tint(spec)
         return self.context.assets.load_ship(spec.sprite, size, tint)
 
     def on_enter(self) -> None:
@@ -153,6 +188,8 @@ class GameScene(Scene):
     def on_exit(self) -> None:
         """Stoppt die Musik, schreibt gesammelte Münzen ins Guthaben und speichert."""
         self.context.music.stop()
+        if self.spectate is not None:
+            return  # fremder Lauf: keine Münzen fürs Zuschauen
         # Guthaben auch bei Abbruch (Escape) gutschreiben und sichern.
         self.context.state.progress.add_coins(self.sim.coins_collected)
         self.context.save_progress()
@@ -179,15 +216,22 @@ class GameScene(Scene):
         self.context.starfield.update(dt)
         self._bonus_notice_ttl = max(0.0, self._bonus_notice_ttl - dt)
 
-        held = from_pressed(pygame.key.get_pressed())
+        held = InputFrame.NONE if self.spectate else from_pressed(pygame.key.get_pressed())
         self._accumulator += dt
         steps = 0
         while self._accumulator >= SIM_DT - _STEP_EPSILON and steps < MAX_STEPS_PER_FRAME:
             self._accumulator -= SIM_DT
             steps += 1
-            self.step(held | self._pending)
-            self._pending = InputFrame.NONE
-            if self.sim.is_over:
+            if self._spectate_inputs is not None:
+                frame = next(self._spectate_inputs, None)
+                if frame is None:
+                    self._end_spectate()  # Aufzeichnung zu Ende, ohne Tod
+                    break
+                self.step(frame)
+            else:
+                self.step(held | self._pending)
+                self._pending = InputFrame.NONE
+            if self.sim.is_over or self._transition is not None:
                 break
         if steps >= MAX_STEPS_PER_FRAME:
             # Hänger: Rest verfällt, statt in einer Todesspirale aufzuholen.
@@ -195,7 +239,7 @@ class GameScene(Scene):
 
     def step(self, inputs: InputFrame) -> list[SimEvent]:
         """Genau ein Simulations-Tick plus Reaktion der Szene auf die Events."""
-        if not self.sim.is_over:
+        if not self.sim.is_over and self.spectate is None:
             self.recorder.record(inputs)
         if self.ghost is not None:
             self.ghost.step()
@@ -215,8 +259,11 @@ class GameScene(Scene):
         elif event.kind is EventKind.COIN_BONUS:
             self._bonus_notice = f"BONUS +{event.value}"
             self._bonus_notice_ttl = COIN_BONUS_NOTICE_SECONDS
+        elif event.kind is EventKind.DEATH and self.spectate is not None:
+            self._end_spectate()
         elif event.kind is EventKind.DEATH:
             state = self.context.state
+            state.final_spectate_author = None
             state.final_light_years = self.sim.light_years
             state.final_coins = self.sim.coins_collected
             state.final_seed = self.seed
@@ -225,8 +272,24 @@ class GameScene(Scene):
             state.final_record_light_years = (
                 self.ghost.replay.light_years if self.ghost is not None else None
             )
+            state.final_record_author = self.ghost.replay.author if self.ghost is not None else ""
             state.last_replay = self._store_replay(self.recorder.finish(self.sim))
             self.finish(Transition.DEATH_SCREEN)
+
+    def _end_spectate(self) -> None:
+        """Zuschauer-Modus zu Ende: Zahlen des fremden Laufs zeigen, nichts speichern."""
+        assert self.spectate is not None
+        state = self.context.state
+        state.final_light_years = self.sim.light_years
+        state.final_coins = self.sim.coins_collected
+        state.final_seed = self.seed
+        state.final_mode = self.mode
+        state.final_label = self.label
+        state.final_record_light_years = None
+        state.final_record_author = ""
+        state.final_spectate_author = self.spectate.author
+        state.last_replay = None  # fremder Lauf: nicht unter eigenem Namen teilbar
+        self.finish(Transition.DEATH_SCREEN)
 
     def record_name(self) -> str:
         """Rekord-Datei: `best` im freien Lauf, `daily-<datum>` im Daily Run."""
@@ -235,7 +298,8 @@ class GameScene(Scene):
         return REPLAY_BEST_NAME
 
     def _store_replay(self, replay: Replay) -> Replay:
-        """`last` immer, Rekord nur bei neuer Bestweite. Ohne Store bleibt es im Speicher."""
+        """`last` immer, Rekord nur bei neuer Bestweite — die geht auch an die
+        Community. Ohne Store bleibt es im Speicher."""
         store = self.context.replays
         if store is None:
             return replay
@@ -243,6 +307,8 @@ class GameScene(Scene):
         record = store.load(self.record_name())
         if record is None or replay.light_years > record.light_years:
             store.save(self.record_name(), replay)
+            if self.context.exchange is not None:
+                self.context.exchange.publish(replay)
         return replay
 
     def draw(self) -> None:
@@ -358,7 +424,14 @@ class GameScene(Scene):
             coins_text, coins_text.get_rect(topright=vp.point(*COINS_TOP_RIGHT))
         )
 
-        if self.ghost is not None:
+        if self.spectate is not None:
+            author = short_pubkey(self.spectate.author) if self.spectate.author else "DIR"
+            replay_text = font.render(f"REPLAY VON {author}", True, GHOST_HUD_COLOR)
+            replay_text.set_alpha(SCORE_ALPHA)
+            self.context.screen.blit(
+                replay_text, replay_text.get_rect(topright=vp.point(*GHOST_HUD_TOP_RIGHT))
+            )
+        elif self.ghost is not None:
             delta = self.ghost.delta(self.sim.light_years)
             sign = "+" if delta >= 0 else "-"
             ghost_text = font.render(

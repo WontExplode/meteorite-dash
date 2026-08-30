@@ -107,3 +107,8 @@ class AssetLoader:
             image.fill((*tint, 255), special_flags=pygame.BLEND_RGBA_MULT)
         self._cache[key] = image
         return image
+
+
+def data_path(filename: str) -> Path:
+    """Sonstige Paket-Daten (z. B. die Wortliste der Share-Phrase)."""
+    return ASSET_DIR / filename

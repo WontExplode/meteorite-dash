@@ -1,2 +1,4 @@
+coincurve>=21.0.0
 interrogate>=1.7.0
 pygame-ce>=2.5.7
+websockets>=17.1

@@ -6,7 +6,8 @@ immer mehr zurückgelegte Lichtjahre.
 
 ## Features
 
-- Hauptmenü mit Start, Daily Run, Schiffsauswahl und Shop
+- Hauptmenü mit Start, Daily Run, Daily Bestenliste, Code eingeben,
+  Schiffsauswahl und Shop
 - vertikale Raumschiffsteuerung
 - Standardwaffe mit 7 Schüssen und Munitions-Pickups
 - zerstörbare Meteoriten und Gegner mit HP; Spieler-HP aus Schiffsrumpf
@@ -31,6 +32,13 @@ immer mehr zurückgelegte Lichtjahre.
   `uv run meteorite-dash --verify datei.json` ihn korrekt nachspielt
 - Daily Run: ein gemeinsamer Seed pro Tag für alle Spieler (ohne Server); der
   Tagesrekord fliegt als Ghost mit, der Game-Over-Screen zeigt den Vergleich
+- Community-Läufe über Nostr: eigene Rekorde gehen signiert an öffentliche
+  Relays, fremde Läufe zum Tages-Seed werden geholt, nachgespielt und
+  fliegen als Ghost mit — kein eigener Server, kein Account
+- Daily-Bestenliste: Top 5 zum Tages-Seed mit eigenem Rang, `R` lädt neu
+- Lauf per Code weitergeben: `C` auf dem Game-Over-Screen veröffentlicht den
+  Lauf unter drei Wörtern (z. B. `apfel berg wolke`); wer den Code im Menü
+  eingibt, tritt gegen den Lauf an oder sieht ihn sich an
 - Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
 
 ## Steuerung
@@ -42,8 +50,12 @@ immer mehr zurückgelegte Lichtjahre.
 - `Space`: schießen (im Spiel)
 - `R`: Waffe wechseln (im Spiel, wenn mehrere Waffen vorhanden)
 - `Enter` / `Space`: Menüauswahl bestätigen
+- `Tab` auf dem Game-Over-Screen nach einem Daily Run: Bestenliste
+- `C` auf dem Game-Over-Screen: Lauf als Drei-Wort-Code teilen
+- Menü „Code eingeben“: Code tippen, `Enter` = antreten, `Tab` = ansehen
+- `R` in der Bestenliste: neu von den Relays laden
 - `Escape`: im Spiel zurück ins Hauptmenü
-- `F` / `F11`: Vollbild umschalten
+- `F` / `F11`: Vollbild umschalten (bei der Code-Eingabe nur `F11` — `F` ist dort ein Buchstabe)
 - `F3`: Difficulty-Diagnose mit Modus, Tick, Faktoren, HP und Munition einblenden
 
 ## Entwicklung
@@ -51,6 +63,9 @@ immer mehr zurückgelegte Lichtjahre.
 ```terminal
 uv sync
 uv run meteorite-dash
+uv run meteorite-dash --verify replay.json    # Replay nachspielen und prüfen
+uv run meteorite-dash --publish replay.json   # Replay an die Nostr-Relays senden
+uv run meteorite-dash --fetch 579292414       # fremde Läufe zum Seed holen
 ```
 
 ## Projektstruktur
@@ -75,6 +90,12 @@ src/meteorite_dash/
   replay.py            Replay-Format, Recorder und Ablage (JSON)
   ghost.py             Ghost: Replay als zweite Simulation im Gleichschritt
   daily.py             Tages-Seed für den Daily Run
+  sharecode.py         Kompaktes Binär-/Textformat eines Replays (Share-Code)
+  identity.py          Nostr-Schlüssel pro Installation (identity.json)
+  nostr.py             Nostr-Events und Relay-Client (websockets)
+  exchange.py          Community-Läufe teilen, holen, prüfen, ablegen
+  phrase.py            Drei-Wort-Phrase aus dem Lauf-Hash (assets/words_de.txt)
+  leaderboard.py       Bestenliste aus gespeicherten Läufen (Logik)
   mathutil.py          Plattformstabiler Sinus/Abstand für die Simulation
   entities.py          Gegner, Hindernisse und Munitions-Pickups
   projectiles.py       Spieler-Projektile
@@ -92,6 +113,8 @@ src/meteorite_dash/
     main_menu.py       Hauptmenü
     ship_selection.py  Schiffsauswahl
     shop.py            Shop (Schiffe, Zubehör, Farben)
+    leaderboard.py     Daily-Bestenliste
+    code_entry.py      Code eingeben, Lauf holen, antreten oder ansehen
     widgets.py         Geteilte Zeichen-Helfer (Münz-Guthaben)
     game.py            Spielszene
     death.py           Game-Over-Screen
@@ -136,5 +159,24 @@ git config core.hooksPath .githooks
   Freunde schicken und `uv run meteorite-dash --verify datei.json` beweist den
   Lauf Tick für Tick.
 - Der Daily-Seed hängt am UTC-Datum; der Tagesrekord liegt als
-  `replays/daily-<datum>.json` und erscheint nur dort als Ghost. Der adaptive
-  Free Mode lädt bewusst keine Ghosts.
+  `replays/daily-<datum>.json`.
+- Ghosts fliegen nur unter denselben Regeln mit (Modus und Director): im
+  Daily der Tagesrekord, im adaptiven Free Mode nur bei erzwungenem Seed oder
+  per Code — ein Rennen per Code übernimmt deshalb die Regeln des fremden
+  Laufs.
+- Community: beim ersten Start entsteht `identity.json` (zufälliger
+  Nostr-Schlüssel, nur ein Pseudonym — Ordner kopieren nimmt ihn mit). Jeder
+  eigene Rekord wird an die Relays aus `config.py` gesendet; das Hauptmenü
+  zeigt, wie viele fremde Läufe es zum Tages-Seed gibt, der weiteste fliegt
+  als Ghost mit (Game-Over-Screen: `REKORD … VON <pubkey>`). Fremde Läufe
+  werden vor dem Import nachgespielt — was nicht bit-gleich nachspielt, wird
+  verworfen. Mit `METEORITE_DASH_SEED=<seed>` holt auch ein freier Lauf die
+  Läufe zu diesem Seed (Rennen gegen Freunde). `METEORITE_DASH_OFFLINE=1`
+  schaltet Teilen und Holen ab. Öffentlich sichtbar sind Pubkey, Seed, Schiff,
+  Zubehör, Eingaben und Endstand des Laufs — sonst nichts.
+- Code weitergeben: Der Drei-Wort-Code ist aus dem Lauf berechnet (gleicher
+  Lauf, gleicher Code) und eine Adresse, kein Passwort — der Lauf liegt
+  öffentlich auf den Relays, 30 Tage lang. Wer den Code eingibt, bekommt den
+  Lauf nur, wenn er bit-gleich nachspielt. Geholte Codes liegen als
+  `replays/share-<wort>-<wort>-<wort>.json` und funktionieren danach auch
+  offline.

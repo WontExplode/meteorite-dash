@@ -8,7 +8,7 @@ from typing import Literal, NamedTuple
 
 WindowSize = tuple[int, int]
 Color = tuple[int, int, int]
-MenuAction = Literal["start", "daily", "ship", "shop", "quit"]
+MenuAction = Literal["start", "daily", "leaderboard", "code", "ship", "shop", "quit"]
 
 
 class MeteoriteVariant(NamedTuple):
@@ -57,12 +57,18 @@ DEATH_MESSAGE_FONT_SIZE = 24
 MENU_ITEMS: tuple[tuple[str, MenuAction], ...] = (
     ("Start", "start"),
     ("Daily Run", "daily"),
+    ("Daily Bestenliste", "leaderboard"),
+    ("Code eingeben", "code"),
     ("Raumschiff auswählen", "ship"),
     ("Shop", "shop"),
     ("Beenden", "quit"),
 )
 
-MENU_ITEM_SPACING = 56  # Referenz-px zwischen Menüpunkten
+MENU_ITEM_FONT_SIZE = 36  # kleiner als der Titel, damit sieben Einträge ins Bild passen
+MENU_ITEMS_TOP = 186  # Referenz-y des ersten Menüpunkts
+MENU_ITEM_SPACING = 44  # Referenz-px zwischen Menüpunkten
+MENU_SELECTED_SHIP_TOP = 508
+MENU_HINT_TOP = 538
 
 MENU_MUSIC = "menumusic.mp3"
 DEATH_SOUND = "gameovermusic.mp3"
@@ -265,3 +271,73 @@ GHOST_HUD_TOP_RIGHT: WindowSize = (776, 108)
 DAILY_SEED_SALT = "meteorite-dash-daily"
 DAILY_REPLAY_PREFIX = "daily-"
 DEATH_MODE_COLOR: Color = (150, 210, 255)
+
+# --- Community-Läufe über Nostr (Issue #34, „Server-Funktion" ohne Server) ---
+# Bestläufe gehen als ersetzbares Event (NIP-78, `kind:30078`) an öffentliche
+# Relays; `d`-Tag = `NOSTR_APP_TAG:<SIM_VERSION>:<seed>`, Inhalt = Share-Code.
+# Fremde Läufe werden vor dem Import mit `headless.verify` nachgespielt.
+NOSTR_RELAYS: tuple[str, ...] = (
+    "wss://nos.lol",
+    "wss://relay.primal.net",
+    "wss://nostr.mom",
+    "wss://relay.damus.io",
+)
+NOSTR_RUN_KIND = 30078
+NOSTR_APP_TAG = "meteorite-dash"
+NOSTR_TIMEOUT = 6.0  # Sekunden pro Relay-Verbindung (verbinden + antworten)
+# So lange wartet der Spielstart auf fremde Läufe; danach geht es ohne sie los.
+NOSTR_FETCH_TIMEOUT = 3.0
+# Relays liefern die *neuesten* N Events, nicht die besten — deshalb großzügig;
+# geprüft wird weiteste-zuerst im Hintergrund.
+NOSTR_MAX_RUNS = 100
+# Härtung gegen ein Relay, das `limit`/EOSE ignoriert und unbegrenzt Events streamt.
+NOSTR_MAX_EVENTS_PER_FETCH = 500
+NOSTR_MAX_TICKS = 30 * 60 * SIM_TICKS_PER_SECOND  # längere fremde Läufe werden ignoriert
+NOSTR_MAX_CONTENT_CHARS = 64_000  # Share-Code-Länge, ab der ein Event verworfen wird
+NOSTR_REPLAY_PREFIX = "nostr-"  # Ablage fremder Läufe: `nostr-<seed>-<pubkey8>`
+OFFLINE_ENV = "METEORITE_DASH_OFFLINE"  # gesetzt = kein Netz, kein Teilen
+
+# Identität: zufälliger Schlüssel pro Installation, neben `progress.json`.
+IDENTITY_FILENAME = "identity.json"
+IDENTITY_FORMAT_VERSION = 1
+PUBKEY_SHORT_LEN = 8  # Anzeige-Kurzform eines Pubkeys
+
+# Share-Code: kompaktes Binärformat eines Replays (`sharecode.py`).
+SHARECODE_VERSION = 2  # 2: Director-Art und -Version im Header
+
+# --- Share-Phrase: drei Wörter als Adresse eines geteilten Laufs (`phrase.py`) ---
+PHRASE_WORDS_FILE = "words_de.txt"  # assets/, 2048 Wörter, eingefroren
+PHRASE_WORD_COUNT = 3
+PHRASE_WORD_BITS = 11  # 2^11 = 2048 Wörter je Position
+# Wortliste oder Ableitung geändert -> alte Phrasen ungültig -> erhöhen.
+PHRASE_VERSION = 1
+NOSTR_SHARE_EXPIRY_SECONDS = 30 * 24 * 60 * 60  # NIP-40: Relays dürfen danach löschen
+SHARE_REPLAY_PREFIX = "share-"  # Ablage geholter Codes: `share-<w1>-<w2>-<w3>`
+
+# --- Code eingeben (Szene) ---
+CODE_ENTRY_MAX_CHARS = 40
+CODE_ENTRY_TITLE_TOP = 90
+CODE_ENTRY_HINT_TOP = 150
+CODE_ENTRY_BOX_RECT: tuple[int, int, int, int] = (100, 200, 600, 60)  # Referenz-px
+CODE_ENTRY_MESSAGE_TOP = 300
+CODE_ENTRY_RESULT_TOP = 360
+CODE_ENTRY_ACTIONS_TOP = 400
+CODE_ENTRY_FOOTER_TOP = 535
+CODE_ENTRY_CURSOR_BLINK_MS = 500
+
+COMMUNITY_STATUS_TOP: int = 480  # Referenz-y der Community-Zeile im Hauptmenü
+COMMUNITY_STATUS_COLOR: Color = (150, 210, 255)
+
+# --- Daily-Bestenliste ---
+LEADERBOARD_SIZE = 5
+LEADERBOARD_OWN_LABEL = "DU"
+LEADERBOARD_TITLE_TOP = 80
+LEADERBOARD_SUBTITLE_TOP = 130
+LEADERBOARD_STATUS_TOP = 160
+LEADERBOARD_HEADER_TOP = 200
+LEADERBOARD_ROWS_TOP = 236
+LEADERBOARD_ROW_SPACING = 38
+LEADERBOARD_OWN_TOP = 460
+LEADERBOARD_HINT_TOP = 535
+# Referenz-x der Spalten: Rang, Spieler, Lichtjahre, Schiff
+LEADERBOARD_COLUMNS: tuple[int, int, int, int] = (140, 200, 400, 560)

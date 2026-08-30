@@ -12,6 +12,7 @@ import pygame
 from meteorite_dash.assets import AssetLoader
 from meteorite_dash.audio import MusicPlayer
 from meteorite_dash.config import MIN_WINDOW_SIZE, REFERENCE_SIZE
+from meteorite_dash.exchange import RunExchange
 from meteorite_dash.persistence import SaveStore
 from meteorite_dash.progress import Progress
 from meteorite_dash.replay import Replay, ReplayStore, RunMode
@@ -36,6 +37,12 @@ class GameState:
     final_label: str = ""  # Daily: ISO-Datum
     # Bisheriger Rekord (Ghost) zum Seed des letzten Laufs; None = kein Vergleich.
     final_record_light_years: float | None = None
+    # Pubkey des Rekordhalters, wenn der Ghost ein Community-Lauf war; sonst leer.
+    final_record_author: str = ""
+    # Zuschauer-Modus beendet: Autor des angesehenen Laufs ("" = eigener); None = gespielt.
+    final_spectate_author: str | None = None
+    # Per Code geholter Lauf, den die nächste Szene als Ghost (Rennen) oder Replay startet.
+    pending_replay: Replay | None = None
     # Aufzeichnung des letzten beendeten Laufs (Issue #34), für Death-Screen/Ghost.
     last_replay: Replay | None = None
     # Persistenter Fortschritt: Münz-Guthaben, Freischaltungen, Ausrüstung (Issue #14).
@@ -70,6 +77,8 @@ class GameContext:
     store: SaveStore | None = None
     # Ohne ReplayStore (Tests) werden Läufe nicht auf Platte aufgezeichnet.
     replays: ReplayStore | None = None
+    # Ohne Exchange (Tests, `METEORITE_DASH_OFFLINE`) wird nichts geteilt oder geholt.
+    exchange: RunExchange | None = None
     _is_fullscreen: bool = field(default=False, init=False)
     _windowed_size: tuple[int, int] = field(default=REFERENCE_SIZE, init=False)
 

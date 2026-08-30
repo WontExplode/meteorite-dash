@@ -8,6 +8,11 @@ from meteorite_dash.context import GameContext
 from meteorite_dash.ghost import Ghost
 from meteorite_dash.headless import scripted_inputs
 from meteorite_dash.inputs import InputFrame
+from meteorite_dash.mode_directors import (
+    director_for_mode,
+    director_kind_for_mode,
+    director_version_for_mode,
+)
 from meteorite_dash.replay import Recorder, Replay, ReplayStore, RunMode
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.simulation import RunConfig, Simulation
@@ -21,8 +26,14 @@ def _record(
     ticks: int = 900,
     mode: RunMode = RunMode.FREE,
 ) -> Replay:
-    sim = Simulation(config)
-    recorder = Recorder(config, mode=mode)
+    """Lauf so aufzeichnen, wie das Spiel es im jeweiligen Modus tut (Director inklusive)."""
+    sim = Simulation(config, director=director_for_mode(mode))
+    recorder = Recorder(
+        config,
+        mode=mode,
+        director_kind=director_kind_for_mode(mode),
+        director_version=director_version_for_mode(mode),
+    )
     for frame in scripted_inputs(input_seed, ticks):
         if sim.is_over:
             break
@@ -92,12 +103,24 @@ def test_scene_picks_best_replay_for_seed(context: GameContext, tmp_path: Path) 
     )
 
 
-def test_free_scene_never_loads_or_accepts_ghost(context: GameContext, tmp_path: Path) -> None:
-    replay = _daily_record()
+def test_free_scene_accepts_only_ghosts_with_same_rules(
+    context: GameContext, tmp_path: Path
+) -> None:
+    daily = _daily_record()
     context.replays = ReplayStore(tmp_path)
-    context.replays.save("daily", replay)
+    context.replays.save("daily", daily)
+    # Daily-Rekord (konstanter Director) ist im adaptiven Free kein Ghost.
     assert GameScene(context, seed=CONFIG.seed).ghost is None
-    assert GameScene(context, seed=CONFIG.seed, ghost=replay).ghost is None
+    assert GameScene(context, seed=CONFIG.seed, ghost=daily).ghost is None
+
+    free = _record(ticks=300)
+    context.replays.save("best", free)
+    scene = GameScene(context, seed=CONFIG.seed)
+    assert scene.ghost is not None
+    assert scene.ghost.replay == free
+    assert GameScene(context, seed=CONFIG.seed, ghost=free).ghost is not None
+    # Umgekehrt ist ein Free-Lauf kein Daily-Ghost.
+    assert GameScene(context, seed=CONFIG.seed, mode=RunMode.DAILY, ghost=free).ghost is None
 
 
 def test_daily_scene_without_store_has_no_ghost(context: GameContext) -> None:
