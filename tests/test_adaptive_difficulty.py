@@ -10,7 +10,7 @@ from meteorite_dash.config import (
     DIFFICULTY_SPEED_MULTIPLIER_MAX,
 )
 from meteorite_dash.difficulty import DifficultyParams
-from meteorite_dash.entities import AmmoPickup, Meteorite
+from meteorite_dash.entities import AmmoPickup, HunterEnemy, Meteorite, WaveEnemy
 from meteorite_dash.simulation import RunConfig, Simulation
 
 SEED = 3301
@@ -105,6 +105,43 @@ def test_near_miss_is_counted_once_per_entity() -> None:
 
     assert director.diagnostics.near_misses == 1
     assert director.diagnostics.safe_passes == 0
+
+
+def test_wave_enemy_near_miss_uses_minimum_gap_during_overlap() -> None:
+    director = AdaptiveDirector()
+    sim = _sim()
+    rng = random.Random(1)
+    enemy = WaveEnemy(pygame.Rect(100, 300, 44, 44), speed_x=180.0)
+    sim.entities = [enemy]
+
+    sim.tick = 1
+    director.params(sim, rng)
+    enemy.rect.y = 165  # knapper Moment, während sich die x-Bereiche überlappen
+    sim.tick = 2
+    director.params(sim, rng)
+    enemy.rect.topleft = (0, 400)  # beim vollständigen Passieren wieder weit entfernt
+    sim.tick = 3
+    director.params(sim, rng)
+
+    assert director.diagnostics.near_misses == 1
+    assert director.diagnostics.safe_passes == 0
+
+
+def test_hunter_safe_pass_ignores_close_snapshot_after_overlap() -> None:
+    director = AdaptiveDirector()
+    sim = _sim()
+    rng = random.Random(1)
+    enemy = HunterEnemy(pygame.Rect(100, 400, 44, 44), speed_x=160.0)
+    sim.entities = [enemy]
+
+    sim.tick = 1
+    director.params(sim, rng)
+    enemy.rect.topleft = (0, 165)  # erst nach der Überlappungsphase vertikal nah
+    sim.tick = 2
+    director.params(sim, rng)
+
+    assert director.diagnostics.near_misses == 0
+    assert director.diagnostics.safe_passes == 1
 
 
 def test_outputs_stay_within_configured_bounds() -> None:

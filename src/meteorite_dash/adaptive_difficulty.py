@@ -58,6 +58,7 @@ class DifficultyDiagnostics:
 class _TrackedEntity:
     serial: int
     evaluated: bool = False
+    minimum_vertical_gap: int | None = None
 
 
 class AdaptiveDirector:
@@ -118,7 +119,12 @@ class AdaptiveDirector:
     def state_key(self) -> tuple[object, ...]:
         """Kanonischer interner Zustand für den späteren Simulationshash."""
         tracked = tuple(
-            (state.serial, state.evaluated, entity.state_key())
+            (
+                state.serial,
+                state.evaluated,
+                state.minimum_vertical_gap,
+                entity.state_key(),
+            )
             for entity, state in sorted(self._tracked.items(), key=lambda item: item[1].serial)
         )
         return (
@@ -183,12 +189,21 @@ class AdaptiveDirector:
 
             if entity.rect.right >= player_rect.left:
                 has_active_hazard = True
+                if entity.rect.left <= player_rect.right:
+                    gap = _vertical_gap(player_rect, entity.rect)
+                    if state.minimum_vertical_gap is None or gap < state.minimum_vertical_gap:
+                        state.minimum_vertical_gap = gap
                 continue
             if state.evaluated:
                 continue
 
             state.evaluated = True
-            if _vertical_gap(player_rect, entity.rect) <= DIFFICULTY_NEAR_MISS_MARGIN:
+            minimum_gap = state.minimum_vertical_gap
+            if minimum_gap is None:
+                # Robust für Tests oder künftig direkt hinter dem Spieler
+                # erzeugte Gefahren ohne beobachtete Überlappungsphase.
+                minimum_gap = _vertical_gap(player_rect, entity.rect)
+            if minimum_gap <= DIFFICULTY_NEAR_MISS_MARGIN:
                 self._record_near_miss(sim.tick)
             else:
                 self._safe_passes += 1
