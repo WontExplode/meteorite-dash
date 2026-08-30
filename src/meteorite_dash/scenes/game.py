@@ -299,7 +299,7 @@ class GameScene(Scene):
             f"TICK {self.sim.tick:06d}",
             (
                 f"SPEED x{difficulty.speed_multiplier:.3f} "
-                f"SPAWN x{difficulty.spawn_interval_multiplier:.3f}"
+                f"INTERVAL x{difficulty.spawn_interval_multiplier:.3f}"
             ),
             (f"HP {player.hp}/{player.max_hp} AMMO {active.ammo}/{active.spec.max_ammo}"),
         )

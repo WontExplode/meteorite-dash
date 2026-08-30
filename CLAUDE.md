@@ -84,6 +84,8 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   `mode_directors.py` liefert für Free eine frische adaptive, für Daily weiterhin
   eine konstante Instanz. Replays speichern Director-Art und getrennte
   Regelversion, sodass Headless-Prüfungen dieselbe Strategie rekonstruieren.
+  Speed, Gefahrenintervall und Lightyears-Rate reagieren auf die Intensität;
+  `F3` blendet ein rein visuelles Diagnose-HUD ein.
 - **Replays** (Issue #34): `Recorder` zeichnet jeden Lauf als `Replay`
   (`RunConfig` + Eingaben, RLE) auf; nach dem Tod landet er als `last.json` /
   `best.json` im `ReplayStore`. `headless.verify` spielt ein Replay nach und
@@ -105,10 +107,10 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Sammelbare Sterne** für Punkte (`StarField` ist nur Deko, nicht einsammelbar).
 - **Spezialwaffen-Pickups** (Loadout und Slot-Limit sind vorbereitet).
 - **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
-- **Weitere adaptive Stellgrößen und Diagnose-HUD:** Free nutzt bereits Speed-
-  und Spawnintervallfaktor. Gegnermix, Größenbias und das geplante verborgene
-  Debug-HUD sind noch nicht umgesetzt; die feste Daily-Zeitrampe bleibt eine
-  getrennte Aufgabe des zweiten Modus.
+- **Weitere adaptive Stellgrößen:** Free nutzt Speed-, Gefahrenintervall- und
+  Score-Faktor. Gegnermix, Größenbias und Schwarm-Events sind noch nicht
+  umgesetzt; die feste Daily-Zeitrampe bleibt eine getrennte Aufgabe des
+  zweiten Modus.
 - Server-Anbindung für Daily-Bestenlisten (Issue #34 „+ Server funktion“):
   Replay-Datei ist die Upload-Einheit, `headless.verify` die Prüfung.
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
@@ -239,7 +241,8 @@ das Bild, nie den Spielzustand — Grundlage für Determinismus und Replays.
   eine Flanke aus `KEYDOWN` und gilt genau einen Tick.
 - **Fester Zeitschritt:** `GameScene.update(dt)` akkumuliert Wandzeit und ruft
   `step` bis zu `MAX_STEPS_PER_FRAME`-mal; Rest verfällt. Sternenfeld und
-  HUD-Fades laufen weiter mit Wandzeit — sie sind Deko.
+  HUD-Fades laufen weiter mit Wandzeit — sie sind Deko. Das standardmäßig
+  verborgene `F3`-HUD liest nur Zustand und beeinflusst weder Hash noch Replay.
 - **Events & Beweis:** jede Interaktion (`EventKind`: FIRED, HIT, DESTROYED,
   AMMO_PICKUP, COIN, COIN_BONUS, SHIELD, CONTACT, DEATH) liefert ein `SimEvent`
   mit `Snapshot(tick, hp, ammo, light_years, coins, shield)` **direkt nach**
@@ -266,8 +269,9 @@ Replays zu brechen:
   Kadenz zählt der Director über `sim.tick`, nie über Sekunden.
 - `DifficultyParams(speed_multiplier, spawn_interval_multiplier)`: die
   Simulation wendet sie auf `Entity.update(..., speed_scale)` bzw.
-  `Spawner.update(..., interval_scale=)` an. Neue Stellgröße = neues Feld hier
-  + Anwendung in `step`.
+  den Gefahren-`Spawner.update(..., interval_scale=)` an. Das Welttempo skaliert
+  außerdem Lightyears und hält den räumlichen Abstand der Münzformationen
+  konstant; der Gefahrenintervallfaktor erhöht niemals die Belohnungsdichte.
 - Erlaubte Eingaben: alles aus `SimulationView` (Tick, Spieler, Loadout,
   Entities, Münzen, Lightyears) und `rng`. Verboten: Wandzeit, FPS, Fenster,
   `random` ohne Seed. Zustandsbehaftete Implementierungen liefern zusätzlich
@@ -286,6 +290,8 @@ Replays zu brechen:
   Factory und getrennte Regelversionen werden von `GameScene`, Ghost und
   Headless-Replay gemeinsam genutzt. Änderungen nur am Tuning erhöhen die
   betreffende Director-Version, nicht die gemeinsame `SIM_VERSION`.
+  `ADAPTIVE_DIRECTOR_VERSION` wurde für die Score-/Münzkopplung auf 2 erhöht;
+  die konstante Daily-Version und ihre Golden-Replays bleiben unverändert.
 
 ### Replays (Issue #34)
 
@@ -485,8 +491,9 @@ Replays zu brechen:
 
 - `DistanceScore` in `score.py` zählt die zurückgelegte Strecke in Lightyears
   dt-basiert hoch.
-- `rate_multiplier` ist der Erweiterungspunkt für spätere Speed-Phasen,
-  Meilensteine oder Boss-Abschnitte.
+- `Simulation.step()` setzt `DistanceScore.rate_multiplier` auf den aktuellen
+  Weltgeschwindigkeitsfaktor. Dadurch wächst der Score im adaptiven Free Mode
+  proportional zur höheren Belastung; beim konstanten Daily bleibt er `1.0`.
 - `GameScene` rendert den Score als transparentes HUD (`LIGHTYRS ...`) über den
   `Viewport` und schreibt beim `DEATH`-Event `state.final_light_years`.
 - `DeathScene` liest `state.final_light_years` und `state.final_coins` und zeigt

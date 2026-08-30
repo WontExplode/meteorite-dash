@@ -445,7 +445,7 @@ def test_scene_toggles_hidden_difficulty_debug_hud(context: GameContext) -> None
     lines = scene._difficulty_debug_lines()
     assert lines[0] == "DEBUG FREE ADAPTIVE"
     assert lines[1] == "TICK 000000"
-    assert lines[2] == "SPEED x1.000 SPAWN x1.000"
+    assert lines[2] == "SPEED x1.000 INTERVAL x1.000"
     assert lines[3] == "HP 100/100 AMMO 7/7"
     state_hash = scene.sim.state_hash()
     context.apply_resize((1280, 720))
