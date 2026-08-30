@@ -81,7 +81,9 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   (`adaptive_difficulty.py`) schätzt aus sicheren Passagen, schadensfreier Zeit,
   Schaden, Near Misses, HP und Munition eine individuelle Belastungsgrenze.
   Sein vollständiger Zustand ist über `state_key()` reproduzierbar. Die
-  produktive Verdrahtung ausschließlich in den Free Mode steht noch aus.
+  zentrale Auswahl in `mode_directors.py` liefert für Free eine frische adaptive
+  und für Daily weiterhin eine konstante Instanz; die produktive Verdrahtung in
+  Szene, Ghost und Replay steht noch aus.
 - **Replays** (Issue #34): `Recorder` zeichnet jeden Lauf als `Replay`
   (`RunConfig` + Eingaben, RLE) auf; nach dem Tod landet er als `last.json` /
   `best.json` im `ReplayStore`. `headless.verify` spielt ein Replay nach und
@@ -276,6 +278,12 @@ Replays zu brechen:
   Near Misses erhöhen `stress`. Die Intensität steigt geglättet und fällt
   schneller, mit Start-Schonzeit, Damage-Hold und Low-HP-Cap. Seine Parameter
   stehen als `DIFFICULTY_*`-Konstanten in `config.py`.
+- `mode_directors.py` ist die einzige Modusgrenze: `director_for_mode(FREE)`
+  liefert `AdaptiveDirector`, `director_for_mode(DAILY)` weiterhin
+  `ConstantDirector`. `director_version_for_mode` trennt künftige
+  Replay-Kompatibilität beider Strategien von der gemeinsamen `SIM_VERSION`.
+  Diese Factory erzeugt nur Instanzen; ihre Nutzung durch Szene/Ghost/Headless
+  folgt in einem getrennten Änderungsschritt.
 
 ### Replays (Issue #34)
 
