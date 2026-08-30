@@ -12,11 +12,15 @@ import pygame
 
 
 class KeyStates(Protocol):
+    """Minimalschnittstelle von `pygame.key.get_pressed()`: Tastencode -> gedrückt."""
+
     def __getitem__(self, key: int) -> bool:
         pass
 
 
 class InputFrame(IntFlag):
+    """Eingaben eines Ticks als Bitmaske; `SWAP_WEAPON` ist eine Flanke, der Rest gehalten."""
+
     NONE = 0
     UP = 1
     DOWN = 2

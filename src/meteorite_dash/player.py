@@ -1,3 +1,5 @@
+"""Spielerschiff: vertikale Bewegung mit Trägheit im Referenzraum."""
+
 import pygame
 
 from meteorite_dash.config import DRAG, PLAYER_SIZE, REFERENCE_SIZE
@@ -30,6 +32,11 @@ class Player:
         self._y = float(position[1])  # Float-Position für verlustfreies Integrieren
 
     def update(self, dt: float, inputs: InputFrame) -> None:
+        """Integriert einen Tick: Schub aus `UP`/`DOWN`, linearer Widerstand, Rand-Clamp.
+
+        `dt` kommt aus `Simulation.step` (`SIM_DT`); am oberen und unteren Rand
+        wird die Geschwindigkeit genullt.
+        """
         direction = 0
         if InputFrame.UP in inputs:
             direction -= 1

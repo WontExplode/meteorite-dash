@@ -1,3 +1,5 @@
+"""Kampflogik: Projektiltreffer und Kollisionsschaden, rein logisch und headless testbar."""
+
 from typing import Protocol, runtime_checkable
 
 import pygame
@@ -8,6 +10,8 @@ from meteorite_dash.projectiles import Projectile
 
 @runtime_checkable
 class Damageable(Protocol):
+    """Alles, was Projektile treffen können: HP, Kontaktschaden, `take_damage`."""
+
     hp: int
     contact_damage: int
 

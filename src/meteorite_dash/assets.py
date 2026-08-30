@@ -1,3 +1,10 @@
+"""Asset-Pfade und gecachtes Laden von Bildern.
+
+Pfade werden nur relativ zum Paket gebildet (`image_path`, `sound_path`);
+`AssetLoader` cacht nach (Pfad, Größe, Rotation, Tint), damit nie pro Frame
+geladen wird.
+"""
+
 from pathlib import Path
 
 import pygame
@@ -36,14 +43,17 @@ SHIP_IMAGES = (
 
 
 def image_path(filename: str) -> Path:
+    """Pfad eines generischen Sprites im Bilder-Ordner des Pakets."""
     return IMAGE_DIR / filename
 
 
 def ship_image_path(filename: str) -> Path:
+    """Pfad eines Schiffsbilds im ships-Unterordner."""
     return SHIP_IMAGE_DIR / filename
 
 
 def sound_path(filename: str) -> Path:
+    """Pfad einer Sound-/Musikdatei im Sounds-Ordner des Pakets."""
     return SOUND_DIR / filename
 
 
@@ -60,6 +70,7 @@ class AssetLoader:
     def load_ship(
         self, filename: str, size: tuple[int, int], tint: Color | None = None
     ) -> pygame.Surface:
+        """Schiffssprite in `size`, um 90 Grad nach links gedreht, optional getönt."""
         return self._load_image_from_path(
             ship_image_path(filename), size, rotate_left=True, tint=tint
         )
@@ -71,6 +82,7 @@ class AssetLoader:
         *,
         rotate_left: bool = False,
     ) -> pygame.Surface:
+        """Generisches Sprite (z. B. Meteorit) in `size`, optional nach links gedreht."""
         return self._load_image_from_path(image_path(filename), size, rotate_left=rotate_left)
 
     def _load_image_from_path(
@@ -81,6 +93,7 @@ class AssetLoader:
         rotate_left: bool = False,
         tint: Color | None = None,
     ) -> pygame.Surface:
+        """Lädt, skaliert, rotiert und tönt ein Bild; Ergebnis landet im Cache."""
         key = (str(path), size, rotate_left, tint)
         cached = self._cache.get(key)
         if cached is not None:

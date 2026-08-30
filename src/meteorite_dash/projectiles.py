@@ -1,3 +1,5 @@
+"""Projektile der Spielerwaffen (Sim-Pfad, Referenzraum)."""
+
 import pygame
 
 from meteorite_dash.config import (
@@ -20,21 +22,26 @@ class Projectile:
         self.damage = damage
 
     def update(self, dt: float) -> None:
+        """Bewegt das Projektil dt-basiert nach rechts; Position float, `rect` gerundet."""
         self._x += self.speed_x * dt
         self.rect.x = round(self._x)
 
     @property
     def is_off_screen(self) -> bool:
+        """True, sobald das Projektil den Referenzraum rechts verlassen hat."""
         return self.rect.left > REFERENCE_SIZE[0]
 
     def draw(self, ctx: RenderContext) -> None:
+        """Zeichnet das Projektil als gefülltes Rechteck über den `RenderContext`."""
         pygame.draw.rect(ctx.surface, PROJECTILE_COLOR, ctx.rect(self.rect))
 
     def state_key(self) -> tuple[object, ...]:
+        """Kanonischer Zustand für den Replay-Hash (Floats als `.hex()`)."""
         return (tuple(self.rect), self._x.hex(), self.speed_x.hex(), self.damage)
 
 
 def spawn_projectile(player: Player, *, damage: int) -> Projectile:
+    """Erzeugt ein Projektil an der rechten Kante des Spielers, vertikal zentriert."""
     width, height = PROJECTILE_SIZE
     x = player.rect.right
     y = player.rect.centery - height // 2

@@ -33,6 +33,8 @@ from meteorite_dash.ships import SHIPS, TINTS, ShipSpec, TintSpec
 
 
 class ShopTab(Enum):
+    """Die drei Reiter des Shops; der Wert ist die angezeigte Beschriftung."""
+
     SHIPS = "Schiffe"
     ACCESSORIES = "Zubehör"
     TINTS = "Farben"
@@ -59,6 +61,8 @@ _HINT_YS = (525, 555)
 
 @dataclass(frozen=True)
 class ShopRow:
+    """Eine Zeile der aktuellen Reiter-Liste: Name, Status (mit Farbe), Beschreibung."""
+
     label: str
     status: str
     status_color: Color
@@ -66,6 +70,12 @@ class ShopRow:
 
 
 class ShopScene(Scene):
+    """Shop-Szene mit Reiter- und Zeilen-Cursor.
+
+    Hält nur Cursor und Hinweis-Text; Guthaben, Besitz und Ausrüstung liegen
+    in `Progress` (`context.state.progress`).
+    """
+
     def __init__(self, context: GameContext) -> None:
         super().__init__(context)
         self.tab_index = 0
@@ -75,17 +85,21 @@ class ShopScene(Scene):
 
     @property
     def tab(self) -> ShopTab:
+        """Aktiver Reiter."""
         return TABS[self.tab_index]
 
     @property
     def _progress(self) -> Progress:
+        """Persistenter Fortschritt aus dem `GameState`."""
         return self.context.state.progress
 
     @property
     def _ship(self) -> ShipSpec:
+        """Aktuell gewähltes Schiff; Bezug für Zubehör und Farben."""
         return self.context.state.selected_ship
 
     def _row_count(self) -> int:
+        """Zeilen im aktiven Reiter; im Farben-Reiter zählt die Standardfarbe mit."""
         if self.tab is ShopTab.SHIPS:
             return len(SHIPS)
         if self.tab is ShopTab.ACCESSORIES:
@@ -95,6 +109,7 @@ class ShopScene(Scene):
     # --- Eingabe ---------------------------------------------------------------
 
     def handle_event(self, event: pygame.event.Event) -> None:
+        """Links/Rechts: Reiter, Hoch/Runter: Zeile, Enter: aktivieren, Escape: zurück."""
         if event.type != pygame.KEYDOWN:
             return
         if event.key == pygame.K_LEFT:
@@ -111,17 +126,21 @@ class ShopScene(Scene):
             self.finish(Transition.MAIN_MENU)
 
     def _switch_tab(self, step: int) -> None:
+        """Wechselt den Reiter zyklisch und setzt den Zeilen-Cursor zurück."""
         self.tab_index = (self.tab_index + step) % len(TABS)
         self.row_index = 0
 
     def update(self, dt: float) -> None:
+        """Lässt den Hinweis-Text ablaufen (Wandzeit, reine Deko)."""
         self._feedback_ttl = max(0.0, self._feedback_ttl - dt)
 
     def _show(self, message: str) -> None:
+        """Zeigt einen Hinweis für `SHOP_FEEDBACK_SECONDS`."""
         self._feedback = message
         self._feedback_ttl = SHOP_FEEDBACK_SECONDS
 
     def _activate(self) -> None:
+        """Enter auf der aktuellen Zeile: je nach Reiter Schiff, Zubehör oder Farbe."""
         if self.tab is ShopTab.SHIPS:
             self._activate_ship(SHIPS[self.row_index])
         elif self.tab is ShopTab.ACCESSORIES:
@@ -134,6 +153,7 @@ class ShopScene(Scene):
             self._activate_tint(TINTS[self.row_index - 1])
 
     def _activate_ship(self, spec: ShipSpec) -> None:
+        """Wählt ein freigeschaltetes Schiff, sonst Kaufversuch; Erfolg wählt es aus."""
         index = SHIPS.index(spec)
         if self._progress.is_ship_unlocked(spec):
             self.context.state.selected_ship_index = index
@@ -148,6 +168,11 @@ class ShopScene(Scene):
             self._show(_failure_text(result, spec.name, spec.price, self._ship))
 
     def _activate_accessory(self, spec: AccessorySpec) -> None:
+        """Kauft oder rüstet Zubehör.
+
+        Nicht besessen: kaufen und bei freiem Platz direkt ausrüsten. Besessen:
+        am gewählten Schiff ausrüsten bzw. ablegen. Fehler landen als Hinweis.
+        """
         ship = self._ship
         if not self._progress.owns_accessory(spec):
             result = self._progress.buy_accessory(spec)
@@ -172,6 +197,7 @@ class ShopScene(Scene):
             self._show(_failure_text(result, spec.name, spec.price, ship))
 
     def _activate_tint(self, spec: TintSpec) -> None:
+        """Kauft die Farbe bei Bedarf und stellt sie am gewählten Schiff ein."""
         ship = self._ship
         if not self._progress.owns_tint(spec):
             result = self._progress.buy_tint(spec)
@@ -188,6 +214,7 @@ class ShopScene(Scene):
     # --- Zeilen ----------------------------------------------------------------
 
     def rows(self) -> list[ShopRow]:
+        """Zeilen des aktiven Reiters aus `Progress`, in Anzeige-Reihenfolge."""
         if self.tab is ShopTab.SHIPS:
             return [self._ship_row(spec) for spec in SHIPS]
         if self.tab is ShopTab.ACCESSORIES:
@@ -195,6 +222,7 @@ class ShopScene(Scene):
         return [self._default_tint_row(), *(self._tint_row(spec) for spec in TINTS)]
 
     def _ship_row(self, spec: ShipSpec) -> ShopRow:
+        """Zeile für ein Schiff: Ausgewählt, Freigeschaltet oder Preis."""
         description = (
             f"Hülle {spec.hp}   Waffenplätze {spec.weapon_slots}   "
             f"Zubehörplätze {spec.accessory_slots}"
@@ -206,6 +234,7 @@ class ShopScene(Scene):
         return ShopRow(spec.name, f"{spec.price} Münzen", COIN_COLOR, description)
 
     def _accessory_row(self, spec: AccessorySpec) -> ShopRow:
+        """Zeile für Zubehör: Preis, Gekauft oder Ausgerüstet (am gewählten Schiff)."""
         if not self._progress.owns_accessory(spec):
             return ShopRow(spec.name, f"{spec.price} Münzen", COIN_COLOR, spec.description)
         if self._progress.is_equipped(self._ship, spec):
@@ -213,12 +242,14 @@ class ShopScene(Scene):
         return ShopRow(spec.name, "Gekauft", OWNED_TEXT_COLOR, spec.description)
 
     def _default_tint_row(self) -> ShopRow:
+        """Zeile 0 im Farben-Reiter: die kostenlose Standardfarbe des Schiffs."""
         description = f"Standardfarbe von {self._ship.name}"
         if self._progress.active_tint(self._ship) is None:
             return ShopRow("Standard", "Aktiv", SELECTED_TEXT_COLOR, description)
         return ShopRow("Standard", "Kostenlos", OWNED_TEXT_COLOR, description)
 
     def _tint_row(self, spec: TintSpec) -> ShopRow:
+        """Zeile für eine kaufbare Farbe: Preis, Gekauft oder Aktiv."""
         description = "Einmal kaufen, auf jedem Schiff einstellbar"
         if not self._progress.owns_tint(spec):
             return ShopRow(spec.name, f"{spec.price} Münzen", COIN_COLOR, description)
@@ -229,6 +260,7 @@ class ShopScene(Scene):
     # --- Zeichnen ----------------------------------------------------------------
 
     def draw(self) -> None:
+        """Zeichnet Titel, Reiter, Zeilen, Vorschau, Beschreibung, Hinweise und Wallet."""
         screen = self.context.screen
         vp = self.context.viewport
         screen.fill(BACKGROUND_COLOR)
@@ -300,6 +332,7 @@ class ShopScene(Scene):
         return self._ship, self._progress.ship_tint(self._ship)
 
     def _draw_preview(self) -> None:
+        """Schiffsvorschau rechts (gesperrt abgedunkelt) mit Name und Zubehör-Belegung."""
         screen = self.context.screen
         vp = self.context.viewport
         hint_font = vp.font(HINT_FONT_SIZE)
@@ -319,6 +352,7 @@ class ShopScene(Scene):
 
 
 def _failure_text(result: ShopResult, name: str, price: int, ship: ShipSpec) -> str:
+    """Übersetzt ein fehlgeschlagenes `ShopResult` in einen Hinweis; leer bei `OK`."""
     if result is ShopResult.TOO_EXPENSIVE:
         return f"Nicht genug Münzen: {name} kostet {price}"
     if result is ShopResult.NO_FREE_SLOT:

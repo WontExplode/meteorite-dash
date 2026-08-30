@@ -81,7 +81,9 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   (`adaptive_difficulty.py`) schätzt aus sicheren Passagen, schadensfreier Zeit,
   Schaden, Near Misses, HP und Munition eine individuelle Belastungsgrenze.
   Sein vollständiger Zustand ist über `state_key()` reproduzierbar. Die
-  produktive Verdrahtung ausschließlich in den Free Mode steht noch aus.
+  zentrale Auswahl in `mode_directors.py` liefert für Free eine frische adaptive
+  und für Daily weiterhin eine konstante Instanz; die produktive Verdrahtung in
+  Szene, Ghost und Replay steht noch aus.
 - **Replays** (Issue #34): `Recorder` zeichnet jeden Lauf als `Replay`
   (`RunConfig` + Eingaben, RLE) auf; nach dem Tod landet er als `last.json` /
   `best.json` im `ReplayStore`. `headless.verify` spielt ein Replay nach und
@@ -161,15 +163,16 @@ uv run ruff format .         # formatieren
 uv run ruff check .          # linten
 uv run mypy                  # Typprüfung (strict, über src + tests)
 uv run pytest                # Tests
+uv run interrogate           # Docstring-Abdeckung (fail-under in pyproject.toml)
 ```
 
-Pre-commit-Hook einmalig aktivieren (führt alle vier Checks vor jedem Commit aus):
+Pre-commit-Hook einmalig aktivieren (führt alle fünf Checks vor jedem Commit aus):
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-**Alle vier Checks müssen grün sein**, bevor committet/gepusht wird — die CI
+**Alle fünf Checks müssen grün sein**, bevor committet/gepusht wird — die CI
 (`.github/workflows/ci.yml`) erzwingt dasselbe bei Push auf `main` und bei jedem
 PR. `ruff format` läuft in CI als `--check` (kein Auto-Format), also lokal
 formatieren.
@@ -304,6 +307,12 @@ Replays zu brechen:
   Near Misses erhöhen `stress`. Die Intensität steigt geglättet und fällt
   schneller, mit Start-Schonzeit, Damage-Hold und Low-HP-Cap. Seine Parameter
   stehen als `DIFFICULTY_*`-Konstanten in `config.py`.
+- `mode_directors.py` ist die einzige Modusgrenze: `director_for_mode(FREE)`
+  liefert `AdaptiveDirector`, `director_for_mode(DAILY)` weiterhin
+  `ConstantDirector`. `director_version_for_mode` trennt künftige
+  Replay-Kompatibilität beider Strategien von der gemeinsamen `SIM_VERSION`.
+  Diese Factory erzeugt nur Instanzen; ihre Nutzung durch Szene/Ghost/Headless
+  folgt in einem getrennten Änderungsschritt.
 
 ### Replays (Issue #34)
 

@@ -1,3 +1,9 @@
+"""Szenen-Framework: Basisklasse mit dem gemeinsamen 60-FPS-Loop und `Transition`.
+
+Jede Szene läuft in `Scene.run()`, bis sie per `finish(transition)` ihren
+Nachfolger benennt; `App._create_scene` mappt den `Transition` auf die nächste Szene.
+"""
+
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 
@@ -8,6 +14,8 @@ from meteorite_dash.context import GameContext
 
 
 class Transition(Enum):
+    """Ergebnis einer Szene: sagt der `App`, welche Szene als Nächstes läuft."""
+
     QUIT = auto()
     MAIN_MENU = auto()
     START_GAME = auto()
@@ -34,9 +42,16 @@ class Scene(ABC):
         self._transition: Transition | None = None
 
     def finish(self, transition: Transition) -> None:
+        """Beendet den Loop nach dem aktuellen Frame und meldet den Nachfolger."""
         self._transition = transition
 
     def run(self) -> Transition:
+        """Template-Method-Loop: `tick`, Events, `update`, `draw`, bis `finish` fällt.
+
+        Globale Events behandelt die Basis selbst: `QUIT`, `VIDEORESIZE` (Resize über
+        den `GameContext`) und Vollbild-Toggle (`F` / `F11`); alles andere geht an
+        `handle_event`. `on_exit` läuft auch bei Ausnahmen. Liefert den `Transition`.
+        """
         self._transition = None
         self.on_enter()
         try:
@@ -77,21 +92,27 @@ class Scene(ABC):
         return key == pygame.K_F11 or (key == pygame.K_f and not self.captures_text)
 
     def on_enter(self) -> None:  # noqa: B027  (optional hook)
+        """Hook beim Betreten der Szene, vor dem ersten Frame (optional)."""
         pass
 
     def on_exit(self) -> None:  # noqa: B027  (optional hook)
+        """Hook beim Verlassen, auch bei Ausnahmen im Loop (optional)."""
         pass
 
     def on_resize(self, size: tuple[int, int]) -> None:  # noqa: B027  (optional hook)
+        """Hook nach Resize oder Vollbild-Wechsel; `size` ist die neue Fenstergröße."""
         pass
 
     @abstractmethod
     def handle_event(self, event: pygame.event.Event) -> None:
+        """Verarbeitet ein Ereignis, das die Basis nicht global behandelt hat."""
         pass
 
     def update(self, dt: float) -> None:  # noqa: B027  (optional hook)
+        """Rückt den Szenen-Zustand um `dt` Sekunden Wandzeit vor (optional)."""
         pass
 
     @abstractmethod
     def draw(self) -> None:
+        """Zeichnet den Frame; `pygame.display.flip()` gehört zur Szene."""
         raise NotImplementedError

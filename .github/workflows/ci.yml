@@ -29,6 +29,9 @@ jobs:
       - name: mypy
         run: uv run mypy .
 
+      - name: interrogate
+        run: uv run interrogate
+
       - name: pytest
         # pygame braucht im headless-CI Dummy-Treiber für Video/Audio
         env:

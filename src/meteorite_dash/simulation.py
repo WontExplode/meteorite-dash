@@ -110,14 +110,18 @@ class RunConfig:
 
     @property
     def spec(self) -> ShipSpec:
+        """Datenblatt des gewählten Schiffs."""
         return SHIPS_BY_NAME[self.ship]
 
     @property
     def accessory_kinds(self) -> set[AccessoryKind]:
+        """Arten des ausgerüsteten Zubehörs; Effekte werden pro Art angewendet."""
         return {ACCESSORIES_BY_ID[acc_id].kind for acc_id in self.accessories}
 
 
 class EventKind(Enum):
+    """Art einer Interaktion; jede erzeugt in `Simulation.step` ein `SimEvent`."""
+
     FIRED = "fired"
     HIT = "hit"  # Projektil trifft
     DESTROYED = "destroyed"  # Ziel zerstört
@@ -141,6 +145,12 @@ class Snapshot(NamedTuple):
 
 
 class SimEvent(NamedTuple):
+    """Eine Interaktion mit dem Zustand unmittelbar danach.
+
+    `GameScene` reagiert nur hierauf (Sound, Hinweise, Death-Screen); der
+    `headless.Trace` besteht aus diesen Events.
+    """
+
     kind: EventKind
     snapshot: Snapshot  # Zustand unmittelbar nach der Interaktion
     value: int = 0  # Schaden, Münzwert, Bonus — je nach Art
@@ -148,6 +158,14 @@ class SimEvent(NamedTuple):
 
 
 class Simulation:
+    """Kompletter Zustand eines Laufs, angetrieben durch `step(inputs)`.
+
+    Wendet beim Aufbau die Zubehör-Effekte aus der `RunConfig` an (Panzerung,
+    Extra-Munition, Schild, Magnet) und hält zwei Spawner mit eigenen
+    Seed-Streams: Gefahren und Münz-Formationen. Der Director bekommt pro
+    Tick den Stream `<seed>:director`.
+    """
+
     def __init__(self, config: RunConfig, *, director: Director | None = None) -> None:
         self.config = config
         spec = config.spec
@@ -181,9 +199,11 @@ class Simulation:
 
     @property
     def light_years(self) -> float:
+        """Bisher zurückgelegte Strecke."""
         return self.score.light_years
 
     def snapshot(self) -> Snapshot:
+        """Die prüfbaren Werte des aktuellen Ticks (für Events und Replays)."""
         return Snapshot(
             tick=self.tick,
             hp=self.player.hp,
@@ -215,6 +235,7 @@ class Simulation:
         )
 
     def state_hash(self) -> str:
+        """SHA-256 über `state_key()` — beweist Gleichheit zweier Läufe."""
         return hashlib.sha256(repr(self.state_key()).encode("utf-8")).hexdigest()
 
     # --- Schritt --------------------------------------------------------------
@@ -279,9 +300,11 @@ class Simulation:
         return events
 
     def _event(self, kind: EventKind, *, value: int = 0, sound: str | None = None) -> SimEvent:
+        """Baut ein `SimEvent` mit dem Snapshot des aktuellen Zustands."""
         return SimEvent(kind, self.snapshot(), value, sound)
 
     def _update_shooting(self, dt: float, inputs: InputFrame, events: list[SimEvent]) -> None:
+        """Feuert bei `FIRE`, wenn Cooldown abgelaufen und Munition vorhanden ist."""
         self._shoot_cooldown = max(0.0, self._shoot_cooldown - dt)
         if InputFrame.FIRE not in inputs or self._shoot_cooldown > 0.0:
             return
@@ -293,6 +316,7 @@ class Simulation:
         events.append(self._event(EventKind.FIRED, value=fired_spec.damage, sound=fired_spec.sound))
 
     def _hazard_rects(self) -> list[object]:
+        """Hitboxen aller Entities, die dem Spieler schaden."""
         return [entity.rect for entity in self.entities if entity.damages_player]
 
     def _accept_entity(self, entity: Entity) -> bool:
@@ -302,6 +326,7 @@ class Simulation:
         return is_clear([entity.rect], coin_rects(self.formations), COIN_HAZARD_CLEARANCE)
 
     def _accept_formation(self, formation: CoinFormation) -> bool:
+        """Gegenstück zu `_accept_entity`: kein Münz-Muster in eine Gefahr hinein."""
         hazards = [entity.rect for entity in self.entities if entity.damages_player]
         return is_clear(coin_rects([formation]), hazards, COIN_HAZARD_CLEARANCE)
 
@@ -313,6 +338,10 @@ class Simulation:
         interval: float,
         events: list[SimEvent],
     ) -> None:
+        """Spawnt, bewegt und sammelt Münz-Formationen; Magnet zieht im Radius heran.
+
+        Münzwert und Bonus erhöhen `coins_collected` und liefern je ein Event.
+        """
         self.formations.extend(
             self.coin_spawner.update(dt, accept=self._accept_formation, interval_scale=interval)
         )

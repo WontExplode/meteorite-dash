@@ -1,3 +1,10 @@
+"""Geteilter Zustand und Ressourcen aller Szenen.
+
+`GameContext` hält Fenster, Uhr, Schriften, Audio, Assets und `Viewport` und
+besitzt die Resize-/Vollbild-Logik; `GameState` trägt den Session-Zustand
+zwischen den Szenen. Größenlogik lebt hier, nicht in den Szenen.
+"""
+
 from dataclasses import dataclass, field
 
 import pygame
@@ -16,6 +23,12 @@ from meteorite_dash.viewport import Viewport
 
 @dataclass
 class GameState:
+    """Session-Zustand über Szenenwechsel hinweg.
+
+    Die `final_*`-Felder beschreiben den zuletzt beendeten Lauf für den
+    Death-Screen; `progress` ist der persistente Fortschritt (Issue #14).
+    """
+
     selected_ship_index: int = 0
     final_light_years: float = 0.0
     final_coins: int = 0
@@ -37,11 +50,18 @@ class GameState:
 
     @property
     def selected_ship(self) -> ShipSpec:
+        """Datenblatt des gewählten Schiffs."""
         return SHIPS[self.selected_ship_index]
 
 
 @dataclass
 class GameContext:
+    """Container für alle geteilten Ressourcen; besitzt Resize und Vollbild.
+
+    Beim Größenwechsel werden Screen, `Viewport` und `StarField` gemeinsam
+    aktualisiert. `store` und `replays` sind in Tests None (kein Dateizugriff).
+    """
+
     screen: pygame.Surface
     clock: pygame.time.Clock
     menu_font: pygame.font.Font
@@ -64,18 +84,22 @@ class GameContext:
 
     @property
     def is_fullscreen(self) -> bool:
+        """True im Vollbildmodus."""
         return self._is_fullscreen
 
     def save_progress(self) -> None:
+        """Schreibt den Fortschritt über den `SaveStore`; ohne Store ein No-op."""
         if self.store is not None:
             self.store.save(self.state.progress)
 
     def apply_resize(self, size: tuple[int, int]) -> None:
+        """Reagiert auf `VIDEORESIZE`; im Vollbild wird das OS-Event ignoriert."""
         if self._is_fullscreen:
             return
         self._set_windowed(size)
 
     def toggle_fullscreen(self) -> None:
+        """Wechselt zwischen Fenster und Vollbild; merkt sich die Fenstergröße."""
         if self._is_fullscreen:
             self._is_fullscreen = False
             self._set_windowed(self._windowed_size)
@@ -86,11 +110,13 @@ class GameContext:
             self._is_fullscreen = True
 
     def _set_windowed(self, size: tuple[int, int]) -> None:
+        """Setzt ein Fenster, nie kleiner als `MIN_WINDOW_SIZE`."""
         width = max(size[0], MIN_WINDOW_SIZE[0])
         height = max(size[1], MIN_WINDOW_SIZE[1])
         self._set_screen((width, height), pygame.RESIZABLE)
 
     def _set_screen(self, size: tuple[int, int], flags: int) -> None:
+        """Erzeugt den Display-Modus und zieht Viewport und Sternenfeld nach."""
         self.screen = pygame.display.set_mode(size, flags)
         width, height = self.screen.get_size()
         self.viewport.resize(width, height)

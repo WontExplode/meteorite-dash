@@ -16,6 +16,8 @@ from meteorite_dash.ships import SHIPS, SHIPS_BY_NAME, TINTS_BY_ID, ShipSpec, Ti
 
 
 class ShopResult(Enum):
+    """Ergebnis einer Shop-Aktion; die Szene übersetzt es in Text."""
+
     OK = auto()
     ALREADY_OWNED = auto()
     TOO_EXPENSIVE = auto()
@@ -24,11 +26,18 @@ class ShopResult(Enum):
 
 
 def _free_ships() -> set[str]:
+    """Namen aller Schiffe mit `price == 0` — von Anfang an freigeschaltet."""
     return {spec.name for spec in SHIPS if spec.is_free}
 
 
 @dataclass
 class Progress:
+    """Persistenter Spielfortschritt: Guthaben, Freischaltungen und Ausrüstung.
+
+    Zubehör und Farben werden einmal gekauft und pro Schiff ausgerüstet bzw.
+    gewählt; `equipped` und `tints` sind nach Schiffsnamen abgelegt.
+    """
+
     coins: int = 0
     unlocked_ships: set[str] = field(default_factory=_free_ships)
     owned_accessories: set[str] = field(default_factory=set)
@@ -41,27 +50,35 @@ class Progress:
     # --- Abfragen -------------------------------------------------------------
 
     def can_afford(self, price: int) -> bool:
+        """True, wenn das Guthaben `price` deckt."""
         return self.coins >= price
 
     def is_ship_unlocked(self, spec: ShipSpec) -> bool:
+        """Kostenlose Schiffe sind immer frei, sonst zählt `unlocked_ships`."""
         return spec.is_free or spec.name in self.unlocked_ships
 
     def owns_accessory(self, spec: AccessorySpec) -> bool:
+        """True, wenn das Zubehör gekauft ist."""
         return spec.id in self.owned_accessories
 
     def owns_tint(self, spec: TintSpec) -> bool:
+        """True, wenn die Farbe gekauft ist."""
         return spec.id in self.owned_tints
 
     def equipped_accessories(self, ship: ShipSpec) -> list[AccessorySpec]:
+        """Ausgerüstetes Zubehör von `ship` in Slot-Reihenfolge."""
         return [ACCESSORIES_BY_ID[acc_id] for acc_id in self.equipped.get(ship.name, [])]
 
     def is_equipped(self, ship: ShipSpec, spec: AccessorySpec) -> bool:
+        """True, wenn `spec` auf `ship` ausgerüstet ist."""
         return spec.id in self.equipped.get(ship.name, [])
 
     def free_slots(self, ship: ShipSpec) -> int:
+        """Noch freie Zubehör-Slots von `ship`."""
         return ship.accessory_slots - len(self.equipped.get(ship.name, []))
 
     def active_tint(self, ship: ShipSpec) -> TintSpec | None:
+        """Gewählte Kauf-Farbe von `ship`; `None` heißt Standardfarbe."""
         tint_id = self.tints.get(ship.name)
         return TINTS_BY_ID[tint_id] if tint_id is not None else None
 
@@ -73,17 +90,20 @@ class Progress:
     # --- Aktionen -------------------------------------------------------------
 
     def add_coins(self, amount: int) -> None:
+        """Schreibt Münzen gut; ein negativer Betrag ist ein Programmierfehler."""
         if amount < 0:
             raise ValueError("amount darf nicht negativ sein")
         self.coins += amount
 
     def _pay(self, price: int) -> ShopResult:
+        """Zieht `price` ab, wenn bezahlbar; sonst `TOO_EXPENSIVE` ohne Abzug."""
         if not self.can_afford(price):
             return ShopResult.TOO_EXPENSIVE
         self.coins -= price
         return ShopResult.OK
 
     def buy_ship(self, spec: ShipSpec) -> ShopResult:
+        """Schaltet `spec` gegen Münzen frei."""
         if self.is_ship_unlocked(spec):
             return ShopResult.ALREADY_OWNED
         result = self._pay(spec.price)
@@ -92,6 +112,7 @@ class Progress:
         return result
 
     def buy_accessory(self, spec: AccessorySpec) -> ShopResult:
+        """Kauft `spec` einmalig; Ausrüsten läuft über `toggle_accessory`."""
         if self.owns_accessory(spec):
             return ShopResult.ALREADY_OWNED
         result = self._pay(spec.price)
@@ -100,6 +121,7 @@ class Progress:
         return result
 
     def buy_tint(self, spec: TintSpec) -> ShopResult:
+        """Kauft `spec` einmalig; die Wahl pro Schiff läuft über `apply_tint`."""
         if self.owns_tint(spec):
             return ShopResult.ALREADY_OWNED
         result = self._pay(spec.price)
@@ -137,6 +159,7 @@ class Progress:
     # --- Serialisierung -------------------------------------------------------
 
     def to_dict(self) -> dict[str, object]:
+        """JSON-taugliche Darstellung mit sortierten Sammlungen (stabile Ausgabe)."""
         return {
             "version": SAVE_FORMAT_VERSION,
             "coins": self.coins,
@@ -187,6 +210,7 @@ class Progress:
 
 
 def _non_negative_int(value: object) -> int:
+    """Nicht-negativer `int` (kein `bool`), sonst 0."""
     # bool ist Unterklasse von int — `True` als Guthaben wäre Unsinn.
     if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
         return value
@@ -194,6 +218,7 @@ def _non_negative_int(value: object) -> int:
 
 
 def _known_ids(value: object, catalog: Container[str]) -> set[str]:
+    """Die Strings aus `value`, die im `catalog` bekannt sind; alles andere fällt weg."""
     if not isinstance(value, list):
         return set()
     return {item for item in value if isinstance(item, str) and item in catalog}

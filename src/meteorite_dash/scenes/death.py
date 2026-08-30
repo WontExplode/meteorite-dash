@@ -1,3 +1,5 @@
+"""Death-/Game-Over-Screen: Lightyears, Münzen, Rekordvergleich und Seed des Laufs."""
+
 import pygame
 
 from meteorite_dash.config import (
@@ -23,16 +25,24 @@ from meteorite_dash.score import format_coins, format_light_years
 
 
 class DeathScene(Scene):
+    """Game-Over-Screen nach dem Tod.
+
+    Liest nur `GameState.final_*`; eine beliebige Taste führt zurück ins Hauptmenü.
+    """
+
     def __init__(self, context: GameContext) -> None:
         super().__init__(context)
 
     def on_enter(self) -> None:
+        """Spielt den Todes-Sound."""
         self.context.music.play_sound_effect(DEATH_SOUND)
 
     def on_exit(self) -> None:
+        """Stoppt laufende Soundeffekte."""
         pygame.mixer.stop()
 
     def handle_event(self, event: pygame.event.Event) -> None:
+        """Jede Taste führt zurück ins Hauptmenü."""
         if event.type == pygame.KEYDOWN:
             state = self.context.state
             played = state.final_spectate_author is None
@@ -46,6 +56,7 @@ class DeathScene(Scene):
             self.finish(Transition.QUIT)
 
     def draw(self) -> None:
+        """Zeichnet Rahmen, Scanlines, Titel, Modus-Zeile, Score, Münzen, Rekord, Seed."""
         screen = self.context.screen
         vp = self.context.viewport
         screen.fill(BACKGROUND_COLOR)
