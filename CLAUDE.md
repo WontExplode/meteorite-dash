@@ -76,6 +76,12 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   (HP/Munition/Score/Münzen). `headless.run` spielt Eingabefolgen ohne Fenster
   ab, `state_hash()` beweist Gleichheit. Director-Vertrag (`difficulty.py`) für
   #32/#33 steht.
+- **Replays** (Issue #34): `Recorder` zeichnet jeden Lauf als `Replay`
+  (`RunConfig` + Eingaben, RLE) auf; nach dem Tod landet er als `last.json` /
+  `best.json` im `ReplayStore`. `headless.verify` spielt ein Replay nach und
+  vergleicht Endzustand + Hash; `uv run meteorite-dash --verify datei.json`
+  macht das von der Kommandozeile. Golden-Regressionstest in
+  `tests/test_replay.py` mit `tests/replays/golden-*.json`.
 - Strikte Typprüfung, Linting, Tests, CI.
 
 **Noch NICHT vorhanden** (aus dem Spec — meist als GitHub-Issue getrackt):
@@ -85,8 +91,7 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
 - **Steigende Schwierigkeit** über die Zeit (Vertrag in `difficulty.py`,
   Umsetzung Issues #32/#33 — nicht Teil von #34).
-- Replay-Aufzeichnung, Ghost und Daily Run (Issue #34, Folge-PRs auf dem
-  Simulations-Kern).
+- Ghost und Daily Run (Issue #34, Folge-PRs auf Simulation + Replay).
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
   (Issue #10), Spieler-Stats (Issue #13), iOS/Android-Port (Issue #5).
 
@@ -111,6 +116,7 @@ Installierte Pakete heißen im Import weiter `pygame` — Code importiert
 ```bash
 uv sync                      # Umgebung + Abhängigkeiten einrichten
 uv run meteorite-dash        # Spiel starten (Entry-Point aus pyproject.toml)
+uv run meteorite-dash --verify replay.json   # Replay headless nachspielen, Trace + PASS/FAIL
 
 uv run ruff format .         # formatieren
 uv run ruff check .          # linten
@@ -249,6 +255,37 @@ Replays zu brechen:
   (Test-Muster: `test_director_keeps_replays_bit_identical`).
 - `ConstantDirector` ist der Platzhalter; Rampe (#32) und adaptiver Teil (#33)
   ersetzen ihn über `Simulation(director=…)` und erhöhen `SIM_VERSION`.
+
+### Replays (Issue #34)
+
+- `replay.py`: `Replay` = `RunConfig` + `frames` (Lauflängen `(Maske, Ticks)`)
+  + `final: Snapshot` + `state_hash` + `sim_version`/`recorded_at`/`mode`/
+  `label`. `inputs()` expandiert die Frames wieder zu `InputFrame`s. Mehr
+  braucht es nicht — die Simulation ist deterministisch.
+- JSON-Format wie der Speicherstand: `to_dict` / `from_dict` (defensiv,
+  `None` statt Exception bei falschen Typen, unbekannten Katalog-IDs,
+  ungültigen Frames, `bool`-als-`int`). `REPLAY_FORMAT_VERSION` in `config.py`.
+- `Recorder(config)`: `record(inputs)` pro Tick **vor** `sim.step`, `finish(sim)`
+  liefert das `Replay` mit Snapshot und Hash. `GameScene.step` zeichnet nur
+  auf, solange `sim.is_over` False ist; Abbruch per Escape speichert nichts.
+- `ReplayStore(dir)` (`GameContext.replays`, in Tests `None`): `save`/`load`
+  per Name (`path_for` bereinigt auf `[A-Za-z0-9_-]`, kein Path-Traversal),
+  `all()`, `best_for_seed(seed)` (nur gleiche `SIM_VERSION`). Ablage:
+  `default_replay_dir()` = Speicherordner + `replays/`. `GameScene._store_replay`
+  schreibt beim `DEATH`-Event `last` immer und `best` bei neuer Bestweite;
+  `GameState.last_replay` und `final_seed` tragen den Lauf zum Death-Screen.
+- **Prüfen:** `headless.run_replay(replay)` → `Trace`; `headless.verify(replay)`
+  → `Verification(ok, version_matches)` — `ok` heißt: gleiche `SIM_VERSION`,
+  gleicher `Snapshot`, gleicher Hash. `format_trace` druckt eine Zeile pro
+  Interaktion. CLI: `meteorite-dash --verify datei.json` (Exit 0/1). Das ist
+  auch die spätere Server-Prüfung eingereichter Läufe.
+- **Golden-Regression:** `tests/replays/golden-<x>.json` (Replays aus
+  `scripted_inputs`, `GOLDEN_RUNS` in `test_replay.py`) + `golden-<x>.trace.json`
+  (Event-Zeilen). Der Test prüft
+  `verify(...).ok` und vergleicht jede Zeile — wörtlich „Score/HP/Munition
+  stimmen nach jeder Interaktion“. Nach bewusster Regeländerung:
+  `SIM_VERSION` erhöhen und `UPDATE_GOLDEN=1 uv run pytest tests/test_replay.py
+  -k golden`.
 
 ### Entities & Spawner
 
@@ -459,8 +496,9 @@ Replays zu brechen:
   Läufe, `context`-Fixture baut einen vollständigen `GameContext` **ohne**
   `store` (kein Datei-Zugriff). Logik (`test_logic.py`), Simulation/Determinismus
   (`test_simulation.py`), Münzen (`test_coins.py`), Fortschritt/Persistenz
-  (`test_progress.py`, mit `tmp_path`), Shop/Zubehör (`test_shop.py`) und
-  Skalierung/Resize (`test_viewport.py`) sind getrennt.
+  (`test_progress.py`, mit `tmp_path`), Replays (`test_replay.py`, Golden in
+  `tests/replays/`), Shop/Zubehör (`test_shop.py`) und Skalierung/Resize
+  (`test_viewport.py`) sind getrennt.
 - Neue Spiel-Logik braucht einen Test. Reine Funktionen bevorzugen, die ohne
   laufenden Loop prüfbar sind (siehe vorhandene Spawner-/Entity-/Player-Tests).
 
@@ -486,7 +524,10 @@ Spielcode. Die realistischen Punkte:
   nicht vertrauenswürdige Daten. `Progress.from_dict` parst defensiv (fehlende/
   falsch typisierte Felder, unbekannte IDs, `bool`-als-`int`), Datei liegt im
   nutzer-beschreibbaren Datenverzeichnis, kaputte Dateien werden toleriert.
-  Dieses Muster für Highscore/Settings wiederverwenden, nicht neu erfinden.
+  `Replay.from_dict` / `ReplayStore` folgen demselben Muster (Replays sind
+  potenziell fremde Dateien — Ghost gegen Freunde); `path_for` bereinigt
+  Dateinamen. Dieses Muster für Highscore/Settings wiederverwenden, nicht neu
+  erfinden.
 - **Abhängigkeiten:** über `uv` gepinnt halten; nur etablierte Pakete (pygame-ce)
   aus PyPI. Keine ungeprüften Downloads zur Laufzeit.
 

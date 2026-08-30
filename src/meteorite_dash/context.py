@@ -7,6 +7,7 @@ from meteorite_dash.audio import MusicPlayer
 from meteorite_dash.config import MIN_WINDOW_SIZE, REFERENCE_SIZE
 from meteorite_dash.persistence import SaveStore
 from meteorite_dash.progress import Progress
+from meteorite_dash.replay import Replay, ReplayStore
 from meteorite_dash.ships import SHIPS, ShipSpec
 from meteorite_dash.starfield import StarField
 from meteorite_dash.viewport import Viewport
@@ -17,6 +18,9 @@ class GameState:
     selected_ship_index: int = 0
     final_light_years: float = 0.0
     final_coins: int = 0
+    final_seed: int = 0
+    # Aufzeichnung des letzten beendeten Laufs (Issue #34), für Death-Screen/Ghost.
+    last_replay: Replay | None = None
     # Persistenter Fortschritt: Münz-Guthaben, Freischaltungen, Ausrüstung (Issue #14).
     progress: Progress = field(default_factory=Progress)
 
@@ -40,6 +44,8 @@ class GameContext:
     )
     # Ohne Store (Tests) bleibt der Fortschritt im Speicher.
     store: SaveStore | None = None
+    # Ohne ReplayStore (Tests) werden Läufe nicht auf Platte aufgezeichnet.
+    replays: ReplayStore | None = None
     _is_fullscreen: bool = field(default=False, init=False)
     _windowed_size: tuple[int, int] = field(default=REFERENCE_SIZE, init=False)
 

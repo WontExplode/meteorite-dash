@@ -100,6 +100,9 @@ class DeathScene(Scene):
         final_coins_rect = final_coins.get_rect(center=(center_x, vp.py(430)))
         screen.blit(final_coins, final_coins_rect)
 
+        seed_text = hint_font.render(f"SEED {self.context.state.final_seed}", True, muted_color)
+        screen.blit(seed_text, seed_text.get_rect(center=(center_x, vp.py(465))))
+
         hint = hint_font.render("DRÜCKE EINE BELIEBIGE TASTE", True, TEXT_COLOR)
         hint_rect = hint.get_rect(center=(center_x, vp.py(500)))
         screen.blit(hint, hint_rect)

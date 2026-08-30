@@ -23,6 +23,8 @@ immer mehr zurückgelegte Lichtjahre.
 - dynamische Fenstergröße und Vollbild über einen gemeinsamen `Viewport`
 - deterministische Simulation: fester Zeitschritt, Seed pro Lauf
   (`METEORITE_DASH_SEED` erzwingt einen), headless nachspielbar
+- Replays: jeder Lauf wird als `last.json` / `best.json` aufgezeichnet;
+  `uv run meteorite-dash --verify datei.json` spielt ihn nach und prüft ihn
 - Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
 
 ## Steuerung
@@ -61,6 +63,7 @@ src/meteorite_dash/
   inputs.py            InputFrame: Eingaben als Bitmaske pro Tick
   difficulty.py        Director-Vertrag (DifficultyParams) für den Schwierigkeitsgrad
   headless.py          Simulation ohne Fenster abspielen (Tests, Replay-Prüfung)
+  replay.py            Replay-Format, Recorder und Ablage (JSON)
   mathutil.py          Plattformstabiler Sinus/Abstand für die Simulation
   entities.py          Gegner, Hindernisse und Munitions-Pickups
   projectiles.py       Spieler-Projektile
@@ -116,4 +119,8 @@ git config core.hooksPath .githooks
   `~/Library/Application Support`). `METEORITE_DASH_SAVE_DIR` überschreibt
   den Ordner.
 - `METEORITE_DASH_SEED=1234` startet jeden Lauf mit demselben Seed — gleiche
-  Eingaben ergeben dann exakt dieselbe Runde.
+  Eingaben ergeben dann exakt dieselbe Runde. Der Seed steht auch auf dem
+  Game-Over-Screen.
+- Replays liegen unter `replays/` neben `progress.json`. Eine Datei an
+  Freunde schicken und `uv run meteorite-dash --verify datei.json` beweist den
+  Lauf Tick für Tick.

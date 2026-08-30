@@ -9,6 +9,8 @@ from meteorite_dash.config import (
     COINS_TOP_RIGHT,
     HP_HUD_TOP_LEFT,
     MAX_STEPS_PER_FRAME,
+    REPLAY_BEST_NAME,
+    REPLAY_LAST_NAME,
     SCORE_ALPHA,
     SCORE_FONT_SIZE,
     SCORE_TOP_RIGHT,
@@ -22,6 +24,7 @@ from meteorite_dash.config import (
 from meteorite_dash.context import GameContext
 from meteorite_dash.inputs import InputFrame, from_pressed
 from meteorite_dash.render import RenderContext
+from meteorite_dash.replay import Recorder, Replay
 from meteorite_dash.scenes.base import Scene, Transition
 from meteorite_dash.score import format_coins
 from meteorite_dash.simulation import EventKind, RunConfig, SimEvent, Simulation, pick_seed
@@ -43,6 +46,7 @@ class GameScene(Scene):
         super().__init__(context)
         self.seed = seed if seed is not None else pick_seed()
         self.sim = Simulation(self.run_config(self.seed))
+        self.recorder = Recorder(self.sim.config)
         self._accumulator = 0.0
         # Flanken (Waffenwechsel) aus Events, bis zum nächsten Tick gesammelt.
         self._pending = InputFrame.NONE
@@ -100,6 +104,8 @@ class GameScene(Scene):
 
     def step(self, inputs: InputFrame) -> list[SimEvent]:
         """Genau ein Simulations-Tick plus Reaktion der Szene auf die Events."""
+        if not self.sim.is_over:
+            self.recorder.record(inputs)
         events = self.sim.step(inputs)
         for event in events:
             self._on_event(event)
@@ -112,9 +118,23 @@ class GameScene(Scene):
             self._bonus_notice = f"BONUS +{event.value}"
             self._bonus_notice_ttl = COIN_BONUS_NOTICE_SECONDS
         elif event.kind is EventKind.DEATH:
-            self.context.state.final_light_years = self.sim.light_years
-            self.context.state.final_coins = self.sim.coins_collected
+            state = self.context.state
+            state.final_light_years = self.sim.light_years
+            state.final_coins = self.sim.coins_collected
+            state.final_seed = self.seed
+            state.last_replay = self._store_replay(self.recorder.finish(self.sim))
             self.finish(Transition.DEATH_SCREEN)
+
+    def _store_replay(self, replay: Replay) -> Replay:
+        """`last` immer, `best` nur bei neuer Bestweite. Ohne Store bleibt es im Speicher."""
+        store = self.context.replays
+        if store is None:
+            return replay
+        store.save(REPLAY_LAST_NAME, replay)
+        best = store.load(REPLAY_BEST_NAME)
+        if best is None or replay.light_years > best.light_years:
+            store.save(REPLAY_BEST_NAME, replay)
+        return replay
 
     def draw(self) -> None:
         screen = self.context.screen
