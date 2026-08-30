@@ -92,10 +92,12 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   vergleicht Endzustand + Hash; `uv run meteorite-dash --verify datei.json`
   macht das von der Kommandozeile. Golden-Regressionstest in
   `tests/test_replay.py` mit `tests/replays/golden-*.json`.
-- **Ghost** (Issue #34): Im Daily spielt `ghost.py` den kompatiblen Tagesrekord
-  als zweite `Simulation` im Gleichschritt nach; `GameScene` zeichnet nur sein
-  Schiff halbtransparent und zeigt `GHOST <ly> ±Δ` im HUD. Der adaptive Free
-  Mode lädt bewusst keinen Ghost.
+- **Ghost** (Issue #34): `ghost.py` spielt einen Lauf mit denselben Regeln
+  (Seed, Modus, Director-Art und -Version) als zweite `Simulation` im
+  Gleichschritt nach; `GameScene` zeichnet nur sein Schiff halbtransparent und
+  zeigt `GHOST <ly> ±Δ` im HUD. Im Daily ist das der Tagesrekord; im adaptiven
+  Free Mode findet sich nur bei erzwungenem Seed ein Ghost (eigener Bestlauf
+  oder Community-Lauf zum selben Seed, ebenfalls adaptiv).
 - **Daily Run** (Issue #34): Menüpunkt mit gemeinsamem Tages-Seed
   (`daily.py`, SHA-256 aus Salt + UTC-Datum, kein Server). Rekord des Tages
   als `daily-<datum>.json`, fliegt als Ghost mit; Death-Screen zeigt Modus,
@@ -374,16 +376,20 @@ Replays zu brechen:
 - Bewusst **Re-Simulation statt Positionsliste**: Datei bleibt klein, Ghost-
   Score läuft live mit. Die Ghost-Welt divergiert nach der ersten Abweichung
   (Hunter, Treffer, Münzen) — deshalb wird nur das Schiff gezeichnet.
-- `GameScene(context, seed=…, ghost=…)`: Nur im Daily sucht `find_ghost` nach
-  gleichem Seed, Modus, Director und Version. Free ignoriert auch explizit
-  übergebene Ghosts. `step()` rückt
+- `GameScene(context, seed=…, ghost=…, director_kind=…)`: `find_ghost` sucht
+  den weitesten Lauf mit gleichem Seed, Modus, Director-Art und -Version;
+  explizit übergebene Ghosts müssen dieselben Regeln erfüllen, sonst fliegt
+  keiner (`_is_compatible_ghost`). Die Director-Art kommt aus dem Modus
+  (`mode_directors`), `director_kind=` überschreibt sie fürs Rennen, Zuschauen
+  nimmt die im Replay aufgezeichnete. Free mit zufälligem Seed findet so nie
+  einen Ghost, Free mit erzwungenem Seed den adaptiven Bestlauf. `step()` rückt
   Ghost und Spieler gemeinsam vor; der Ghost fasst die Spieler-Simulation nie
   an. Zeichnen: `ghost_image(size)` = getöntes Schiff (`GHOST_TINT`) mit
   `GHOST_ALPHA`, pro Größe gecacht; Ghost hinter dem Spieler, verschwindet mit
   `finished`. HUD `GHOST <ly> ±Δ` über `GHOST_HUD_TOP_RIGHT`.
 - Daily-Ghost gegen Freunde: Ein kompatibles Daily-Replay kann in den
-  `replays/`-Ordner gelegt werden; Free-Replays bleiben reine Aufzeichnungen
-  und Prüfartefakte.
+  `replays/`-Ordner gelegt werden. Free-Replays werden nur bei erzwungenem
+  Seed (`METEORITE_DASH_SEED`) oder per Share-Code zum Ghost.
 
 ### Daily Run (Issue #34)
 
@@ -413,11 +419,13 @@ Replays zu brechen:
 Läufe austauschen ohne eigenen Server: öffentliche Nostr-Relays sind der
 Briefkasten, die Simulation ist der Richter.
 
-- `sharecode.py`: `encode`/`decode` packen ein `Replay` in Bytes (Header,
-  Snapshot, Hash, ein Byte pro Eingabe-Event, CRC-32), `to_text`/`from_text`
-  als Base64url. ~3,5 Byte pro Spielsekunde; `decode` ist defensiv wie
-  `Replay.from_dict`. Das ist das Wire-Format — auch für späteres QR/Tippen.
-  Format-Änderung → `SHARECODE_VERSION` erhöhen.
+- `sharecode.py`: `encode`/`decode` packen ein `Replay` in Bytes (Header
+  inklusive Director-Art und -Version, Snapshot, Hash, ein Byte pro
+  Eingabe-Event, CRC-32), `to_text`/`from_text` als Base64url. ~3,5 Byte pro
+  Spielsekunde; `decode` ist defensiv wie `Replay.from_dict`. Das ist das
+  Wire-Format — auch für späteres QR/Tippen. Format-Änderung →
+  `SHARECODE_VERSION` erhöhen (2 seit den Director-Feldern; ohne sie käme ein
+  adaptiver Free-Lauf als „konstant“ an und fiele bei `headless.verify` durch).
 - `identity.py`: `Identity` = 32 Byte Zufall (`secrets`), Pubkey x-only,
   BIP-340-Schnorr über `coincurve`. `IdentityStore` speichert
   `identity.json` neben `progress.json` (0600, atomar); fehlend/kaputt →
@@ -485,9 +493,14 @@ Relay der Briefkasten, die Simulation der Richter.
   Exchange nur schon geholte Codes aus dem Store. Ergebnis wandert über
   `GameState.pending_replay` + `Transition.START_RACE` / `SPECTATE` in
   `App._create_scene`.
+- Rennen (`START_RACE`): `GameScene(seed, ghost=replay, mode=replay.mode,
+  label=replay.label, director_kind=replay.director_kind)` — der Spieler fährt
+  unter den Regeln des fremden Laufs, damit der Ghost kompatibel ist und der
+  Vergleich fair bleibt; ein Daily-Lauf startet so als Daily des Datums und
+  schreibt `daily-<datum>`.
 - `GameScene(spectate=replay)`: Zuschauer-Modus — Eingaben aus
   `replay.inputs()`, kein Recorder, keine Münzen-Gutschrift, kein Store, kein
-  Publish, Schiff des Replays; HUD „REPLAY VON <pubkey8|DIR>“; Ende (Tod oder
+  Publish, Director-Art aus dem Replay, Schiff des Replays; HUD „REPLAY VON <pubkey8|DIR>“; Ende (Tod oder
   Eingaben aufgebraucht) → `_end_spectate` → Death-Screen mit
   `GameState.final_spectate_author`, `last_replay = None` (nicht teilbar).
 - Death-Screen: `C` = `exchange.share(last_replay)`, Zeile zeigt

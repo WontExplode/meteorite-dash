@@ -321,6 +321,19 @@ def test_app_starts_race_and_spectate_from_pending_replay(
         assert race.ghost.replay == run
         assert race.spectate is None
         assert app.context.state.pending_replay is None
+        # Rennen unter den Regeln des Laufs: gleicher Modus und gleicher Director.
+        assert race.mode is run.mode
+        assert race.director_kind is run.director_kind
+        assert race.recorder.director_kind is run.director_kind
+
+        daily = replace(_record(ticks=120), mode=RunMode.DAILY, label="2026-08-30")
+        app.context.state.pending_replay = daily
+        daily_race = app._create_scene(Transition.START_RACE)
+        assert isinstance(daily_race, GameScene)
+        assert daily_race.mode is RunMode.DAILY
+        assert daily_race.label == "2026-08-30"
+        assert daily_race.ghost is not None
+        assert daily_race.record_name() == "daily-2026-08-30"
 
         app.context.state.pending_replay = run
         watch = app._create_scene(Transition.SPECTATE)
@@ -340,6 +353,7 @@ def test_spectate_replays_inputs_and_credits_nothing(context: GameContext, tmp_p
     golden = replace(_golden_a(), author="f" * 64)
     scene = GameScene(context, spectate=golden)
     assert scene.sim.config == golden.config
+    assert scene.director_kind is golden.director_kind  # Regeln des Replays, nicht des Modus
     coins_before = context.state.progress.coins
     ticks = 0
     while scene._transition is None:

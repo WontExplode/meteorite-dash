@@ -123,7 +123,15 @@ class App:
             if replay is None:
                 return MainMenu(self.context)
             if transition is Transition.START_RACE:
-                return GameScene(self.context, seed=replay.config.seed, ghost=replay)
+                # Rennen unter den Regeln des fremden Laufs: Modus, Label, Director.
+                return GameScene(
+                    self.context,
+                    seed=replay.config.seed,
+                    ghost=replay,
+                    mode=replay.mode,
+                    label=replay.label,
+                    director_kind=replay.director_kind,
+                )
             return GameScene(self.context, spectate=replay)
         if transition is Transition.START_GAME:
             seed = pick_seed()

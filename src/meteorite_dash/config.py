@@ -303,7 +303,7 @@ IDENTITY_FORMAT_VERSION = 1
 PUBKEY_SHORT_LEN = 8  # Anzeige-Kurzform eines Pubkeys
 
 # Share-Code: kompaktes Binärformat eines Replays (`sharecode.py`).
-SHARECODE_VERSION = 1
+SHARECODE_VERSION = 2  # 2: Director-Art und -Version im Header
 
 # --- Share-Phrase: drei Wörter als Adresse eines geteilten Laufs (`phrase.py`) ---
 PHRASE_WORDS_FILE = "words_de.txt"  # assets/, 2048 Wörter, eingefroren

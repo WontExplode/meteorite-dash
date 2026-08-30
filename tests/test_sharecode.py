@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from meteorite_dash import sharecode
+from meteorite_dash.difficulty import DirectorKind
 from meteorite_dash.headless import scripted_inputs
 from meteorite_dash.inputs import InputFrame
 from meteorite_dash.replay import Recorder, Replay, RunMode
@@ -51,6 +52,19 @@ def test_roundtrip_keeps_config_mode_and_label() -> None:
     assert restored.config.accessories == ("shield", "magnet")
     assert restored.mode is RunMode.DAILY
     assert restored.label == "2026-08-30"
+
+
+def test_roundtrip_keeps_director_kind_and_version() -> None:
+    # Ohne diese Felder käme ein adaptiver Free-Lauf als „konstant“ an und
+    # fiele bei `headless.verify` durch.
+    replay = replace(
+        _record(CONFIG, 3, 300), director_kind=DirectorKind.ADAPTIVE, director_version=7
+    )
+    restored = sharecode.decode(sharecode.encode(replay))
+    assert restored == replay
+    assert restored is not None
+    assert restored.director_kind is DirectorKind.ADAPTIVE
+    assert restored.director_version == 7
 
 
 def test_long_runs_and_edge_values_survive() -> None:
@@ -106,6 +120,23 @@ def test_decode_rejects_unknown_catalog_ids_and_versions() -> None:
 
     body = bytearray(data[:-4])
     body[ship_start + len("Allrounder")] = 3  # Modus-Byte (0/1 gültig)
+    assert sharecode.decode(_with_crc(bytes(body))) is None
+
+    body = bytearray(data[:-4])
+    # Hinter Zubehör, Modus, Label und recorded_at (je ein Längen-Byte, da < 128 Zeichen).
+    director_start = (
+        ship_start
+        + len("Allrounder")
+        + 1
+        + sum(1 + len(accessory) for accessory in replay.config.accessories)
+        + 1
+        + 1
+        + len(replay.label)
+        + 1
+        + len(replay.recorded_at)
+    )
+    assert body[director_start] == 0  # golden-a: konstanter Director
+    body[director_start] = 2  # Director-Byte (0/1 gültig)
     assert sharecode.decode(_with_crc(bytes(body))) is None
 
 

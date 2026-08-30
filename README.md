@@ -160,6 +160,10 @@ git config core.hooksPath .githooks
   Lauf Tick für Tick.
 - Der Daily-Seed hängt am UTC-Datum; der Tagesrekord liegt als
   `replays/daily-<datum>.json`.
+- Ghosts fliegen nur unter denselben Regeln mit (Modus und Director): im
+  Daily der Tagesrekord, im adaptiven Free Mode nur bei erzwungenem Seed oder
+  per Code — ein Rennen per Code übernimmt deshalb die Regeln des fremden
+  Laufs.
 - Community: beim ersten Start entsteht `identity.json` (zufälliger
   Nostr-Schlüssel, nur ein Pseudonym — Ordner kopieren nimmt ihn mit). Jeder
   eigene Rekord wird an die Relays aus `config.py` gesendet; das Hauptmenü
@@ -176,5 +180,3 @@ git config core.hooksPath .githooks
   Lauf nur, wenn er bit-gleich nachspielt. Geholte Codes liegen als
   `replays/share-<wort>-<wort>-<wort>.json` und funktionieren danach auch
   offline.
-  `replays/daily-<datum>.json` und erscheint nur dort als Ghost. Der adaptive
-  Free Mode lädt bewusst keine Ghosts.

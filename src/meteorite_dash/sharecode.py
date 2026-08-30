@@ -9,6 +9,7 @@ Layout (Big-Endian, Varints wie bei Protobuf, Strings mit Längen-Präfix):
 
     u8 SHARECODE_VERSION · u8 sim_version · u32 seed · str ship
     · u8 n + n x str accessory · u8 mode · str label · str recorded_at
+    · u8 director_kind · u8 director_version
     · Snapshot (varint tick, svarint hp, svarint ammo, f64 light_years,
       varint coins, varint shield) · 32 B state_hash
     · varint n_events + n x (Maske << 4 | Länge; Länge 15 = Escape + varint)
@@ -26,6 +27,7 @@ import struct
 import zlib
 
 from meteorite_dash.config import SHARECODE_VERSION
+from meteorite_dash.difficulty import DirectorKind
 from meteorite_dash.inputs import InputFrame
 from meteorite_dash.replay import Frames, Replay, RunMode
 from meteorite_dash.simulation import RunConfig, Snapshot
@@ -33,6 +35,8 @@ from meteorite_dash.simulation import RunConfig, Snapshot
 _ALL_INPUTS = int(functools.reduce(operator.or_, InputFrame))
 _MODE_CODES: dict[RunMode, int] = {RunMode.FREE: 0, RunMode.DAILY: 1}
 _MODES_BY_CODE: dict[int, RunMode] = {code: mode for mode, code in _MODE_CODES.items()}
+_DIRECTOR_CODES: dict[DirectorKind, int] = {DirectorKind.CONSTANT: 0, DirectorKind.ADAPTIVE: 1}
+_DIRECTORS_BY_CODE: dict[int, DirectorKind] = {code: kind for kind, code in _DIRECTOR_CODES.items()}
 _RUN_LENGTH_ESCAPE = 15  # Lauflängen ab hier stehen als Varint hinter dem Byte
 _MAX_VARINT_BYTES = 10
 _HASH_BYTES = 32
@@ -134,6 +138,8 @@ def encode(replay: Replay) -> bytes:
     writer.u8(_MODE_CODES[replay.mode])
     writer.string(replay.label)
     writer.string(replay.recorded_at)
+    writer.u8(_DIRECTOR_CODES[replay.director_kind])
+    writer.u8(replay.director_version)
     final = replay.final
     writer.varint(final.tick)
     writer.svarint(final.hp)
@@ -172,6 +178,8 @@ def decode(data: bytes) -> Replay | None:
         mode = _MODES_BY_CODE[reader.u8()]
         label = reader.string()
         recorded_at = reader.string()
+        director_kind = _DIRECTORS_BY_CODE[reader.u8()]
+        director_version = reader.u8()
         final = Snapshot(
             tick=reader.varint(),
             hp=reader.svarint(),
@@ -196,6 +204,8 @@ def decode(data: bytes) -> Replay | None:
         recorded_at=recorded_at,
         mode=mode,
         label=label,
+        director_kind=director_kind,
+        director_version=director_version,
     )
 
 

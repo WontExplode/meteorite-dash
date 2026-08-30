@@ -39,6 +39,11 @@ from meteorite_dash.headless import scripted_inputs
 from meteorite_dash.identity import Identity, IdentityStore, verify_signature
 from meteorite_dash.inputs import InputFrame
 from meteorite_dash.main import main
+from meteorite_dash.mode_directors import (
+    director_for_mode,
+    director_kind_for_mode,
+    director_version_for_mode,
+)
 from meteorite_dash.nostr import (
     Event,
     RelayClient,
@@ -58,9 +63,21 @@ SEED = 20260830
 CONFIG = RunConfig(seed=SEED, ship="Allrounder")
 
 
-def _record(config: RunConfig = CONFIG, input_seed: int = 3, ticks: int = 900) -> Replay:
-    sim = Simulation(config)
-    recorder = Recorder(config, mode=RunMode.DAILY, label="2026-08-30")
+def _record(
+    config: RunConfig = CONFIG,
+    input_seed: int = 3,
+    ticks: int = 900,
+    mode: RunMode = RunMode.DAILY,
+) -> Replay:
+    """Lauf mit dem Director des Modus aufzeichnen — so, wie das Spiel ihn erzeugt."""
+    sim = Simulation(config, director=director_for_mode(mode))
+    recorder = Recorder(
+        config,
+        mode=mode,
+        label="2026-08-30" if mode is RunMode.DAILY else "",
+        director_kind=director_kind_for_mode(mode),
+        director_version=director_version_for_mode(mode),
+    )
     for frame in scripted_inputs(input_seed, ticks):
         if sim.is_over:
             break
@@ -369,8 +386,9 @@ def test_game_scene_publishes_new_records_only(
 def test_ghost_from_community_run_and_death_screen(
     context: GameContext, relay: FakeRelay, tmp_path: Path
 ) -> None:
+    # Erzwungener Seed im Free Mode: der Freund hat denselben Seed frei (adaptiv) gespielt.
     friend = _exchange(relay, tmp_path / "friend")
-    friend.publish_now(_record(ticks=1200))
+    friend.publish_now(_record(ticks=1200, mode=RunMode.FREE))
     me = _exchange(relay, tmp_path / "me")
     context.replays = me.store
     context.exchange = me

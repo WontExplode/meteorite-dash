@@ -36,6 +36,7 @@ from meteorite_dash.config import (
     WEAPON_HUD_TOP_LEFT,
 )
 from meteorite_dash.context import GameContext
+from meteorite_dash.difficulty import DirectorKind
 from meteorite_dash.ghost import Ghost
 from meteorite_dash.identity import short_pubkey
 from meteorite_dash.inputs import InputFrame, from_pressed
@@ -65,6 +66,11 @@ class GameScene(Scene):
     Mit `spectate=` läuft sie als Zuschauer: Eingaben kommen aus dem Replay
     statt von der Tastatur, nichts wird aufgezeichnet, gutgeschrieben oder
     geteilt; am Ende zeigt der Death-Screen „REPLAY VON …“.
+
+    Die Director-Art folgt dem Modus (`mode_directors`); `director_kind=`
+    überschreibt sie für ein Rennen gegen einen fremden Lauf, Zuschauen nimmt
+    immer die im Replay aufgezeichnete Art. So gelten für Spieler und Ghost
+    dieselben Regeln.
     """
 
     def __init__(
@@ -76,18 +82,22 @@ class GameScene(Scene):
         mode: RunMode = RunMode.FREE,
         label: str = "",
         spectate: Replay | None = None,
+        director_kind: DirectorKind | None = None,
     ) -> None:
         super().__init__(context)
         self.spectate = spectate
         if spectate is not None:
             self.seed, self.mode, self.label = spectate.config.seed, spectate.mode, spectate.label
             config = spectate.config
+            director_kind = spectate.director_kind
         else:
             self.seed = seed if seed is not None else pick_seed()
             self.mode = mode
             self.label = label
             config = self.run_config(self.seed)
-        director_kind = director_kind_for_mode(self.mode)
+            if director_kind is None:
+                director_kind = director_kind_for_mode(self.mode)
+        self.director_kind = director_kind
         self.sim = Simulation(config, director=director_for_kind(director_kind))
         self._spectate_inputs: Iterator[InputFrame] | None = (
             spectate.inputs() if spectate is not None else None
@@ -99,9 +109,9 @@ class GameScene(Scene):
             director_kind=director_kind,
             director_version=director_version_for_kind(director_kind),
         )
-        # Ghosts gehören nur zum wiederholbaren Daily Run, beim Zuschauen nie.
+        # Ghost nur unter denselben Regeln (Seed, Modus, Director), beim Zuschauen nie.
         ghost_replay = None
-        if spectate is None and self.mode is RunMode.DAILY:
+        if spectate is None:
             candidate = ghost if ghost is not None else self.find_ghost(self.seed)
             if candidate is not None and self._is_compatible_ghost(candidate):
                 ghost_replay = candidate
@@ -126,28 +136,28 @@ class GameScene(Scene):
         return RunConfig(seed, spec.name, equipped)
 
     def find_ghost(self, seed: int) -> Replay | None:
-        """Kompatiblen Daily-Rekord zum Seed finden; Free lädt bewusst keinen Ghost."""
-        if self.mode is not RunMode.DAILY:
-            return None
+        """Weitesten Lauf zum Seed mit denselben Regeln (Modus, Director, Version) finden.
+
+        Im Daily ist das der Tagesrekord, im Free nur bei erzwungenem Seed
+        relevant (eigener Bestlauf oder Community-Läufe zu diesem Seed).
+        """
         store = self.context.replays
         if store is None:
             return None
-        director_kind = director_kind_for_mode(self.mode)
         return store.best_for_seed(
             seed,
             mode=self.mode,
-            director_kind=director_kind,
-            director_version=director_version_for_kind(director_kind),
+            director_kind=self.director_kind,
+            director_version=director_version_for_kind(self.director_kind),
         )
 
     def _is_compatible_ghost(self, replay: Replay) -> bool:
-        director_kind = director_kind_for_mode(self.mode)
         return (
             replay.config.seed == self.seed
             and replay.mode is self.mode
             and replay.sim_version == SIM_VERSION
-            and replay.director_kind is director_kind
-            and replay.director_version == director_version_for_kind(director_kind)
+            and replay.director_kind is self.director_kind
+            and replay.director_version == director_version_for_kind(self.director_kind)
         )
 
     def ghost_image(self, size: tuple[int, int]) -> pygame.Surface:
