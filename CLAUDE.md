@@ -76,11 +76,20 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   Muster zahlt Bonus. Eigener Münz-Score im HUD und Death-Screen; nach jedem
   Lauf wandern die Münzen ins persistente Guthaben.
 - **Shop & Fortschritt** (Issue #14): `Progress` (Guthaben, Freischaltungen,
-  Ausrüstung) wird als JSON im Nutzer-Datenverzeichnis gespeichert
+  Zubehör-Vorrat) wird als JSON im Nutzer-Datenverzeichnis gespeichert
   (`persistence.py`). `ShopScene` mit drei Reitern: Schiffe freischalten
-  (`ShipSpec.price`), Zubehör für die `accessory_slots` (Schild, Magnet,
-  Extra-Munition, Panzerung — `accessories.py`) und Farbvarianten (`TINTS` in
-  `ships.py`). Schiffsauswahl zeigt gesperrte Schiffe abgedunkelt mit Preis.
+  (`ShipSpec.price`), Zubehör nachkaufen (Schild, Magnet, Extra-Munition,
+  Panzerung — `accessories.py`) und Farbvarianten (`TINTS` in `ships.py`).
+  Schiffsauswahl zeigt gesperrte Schiffe abgedunkelt mit Preis.
+- **Zubehör als Verbrauchsware**: `accessory_stock` zählt die Exemplare je Art
+  (mehrfach kaufbar bis `ACCESSORY_MAX_STOCK`), die `LoadoutScene`
+  (`scenes/loadout.py`) legt sie vor jedem Lauf auf die `accessory_slots` des
+  Schiffs, und `GameScene.run_config` bucht sie beim Start ab
+  (`Progress.consume_loadout`). Damit behalten Münzen dauerhaft einen Zweck.
+  Jeder gespielte Lauf geht deshalb über die Ausrüstung: `LOADOUT_FREE`
+  (Start), `LOADOUT_DAILY` (Daily Run) und `LOADOUT_RACE` (Rennen gegen einen
+  per Code geholten Lauf; `pending_replay` bleibt dabei liegen). Zuschauen
+  verbraucht nichts — dort baut `GameScene` gar keine eigene `RunConfig`.
 - **Deterministische Simulation** (Issue #34): `Simulation` (`simulation.py`)
   tickt mit festem `SIM_DT`, Zufall aus Seed-Streams, Eingaben als
   `InputFrame`; jede Interaktion liefert ein `SimEvent` mit Snapshot
@@ -221,6 +230,7 @@ main.main()                 Entry-Point, ruft App().run()
       ├─ MainMenu            Transition zurück → App wählt nächste Szene
       ├─ ShipSelection
       ├─ ShopScene          Münzen gegen Schiffe, Zubehör, Farben
+      ├─ LoadoutScene       Zubehör-Vorrat vor dem Lauf auf die Plätze legen
       ├─ LeaderboardScene   Daily-Bestenliste aus dem ReplayStore
       ├─ CodeEntryScene     Drei-Wort-Code tippen -> Lauf holen -> Rennen/Ansehen
       ├─ GameScene          Fixstep-Loop um `Simulation` (simulation.py) + Rendering
@@ -664,10 +674,13 @@ Relay der Briefkasten, die Simulation der Richter.
 ### Shop, Zubehör & Persistenz (Issue #14)
 
 - `progress.py`: `Progress` ist reine Logik — Guthaben (`coins`),
-  `unlocked_ships`, `owned_accessories`, `owned_tints`, `equipped` (Schiffsname
-  → Zubehör-IDs) und `tints` (Schiffsname → Farb-ID). Kauf-/Ausrüst-Methoden
-  liefern ein `ShopResult` (`OK`, `TOO_EXPENSIVE`, `NO_FREE_SLOT`, …); die Szene
-  übersetzt das in Text. Kostenlose Schiffe (`price == 0`) sind immer frei.
+  `unlocked_ships`, `accessory_stock` (Zubehör-ID → Exemplare im Lager),
+  `owned_tints`, `equipped` (Schiffsname → Zubehör-IDs für den nächsten Lauf)
+  und `tints` (Schiffsname → Farb-ID). Kauf-/Ausrüst-Methoden liefern ein
+  `ShopResult` (`OK`, `TOO_EXPENSIVE`, `NO_FREE_SLOT`, `STOCK_FULL`, …); die
+  Szene übersetzt das in Text. Kostenlose Schiffe (`price == 0`) sind immer
+  frei. `consume_loadout(ship)` bucht die eingesetzten Teile beim Laufstart ab
+  und nimmt ein leer gewordenes Teil von den Plätzen **aller** Schiffe.
 - `persistence.py`: `SaveStore(path)` liest/schreibt `Progress` als JSON —
   atomar (Temp-Datei + `os.replace`), defensiv geparst (`Progress.from_dict`
   verwirft falsche Typen und unbekannte IDs), kaputte/fehlende Datei → frischer
@@ -678,10 +691,12 @@ Relay der Briefkasten, die Simulation der Richter.
   `accessories.ACCESSORIES` (Kind, Name, Beschreibung, Preis), `TintSpec` in
   `ships.TINTS`. Effektstärken (`SHIELD_CHARGES`, `MAGNET_RADIUS`,
   `AMMO_RESERVE_BONUS`, `ARMOR_HP_BONUS`) stehen in `config.py`.
-- Zubehör wird **einmal gekauft** und pro Schiff ausgerüstet, begrenzt durch
-  `ShipSpec.accessory_slots`. Farben ebenso: einmal kaufen, pro Schiff
-  wählen; `Progress.ship_tint(spec)` liefert die effektive Färbung (gekaufte
-  Farbe oder `ShipSpec.tint`).
+- Zubehör wird **auf Vorrat gekauft** (beliebig oft, Deckel
+  `ACCESSORY_MAX_STOCK`), vor dem Lauf in der `LoadoutScene` auf die
+  `ShipSpec.accessory_slots` gelegt und mit dem Start verbraucht — je Art
+  höchstens ein Exemplar pro Lauf (Effekte stapeln nicht). Farben dagegen:
+  einmal kaufen, pro Schiff wählen; `Progress.ship_tint(spec)` liefert die
+  effektive Färbung (gekaufte Farbe oder `ShipSpec.tint`).
 - Effekte wendet `Simulation.__init__` aus der `RunConfig` an (Zubehör-IDs
   liefert `GameScene.run_config`): Panzerung → `Player(extra_hp=…)`,
   Extra-Munition → `WeaponLoadout(standard_ammo_bonus=…)`, Schild →
@@ -689,8 +704,9 @@ Relay der Briefkasten, die Simulation der Richter.
   HUD `SCHILD xN`), Magnet → `CoinFormation.attract` zieht Münzen im Radius
   heran.
 - `ShopScene` (`scenes/shop.py`): Reiter Schiffe / Zubehör / Farben, `rows()`
-  baut die Zeilen aus `Progress`, `_activate` kauft/rüstet/wählt und ruft
-  danach `context.save_progress()`. Wallet oben rechts über
+  baut die Zeilen aus `Progress`, `_activate` kauft/wählt und ruft danach
+  `context.save_progress()`; der Zubehör-Reiter zeigt den Vorrat (`x3`) und
+  kauft nur nach — eingesetzt wird in der `LoadoutScene`. Wallet oben rechts über
   `scenes/widgets.draw_wallet` — auch im Hauptmenü und in der Schiffsauswahl.
 - `ShipSelection` hält einen eigenen `cursor`; nur ein freigeschaltetes Schiff
   wird per Enter in `GameState.selected_ship_index` übernommen.
@@ -779,11 +795,11 @@ Relay der Briefkasten, die Simulation der Richter.
 - **Münz-Muster:** Layout-Funktion in `coins.py` + Eintrag in `LAYOUTS` +
   `CoinPatternSpec` in `COIN_PATTERNS` (`config.py`) → Test in
   `tests/test_coins.py` (Determinismus, passt ins Fenster).
-- **Zubehör:** `AccessoryKind` + `AccessorySpec` in `accessories.py`,
-  Effektstärke in `config.py`, Effekt in `Simulation.__init__` / `step` (oder
-  als reine Funktion in `combat.py` / `coins.py`) → Tests in
-  `tests/test_shop.py`.
-  `Progress` braucht keine Änderung — IDs kommen aus dem Katalog.
+- **Zubehör:** `AccessoryKind` + `AccessorySpec` in `accessories.py` (Preis pro
+  Exemplar, es hält einen Lauf), Effektstärke in `config.py`, Effekt in
+  `Simulation.__init__` / `step` (oder als reine Funktion in `combat.py` /
+  `coins.py`) → Tests in `tests/test_shop.py`. `Progress`, `ShopScene` und
+  `LoadoutScene` brauchen keine Änderung — IDs kommen aus dem Katalog.
 - **Shop-Artikel / Farbe:** `TintSpec` in `ships.TINTS` bzw. `price` am
   `ShipSpec`; Persistenz übernimmt neue IDs automatisch, alte Speicherstände
   bleiben lesbar.
@@ -811,7 +827,7 @@ Relay der Briefkasten, die Simulation der Richter.
   (`test_simulation.py`), Münzen (`test_coins.py`), Fortschritt/Persistenz
   (`test_progress.py`, mit `tmp_path`), Replays (`test_replay.py`, Golden in
   `tests/replays/`), Ghost (`test_ghost.py`), Daily (`test_daily.py`),
-  Shop/Zubehör (`test_shop.py`), Skalierung/Resize (`test_viewport.py`),
+  Shop/Zubehör/Ausrüstung (`test_shop.py`), Skalierung/Resize (`test_viewport.py`),
   Hitboxen (`test_hitbox.py`), Feedback/Sound (`test_feedback.py`),
   Zeitrampe (`test_ramp_difficulty.py`),
   Share-Code (`test_sharecode.py`), Nostr (`test_nostr.py`), Bestenliste

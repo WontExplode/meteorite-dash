@@ -21,7 +21,9 @@ immer mehr zurückgelegte Lichtjahre.
   komplett eingesammelt gibt Bonus, eigener Münz-Score im HUD
 - Shop: Münzen aus allen Läufen werden gespeichert und kaufen Schiffe,
   Zubehör (Schild, Magnet, Extra-Munition, Panzerung) und Schiffsfarben
-- Zubehör wird pro Schiff in dessen Zubehörplätze gelegt und wirkt im Lauf
+- Zubehör ist Verbrauchsware: es wird auf Vorrat gekauft (mehrere Exemplare
+  derselben Art), vor jedem Lauf auf die Zubehörplätze des Schiffs gelegt und
+  mit dem Start verbraucht — Münzen bleiben also dauerhaft nützlich
 - Game-Over-Screen mit finalem Score
 - dynamische Fenstergröße und Vollbild über einen gemeinsamen `Viewport`
 - deterministische Simulation: fester Zeitschritt, Seed pro Lauf
@@ -57,7 +59,9 @@ immer mehr zurückgelegte Lichtjahre.
 - `Pfeil hoch` / `Pfeil runter`: Raumschiff bewegen oder Menüpunkt wechseln
 - `Pfeil links` / `Pfeil rechts`: Raumschiff in der Schiffsauswahl wechseln,
   Reiter im Shop wechseln
-- `Enter` im Shop: kaufen, ausrüsten/ablegen oder Farbe wählen
+- `Enter` im Shop: kaufen, Schiff auswählen oder Farbe wählen
+- Ausrüstung vor dem Lauf: `Space` setzt Zubehör ein bzw. legt es ab,
+  `Enter` startet den Lauf, `Escape` geht zurück ins Menü
 - `Space`: schießen (im Spiel)
 - `R`: Waffe wechseln (im Spiel, wenn mehrere Waffen vorhanden)
 - `Enter` / `Space`: Menüauswahl bestätigen
@@ -118,7 +122,7 @@ src/meteorite_dash/
   hitbox.py            Pixelgenaue Masken im Referenzraum
   ships.py             Schiffsdatenblätter, Slot-Limits, Preise und Farben
   accessories.py       Zubehör-Katalog (Schild, Magnet, Extra-Munition, Panzerung)
-  progress.py          Guthaben, Freischaltungen, Ausrüstung (Shop-Regeln)
+  progress.py          Guthaben, Freischaltungen, Zubehör-Vorrat (Shop-Regeln)
   persistence.py       JSON-Speicherstand im Nutzer-Datenverzeichnis
   coins.py             Münzen, Muster-Layouts und Formationen
   spawner.py           Timergesteuertes Spawning
@@ -128,6 +132,7 @@ src/meteorite_dash/
     main_menu.py       Hauptmenü
     ship_selection.py  Schiffsauswahl
     shop.py            Shop (Schiffe, Zubehör, Farben)
+    loadout.py         Ausrüstung vor dem Lauf: Vorrat auf die Plätze legen
     leaderboard.py     Daily-Bestenliste
     code_entry.py      Code eingeben, Lauf holen, antreten oder ansehen
     widgets.py         Geteilte Zeichen-Helfer (Münz-Guthaben)

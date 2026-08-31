@@ -74,7 +74,8 @@ class CodeEntryScene(Scene):
     def confirm(self) -> None:
         if self.result is not None:
             self.context.state.pending_replay = self.result
-            self.finish(Transition.START_RACE)
+            # Vor dem Rennen wird ausgerüstet — es kostet Zubehör wie jeder Lauf.
+            self.finish(Transition.LOADOUT_RACE)
             return
         if self._waiting:
             return

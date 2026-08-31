@@ -41,8 +41,9 @@ from meteorite_dash.scenes.base import Scene, Transition
 from meteorite_dash.scenes.widgets import draw_wallet
 
 _ACTION_TRANSITIONS: dict[MenuAction, Transition] = {
-    "start": Transition.START_GAME,
-    "daily": Transition.START_DAILY,
+    # Beide Läufe gehen über die Ausrüstung: Zubehör wird pro Lauf eingesetzt.
+    "start": Transition.LOADOUT_FREE,
+    "daily": Transition.LOADOUT_DAILY,
     "leaderboard": Transition.LEADERBOARD,
     "code": Transition.CODE_ENTRY,
     "ship": Transition.SHIP_SELECTION,

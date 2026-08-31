@@ -73,7 +73,7 @@ def test_menu_offers_daily_run(context: GameContext) -> None:
     for _ in range(index):
         menu.handle_event(_keydown(pygame.K_DOWN))
     menu.handle_event(_keydown(pygame.K_RETURN))
-    assert menu._transition is Transition.START_DAILY
+    assert menu._transition is Transition.LOADOUT_DAILY
     menu.draw()
 
 

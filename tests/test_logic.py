@@ -139,7 +139,8 @@ def test_main_menu_remembers_cursor(context: GameContext) -> None:
 def test_main_menu_actions_map_to_transitions(context: GameContext) -> None:
     menu = MainMenu(context)
     menu.handle_event(_keydown(pygame.K_RETURN))
-    assert menu._transition is Transition.START_GAME
+    # "Start" führt zuerst zur Ausrüstung, die dann den Lauf startet.
+    assert menu._transition is Transition.LOADOUT_FREE
 
 
 def test_ship_selection_navigation_wraps(context: GameContext) -> None:

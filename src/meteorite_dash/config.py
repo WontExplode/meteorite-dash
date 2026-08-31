@@ -47,7 +47,7 @@ DEATH_MUTED_COLOR: Color = (120, 120, 150)
 MUTED_TEXT_COLOR: Color = (120, 120, 150)
 OWNED_TEXT_COLOR: Color = (140, 255, 160)
 
-MENU_FONT_NAME = "amoria"
+MENU_FONT_NAME = "default"
 MENU_FONT_SIZE = 42
 HINT_FONT_SIZE = 22
 DEATH_TITLE_FONT_SIZE = 84
@@ -245,7 +245,9 @@ SFX_VOLUME = 0.35
 SAVE_DIR_ENV = "METEORITE_DASH_SAVE_DIR"
 SAVE_APP_DIR = "meteorite-dash"
 SAVE_FILENAME = "progress.json"
-SAVE_FORMAT_VERSION = 1
+# 2: Zubehör ist Vorratsware (`accessory_stock`) statt Einmalkauf. Ältere
+# Stände werden weiter gelesen — jedes gekaufte Teil zählt als ein Exemplar.
+SAVE_FORMAT_VERSION = 2
 
 # Zubehör-Effekte. Preise und Beschreibungen stehen im Katalog in `accessories.py`.
 SHIELD_CHARGES = 1  # blockierte Kollisionen pro Lauf
@@ -253,6 +255,9 @@ MAGNET_RADIUS = 140.0  # Referenz-px um die Schiffsmitte
 MAGNET_PULL_SPEED = 520.0  # Referenz-px/s, muss COIN_SPEED deutlich übersteigen
 AMMO_RESERVE_BONUS = 3  # zusätzliche Schüsse im Standard-Magazin
 ARMOR_HP_BONUS = 30  # zusätzliche Hüllenpunkte
+# Zubehör ist Verbrauchsware: gekauft wird auf Vorrat, ein Lauf verbraucht die
+# eingesetzten Teile. Der Deckel hält Lager und Speicherdatei überschaubar.
+ACCESSORY_MAX_STOCK = 99
 
 WALLET_TOP_RIGHT: WindowSize = (776, 24)
 SHIELD_HUD_TOP_LEFT: WindowSize = (24, 80)

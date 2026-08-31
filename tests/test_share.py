@@ -254,7 +254,7 @@ def test_code_entry_offline_uses_local_store_only(context: GameContext, tmp_path
     scene.handle_event(_keydown(pygame.K_RETURN))
     assert scene.result is not None
     scene.handle_event(_keydown(pygame.K_RETURN))
-    assert scene._transition is Transition.START_RACE
+    assert scene._transition is Transition.LOADOUT_RACE  # erst ausrüsten, dann rennen
     assert context.state.pending_replay == scene.result
 
 

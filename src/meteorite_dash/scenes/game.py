@@ -148,11 +148,18 @@ class GameScene(Scene):
         self._show_difficulty_debug = False
 
     def run_config(self, seed: int) -> RunConfig:
-        """`RunConfig` aus Seed, gewähltem Schiff und dessen ausgerüstetem Zubehör."""
+        """`RunConfig` aus Seed, gewähltem Schiff und dessen Zubehör für diesen Lauf.
+
+        Zubehör ist Verbrauchsware: die in der `LoadoutScene` eingesetzten Teile
+        werden hier aus dem Lager gebucht und gelten nur für diesen Lauf. Der
+        Fortschritt wird sofort geschrieben — sonst wäre ein Absturz ein
+        Gratis-Lauf.
+        """
         state = self.context.state
         spec = state.selected_ship
-        equipped = tuple(acc.id for acc in state.progress.equipped_accessories(spec))
-        return RunConfig(seed, spec.name, equipped)
+        used = state.progress.consume_loadout(spec)
+        self.context.save_progress()
+        return RunConfig(seed, spec.name, tuple(acc.id for acc in used))
 
     def find_ghost(self, seed: int) -> Replay | None:
         """Weitesten Lauf zum Seed mit denselben Regeln (Modus, Director, Version) finden.
