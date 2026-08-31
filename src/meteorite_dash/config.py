@@ -110,6 +110,86 @@ METEORITE_VARIANTS: tuple[MeteoriteVariant, ...] = (
     MeteoriteVariant(42, ("AsteroidMedium.png", "AsteroidMedium2.png"), hp=40, contact_damage=30),
     MeteoriteVariant(60, ("AsteroidLarge.png", "AsteroidLarge2.png"), hp=70, contact_damage=45),
 )
+# Unzerstörbare Meteoriten (Projektskizze): Panzergestein, das kein Schuss
+# knackt — es muss umflogen werden. Silhouette und Sprites sind dieselben wie
+# beim normalen Meteoriten; einziges Warnsignal ist die metallische Tönung,
+# deshalb liegt sie weit weg von `METEORITE_COLOR`.
+INDESTRUCTIBLE_METEORITE_COLOR: Color = (176, 196, 222)
+# Helligkeitsstufen des Panzergesteins, vom unbeleuchteten Metall bis zur
+# vollen Reflexion. Der `AssetLoader` entsättigt das Sprite zuerst und
+# **addiert** dann diesen Wert (`BLEND_RGB_ADD`). Beides ist nötig: die
+# Asteroiden-Sprites sind blaustichig, ein fester Summand ließe je nach Pixel
+# einen Farbstich stehen (die Blauwerte streuen von 27 bis 80) — und sie liegen
+# bei rund (32, 40, 64), also fast schwarz, weshalb Multiplizieren sie nur
+# weiter abdunkeln könnte. Entsättigt und aufgehellt ergibt Stufe 0 etwa Grau
+# 95, die letzte etwa Grau 200. Feste Liste statt stetiger Kurve, damit der
+# Bild-Cache beschränkt bleibt: eine Surface je Stufe und Größe statt einer je
+# Frame.
+INDESTRUCTIBLE_METEORITE_SHEEN: tuple[Color, ...] = (
+    (50, 50, 50),
+    (65, 65, 65),
+    (80, 80, 80),
+    (95, 95, 95),
+    (110, 110, 110),
+    (125, 125, 125),
+    (140, 140, 140),
+    (155, 155, 155),
+)
+
+# --- Lichtbänder ("Sonne") --------------------------------------------------
+# Zwei schräge Streifen liegen über dem Referenzraum. Wo ein Panzerfels sie
+# kreuzt, blitzt er auf — er reflektiert. Rein optisch: kein Sim-Zustand, keine
+# Wirkung auf Kollision, Hash oder Replay. Nur die unzerstörbaren Meteoriten
+# reagieren darauf; normales Gestein bleibt stumpf, damit der Unterschied das
+# Warnsignal bleibt.
+LIGHT_BAND_START_DEGREES = 60.0
+# Abstand zweier Streifen, gemessen längs ihrer Normalen (Referenz-px). Quer zu
+# den Streifen legt ein Meteorit rund 745 px zurück, bis er links hinausfliegt.
+# 400 px Abstand ergeben beim Startwinkel auf jeder Flughöhe genau zwei
+# Reflexionen pro Überflug. Über den ganzen Sonnenbogen bleiben es zwei bis
+# drei — weiter auseinander, und bei flachem Winkel fällt eine ganz aus.
+LIGHT_BAND_PERIOD = 400.0
+# Streifenprofil, beide als Anteil von `LIGHT_BAND_PERIOD`. Bewusst
+# unsymmetrisch: der Fels läuft in den Streifen hinein und blitzt auf kurzer
+# Strecke auf (`EDGE`), danach klingt die Reflexion über eine längere Strecke
+# ab (`FADE`) — so sieht man eine Reflexion mit Nachglühen und nicht ein
+# gleichmäßig helles Band. Zusammen gut ein Sechstel des Streifenabstands,
+# der Rest liegt im Schatten.
+LIGHT_BAND_EDGE_WIDTH = 0.02
+LIGHT_BAND_FADE_WIDTH = 0.14
+# Die "Sonne" kippt die Streifen von `LIGHT_BAND_START_DEGREES` um
+# `LIGHT_SUN_SWING_DEGREES` weiter und wieder zurück, eine volle Bewegung je
+# `LIGHT_SUN_PERIOD_SECONDS`. Bewusst ein Pendel und keine volle Umdrehung:
+# bei 180 Grad lägen die Streifen parallel zur Flugbahn, kein Meteorit würde
+# je einen kreuzen und alle Reflexionen fielen aus. Der Bogen 60 bis 120 Grad
+# hält den Winkel zur Flugbahn immer steil genug für zwei Reflexionen.
+LIGHT_SUN_SWING_DEGREES = 60.0
+LIGHT_SUN_PERIOD_SECONDS = 240.0
+# Platzhalter: `take_damage` zieht nie ab, die HP sinken nie. Der Wert taucht
+# nur im `state_key` auf und hält das `Damageable`-Protokoll erfüllt — sonst
+# flögen Projektile wirkungslos hindurch, statt am Panzer zu zerschellen.
+INDESTRUCTIBLE_METEORITE_HP = 1
+INDESTRUCTIBLE_METEORITE_VARIANTS: tuple[MeteoriteVariant, ...] = (
+    MeteoriteVariant(
+        30,
+        ("AsteroidSmall.png", "AsteroidSmall2.png"),
+        hp=INDESTRUCTIBLE_METEORITE_HP,
+        contact_damage=30,
+    ),
+    MeteoriteVariant(
+        42,
+        ("AsteroidMedium.png", "AsteroidMedium2.png"),
+        hp=INDESTRUCTIBLE_METEORITE_HP,
+        contact_damage=40,
+    ),
+    MeteoriteVariant(
+        60,
+        ("AsteroidLarge.png", "AsteroidLarge2.png"),
+        hp=INDESTRUCTIBLE_METEORITE_HP,
+        contact_damage=55,
+    ),
+)
+
 ENEMY_SIZE: WindowSize = (44, 44)
 WAVE_ENEMY_HP = 20
 HUNTER_ENEMY_HP = 30
@@ -128,6 +208,9 @@ SPAWN_INTERVAL_RANGE: tuple[float, float] = (0.6, 1.4)
 METEORITE_WEIGHT = 8.0
 WAVE_ENEMY_WEIGHT = 2.0
 HUNTER_ENEMY_WEIGHT = 0.5
+# Selten: ein Hindernis, gegen das Munition nichts ausrichtet, soll überraschen,
+# nicht die Bahn verstopfen.
+INDESTRUCTIBLE_METEORITE_WEIGHT = 1.5
 # Spawn-Würfe, die ein `accept`-Prädikat ablehnt, werden so oft wiederholt;
 # danach fällt der Spawn aus.
 SPAWN_MAX_ATTEMPTS = 5
@@ -289,7 +372,7 @@ MAX_STEPS_PER_FRAME = 5
 # Bei jeder Änderung an Spielregeln/Physik/Spawn erhöhen: Replays älterer
 # Versionen bleiben lesbar, werden aber nicht mehr als Ghost/Referenz benutzt.
 # 2: pixelgenaue Kollision über Masken statt Rechtecke (`hitbox.py`).
-SIM_VERSION = 2
+SIM_VERSION = 3
 # Seeds sind 32-Bit-Zahlen — kurz genug zum Abtippen ("Rennen gegen Freunde").
 SEED_BITS = 32
 SEED_ENV = "METEORITE_DASH_SEED"

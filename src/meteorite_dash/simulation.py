@@ -28,6 +28,7 @@ from meteorite_dash.config import (
     COIN_PATTERNS,
     COIN_SPAWN_INTERVAL_RANGE,
     HUNTER_ENEMY_WEIGHT,
+    INDESTRUCTIBLE_METEORITE_WEIGHT,
     MAGNET_PULL_SPEED,
     MAGNET_RADIUS,
     METEORITE_WEIGHT,
@@ -52,6 +53,7 @@ from meteorite_dash.entities import (
     collect_pickups,
     spawn_ammo_pickup,
     spawn_hunter_enemy,
+    spawn_indestructible_meteorite,
     spawn_meteorite,
     spawn_wave_enemy,
 )
@@ -66,6 +68,7 @@ from meteorite_dash.weapons import WeaponLoadout
 # Spawn-Tabellen sind fensterunabhängig: alle Fabriken arbeiten im Referenzraum.
 SPAWN_TABLE: tuple[SpawnEntry[Entity], ...] = (
     SpawnEntry(METEORITE_WEIGHT, spawn_meteorite),
+    SpawnEntry(INDESTRUCTIBLE_METEORITE_WEIGHT, spawn_indestructible_meteorite),
     SpawnEntry(WAVE_ENEMY_WEIGHT, spawn_wave_enemy),
     SpawnEntry(HUNTER_ENEMY_WEIGHT, spawn_hunter_enemy),
     SpawnEntry(AMMO_PICKUP_WEIGHT, spawn_ammo_pickup),

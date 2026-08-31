@@ -65,7 +65,9 @@ class AssetLoader:
     """
 
     def __init__(self) -> None:
-        self._cache: dict[tuple[str, tuple[int, int], bool, Color | None], pygame.Surface] = {}
+        self._cache: dict[
+            tuple[str, tuple[int, int], bool, Color | None, Color | None], pygame.Surface
+        ] = {}
 
     def load_ship(
         self, filename: str, size: tuple[int, int], tint: Color | None = None
@@ -81,9 +83,17 @@ class AssetLoader:
         size: tuple[int, int],
         *,
         rotate_left: bool = False,
+        tint: Color | None = None,
+        sheen: Color | None = None,
     ) -> pygame.Surface:
-        """Generisches Sprite (z. B. Meteorit) in `size`, optional nach links gedreht."""
-        return self._load_image_from_path(image_path(filename), size, rotate_left=rotate_left)
+        """Generisches Sprite (z. B. Meteorit) in `size`, optional gedreht und getönt.
+
+        `sheen` macht aus dem Sprite Metall: erst entsättigen, dann um diesen
+        Betrag aufhellen (siehe `_load_image_from_path`).
+        """
+        return self._load_image_from_path(
+            image_path(filename), size, rotate_left=rotate_left, tint=tint, sheen=sheen
+        )
 
     def _load_image_from_path(
         self,
@@ -92,9 +102,10 @@ class AssetLoader:
         *,
         rotate_left: bool = False,
         tint: Color | None = None,
+        sheen: Color | None = None,
     ) -> pygame.Surface:
-        """Lädt, skaliert, rotiert und tönt ein Bild; Ergebnis landet im Cache."""
-        key = (str(path), size, rotate_left, tint)
+        """Lädt, skaliert, rotiert, tönt und veredelt ein Bild; Ergebnis landet im Cache."""
+        key = (str(path), size, rotate_left, tint, sheen)
         cached = self._cache.get(key)
         if cached is not None:
             return cached
@@ -105,6 +116,13 @@ class AssetLoader:
             image = pygame.transform.rotate(image, -90)
         if tint is not None:
             image.fill((*tint, 255), special_flags=pygame.BLEND_RGBA_MULT)
+        if sheen is not None:
+            # Metall statt Gestein: entsättigen nimmt den Blaustich der
+            # Asteroiden-Sprites weg, das Addieren hellt auf. Beides rührt nur
+            # RGB an — der Alphakanal bleibt, damit Silhouette und
+            # Kollisionsmaske unverändert sind.
+            image = pygame.transform.grayscale(image)
+            image.fill(sheen, special_flags=pygame.BLEND_RGB_ADD)
         self._cache[key] = image
         return image
 

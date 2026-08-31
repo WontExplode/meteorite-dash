@@ -20,12 +20,22 @@
   "shield": 0
  },
  {
-  "tick": 157,
+  "tick": 114,
   "kind": "hit",
   "value": 0,
   "hp": 100,
   "ammo": 5,
-  "light_years": 31.39999999999992,
+  "light_years": 22.79999999999995,
+  "coins": 0,
+  "shield": 0
+ },
+ {
+  "tick": 141,
+  "kind": "hit",
+  "value": 0,
+  "hp": 100,
+  "ammo": 5,
+  "light_years": 28.199999999999932,
   "coins": 0,
   "shield": 0
  },
@@ -46,36 +56,6 @@
   "hp": 100,
   "ammo": 3,
   "light_years": 41.00000000000004,
-  "coins": 0,
-  "shield": 0
- },
- {
-  "tick": 205,
-  "kind": "hit",
-  "value": 0,
-  "hp": 100,
-  "ammo": 3,
-  "light_years": 41.00000000000004,
-  "coins": 0,
-  "shield": 0
- },
- {
-  "tick": 216,
-  "kind": "hit",
-  "value": 0,
-  "hp": 100,
-  "ammo": 3,
-  "light_years": 43.200000000000074,
-  "coins": 0,
-  "shield": 0
- },
- {
-  "tick": 216,
-  "kind": "destroyed",
-  "value": 0,
-  "hp": 100,
-  "ammo": 3,
-  "light_years": 43.200000000000074,
   "coins": 0,
   "shield": 0
  },
@@ -106,16 +86,6 @@
   "hp": 100,
   "ammo": 2,
   "light_years": 67.60000000000042,
-  "coins": 2,
-  "shield": 0
- },
- {
-  "tick": 349,
-  "kind": "hit",
-  "value": 0,
-  "hp": 100,
-  "ammo": 2,
-  "light_years": 69.80000000000045,
   "coins": 2,
   "shield": 0
  },
@@ -200,6 +170,16 @@
   "shield": 0
  },
  {
+  "tick": 530,
+  "kind": "hit",
+  "value": 0,
+  "hp": 100,
+  "ammo": 0,
+  "light_years": 106.00000000000097,
+  "coins": 8,
+  "shield": 0
+ },
+ {
   "tick": 534,
   "kind": "coin",
   "value": 1,
@@ -250,73 +230,103 @@
   "shield": 0
  },
  {
-  "tick": 568,
-  "kind": "hit",
-  "value": 0,
-  "hp": 100,
-  "ammo": 0,
-  "light_years": 113.60000000000107,
-  "coins": 17,
-  "shield": 0
- },
- {
-  "tick": 568,
-  "kind": "destroyed",
-  "value": 0,
-  "hp": 100,
-  "ammo": 0,
-  "light_years": 113.60000000000107,
-  "coins": 17,
-  "shield": 0
- },
- {
-  "tick": 570,
-  "kind": "contact",
-  "value": 35,
-  "hp": 65,
-  "ammo": 0,
-  "light_years": 114.00000000000108,
-  "coins": 17,
-  "shield": 0
- },
- {
-  "tick": 610,
+  "tick": 892,
   "kind": "contact",
   "value": 25,
-  "hp": 40,
+  "hp": 75,
   "ammo": 0,
-  "light_years": 122.0000000000012,
+  "light_years": 178.3999999999984,
   "coins": 17,
   "shield": 0
  },
  {
-  "tick": 829,
+  "tick": 947,
   "kind": "contact",
-  "value": 25,
-  "hp": 15,
+  "value": 22,
+  "hp": 53,
   "ammo": 0,
-  "light_years": 165.79999999999913,
+  "light_years": 189.3999999999978,
   "coins": 17,
   "shield": 0
  },
  {
-  "tick": 938,
+  "tick": 1132,
   "kind": "contact",
-  "value": 15,
+  "value": 40,
+  "hp": 13,
+  "ammo": 0,
+  "light_years": 226.39999999999569,
+  "coins": 17,
+  "shield": 0
+ },
+ {
+  "tick": 1204,
+  "kind": "coin",
+  "value": 1,
+  "hp": 13,
+  "ammo": 0,
+  "light_years": 240.79999999999487,
+  "coins": 18,
+  "shield": 0
+ },
+ {
+  "tick": 1352,
+  "kind": "coin",
+  "value": 1,
+  "hp": 13,
+  "ammo": 0,
+  "light_years": 270.3999999999932,
+  "coins": 19,
+  "shield": 0
+ },
+ {
+  "tick": 1355,
+  "kind": "coin",
+  "value": 1,
+  "hp": 13,
+  "ammo": 0,
+  "light_years": 270.9999999999932,
+  "coins": 20,
+  "shield": 0
+ },
+ {
+  "tick": 1366,
+  "kind": "coin",
+  "value": 1,
+  "hp": 13,
+  "ammo": 0,
+  "light_years": 273.19999999999305,
+  "coins": 21,
+  "shield": 0
+ },
+ {
+  "tick": 1376,
+  "kind": "coin",
+  "value": 1,
+  "hp": 13,
+  "ammo": 0,
+  "light_years": 275.19999999999294,
+  "coins": 22,
+  "shield": 0
+ },
+ {
+  "tick": 1395,
+  "kind": "contact",
+  "value": 13,
   "hp": 0,
   "ammo": 0,
-  "light_years": 187.5999999999979,
-  "coins": 17,
+  "light_years": 278.9999999999927,
+  "coins": 22,
   "shield": 0
  },
  {
-  "tick": 938,
+  "tick": 1395,
   "kind": "death",
   "value": 0,
   "hp": 0,
   "ammo": 0,
-  "light_years": 187.5999999999979,
-  "coins": 17,
+  "light_years": 278.9999999999927,
+  "coins": 22,
   "shield": 0
  }
 ]

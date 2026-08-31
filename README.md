@@ -11,6 +11,11 @@ immer mehr zurückgelegte Lichtjahre.
 - vertikale Raumschiffsteuerung
 - Standardwaffe mit 7 Schüssen und Munitions-Pickups
 - zerstörbare Meteoriten und Gegner mit HP; Spieler-HP aus Schiffsrumpf
+- unzerstörbare Meteoriten: graues Panzergestein, das kein Schuss knackt —
+  Treffer kosten nur Munition, hier hilft nur ausweichen. Zwei schmale schräge
+  Lichtstreifen liegen über dem Feld: jeder Fels blitzt beim Überflug zweimal
+  kurz auf und glüht danach langsam aus. Die Streifen kippen mit der Laufzeit
+  hin und her, als wanderte eine Sonne über die Szene
 - pixelgenaue Kollision: Schiff, Meteoriten, Gegner und Münzen treffen über
   ihre Silhouette, nicht über ihr Rechteck
 - Meteoriten in vier Größen mit zufälligen Farbvarianten
@@ -18,7 +23,10 @@ immer mehr zurückgelegte Lichtjahre.
 - scrollendes Sternenfeld als Hintergrund
 - Lightyears-Score als HUD-Anzeige
 - sammelbare Münzen in Mustern (Linie, Welle, Bogen, Zickzack, Raute); Muster
-  komplett eingesammelt gibt Bonus, eigener Münz-Score im HUD
+  komplett eingesammelt gibt Bonus, eigener Münz-Score im HUD. Sie sind das
+  Sammelobjekt des Spiels — die ursprünglich geplanten Sterne wären dieselbe
+  Aktion ohne Shop-Anbindung gewesen; das Sternenfeld im Hintergrund bleibt
+  bewusst reine Deko
 - Shop: Münzen aus allen Läufen werden gespeichert und kaufen Schiffe,
   Zubehör (Schild, Magnet, Extra-Munition, Panzerung) und Schiffsfarben
 - Zubehör ist Verbrauchsware: es wird auf Vorrat gekauft (mehrere Exemplare
@@ -150,7 +158,8 @@ src/meteorite_dash/
 uv run ruff format .
 uv run ruff check .
 uv run mypy
-uv run pytest
+uv run pytest        # Unit-Tests plus die Doctests aus den Docstrings
+uv run interrogate   # Docstring-Abdeckung
 ```
 
 Diese Checks laufen auch in der CI.

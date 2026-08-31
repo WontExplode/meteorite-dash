@@ -1,3 +1,10 @@
+"""Fixtures der Testsuite plus headless-Treiber, bevor `pygame` importiert wird.
+
+Nur `tests/` braucht das: die Doctests aus `src/` (`--doctest-modules`) fassen
+kein Display an, und keins der Spielmodule startet SDL beim Import — erst
+`App.run` und `GameContext` rufen `pygame.init`/`set_mode`.
+"""
+
 import os
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")

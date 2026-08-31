@@ -113,14 +113,37 @@ def test_composite_state_key_only_covers_stateful_parts() -> None:
 
 
 def test_daily_run_gets_faster_over_time() -> None:
+    """Der Daily-Director ist die pure Rampe: gleiche Laufzeit, gleiches Tempo für alle."""
+    director = director_for_kind(DirectorKind.RAMP)
+    sim = Simulation(CONFIG)
+    rng = random.Random(0)
+
+    sim.tick = _ticks(DIFFICULTY_RAMP_GRACE_SECONDS)
+    early = director.params(sim, rng)
+    sim.tick = _ticks(DIFFICULTY_RAMP_GRACE_SECONDS + 120)
+    later = director.params(sim, rng)
+
+    assert early == ramp_params(_ticks(DIFFICULTY_RAMP_GRACE_SECONDS))
+    assert early.speed_multiplier == 1.0
+    assert later.speed_multiplier > early.speed_multiplier
+
+
+def test_simulation_applies_the_ramp_every_tick() -> None:
+    """Die Simulation übernimmt die Stellgrößen unverändert, solange der Lauf läuft.
+
+    Bewusst ohne Überlebens-Annahme: wer nichts tut, stirbt nach gut zehn
+    Sekunden, und nach dem Tod ist `step` ein No-op. Ein Test, der auf einen
+    langen Lauf baut, misst die Spawn-Folge des Seeds, nicht die Rampe.
+    """
     sim = Simulation(CONFIG, director=director_for_kind(DirectorKind.RAMP))
-    for _ in range(_ticks(DIFFICULTY_RAMP_GRACE_SECONDS)):
+    assert sim.difficulty == ramp_params(0)
+
+    limit = _ticks(DIFFICULTY_RAMP_GRACE_SECONDS + 120)
+    while not sim.is_over and sim.tick < limit:
         sim.step(InputFrame.NONE)
-    early = sim.difficulty.speed_multiplier
-    for _ in range(_ticks(120)):
-        sim.step(InputFrame.NONE)
-    assert sim.difficulty.speed_multiplier > early
-    assert early == 1.0
+        assert sim.difficulty == ramp_params(sim.tick)
+
+    assert sim.tick > 0
 
 
 def test_score_rate_follows_the_ramp() -> None:

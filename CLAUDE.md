@@ -157,13 +157,54 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   Spielerseite links jagen und zerschießen sie (Funken/Trümmer-Partikel).
   Reines Rendering wie `StarField` (Wandzeit, ungeseedeter Zufall, Referenzraum
   + `RenderContext`) — kein Sim-Pfad, keine Wirkung auf Replays.
-- Strikte Typprüfung, Linting, Tests, CI.
+- **Unzerstörbare Meteoriten** (`IndestructibleMeteorite` in `entities.py`):
+  eigene Größentabelle (`INDESTRUCTIBLE_METEORITE_VARIANTS`) und eigener
+  Eintrag in `SPAWN_TABLE`, damit die Gewichte der normalen Meteoriten
+  unangetastet bleiben. `take_damage` gibt immer `False` zurück — der Treffer
+  zählt (`EventKind.HIT`, Funken), das Projektil ist verbraucht, der Fels
+  fliegt weiter. Kenntlich an grauem Metall mit wandernden Reflexionen:
+  `RenderContext.image(..., sheen=…)` entsättigt das Sprite und hellt es um
+  den Betrag auf. **Entsättigen und addieren, nicht multiplizieren:** die
+  Asteroiden-Sprites sind blaustichig (Blauwerte 27–80, ein fester Summand
+  ließe je nach Pixel einen Farbstich stehen) und mit rund (32, 40, 64) fast
+  schwarz, eine Tönung könnte sie nur weiter abdunkeln. Beides rührt nur RGB
+  an — die Kollisionsmaske ist dieselbe Sprite-Silhouette wie beim normalen
+  Meteoriten.
+- **Lichtbänder („Sonne")**: zwei schmale schräge Streifen liegen über dem
+  Referenzraum (`LIGHT_BAND_*` in `config.py`).
+  `IndestructibleMeteorite.lit_fraction(sun_angle)` misst die Lage des
+  Mittelpunkts längs der Streifen-Normalen; `sheen()` rastert daraus eine
+  Stufe aus `INDESTRUCTIBLE_METEORITE_SHEEN`. Das Profil ist **unsymmetrisch**
+  (`LIGHT_BAND_EDGE_WIDTH` 0.02 gegen `LIGHT_BAND_FADE_WIDTH` 0.14): kurzer
+  Anstieg, langes Abklingen — der Fels blitzt auf und glüht nach, statt
+  gleichmäßig hell durch ein Band zu fahren. Bei `LIGHT_BAND_PERIOD = 400`
+  kreuzt jeder Fels auf dem Weg nach links beim Startwinkel genau zwei
+  Streifen; über den ganzen Sonnenbogen bleiben es zwei bis drei.
+  Den Winkel liefert `effects.sun_angle(tick)` — ein **Pendel**, kein Kreis:
+  von `LIGHT_BAND_START_DEGREES` (60) um `LIGHT_SUN_SWING_DEGREES` (60) weiter
+  und zurück, eine Bewegung je `LIGHT_SUN_PERIOD_SECONDS`. Eine volle
+  Umdrehung wäre falsch: bei 180 Grad lägen die Streifen parallel zur Flugbahn
+  und keine Reflexion käme mehr zustande. Aus dem **Sim-Tick**, nicht aus der
+  Wandzeit — derselbe Lauf sieht zweimal gleich aus und der Ghost steht im
+  selben Licht. `GameScene.draw` legt den Winkel als
+  `RenderContext.sun_angle` an, genau wie die Erschütterung als `offset`:
+  global, rein optisch, kein Sim-Zustand, nicht im Hash. Nur Panzergestein
+  reagiert darauf; normales Gestein bleibt stumpf, damit der Unterschied das
+  Warnsignal bleibt. Gerastert statt stetig, weil jede Stufe eine eigene
+  Surface im Bild-Cache ist.
+- Strikte Typprüfung, Linting, Tests, CI. Doctests laufen über
+  `addopts = "--doctest-modules"` bei jedem `uv run pytest` mit.
 
 **Noch NICHT vorhanden** (aus dem Spec — meist als GitHub-Issue getrackt):
 
-- **Sammelbare Sterne** für Punkte (`StarField` ist nur Deko, nicht einsammelbar).
+- **Sammelbare Sterne** — bewusst ersetzt, nicht offen: die Rolle „Objekt
+  einsammeln, Punkte bekommen" füllen die Münzen (`coins.py`, Issue #14). Sie
+  können mehr als Sterne es sollten (Muster mit Komplett-Bonus, Magnet-Zubehör,
+  persistentes Guthaben, Shop) und schaffen einen Grund weiterzuspielen, den
+  ein reiner Punktezähler nicht hat. Zwei Sammelobjekte nebeneinander hätten
+  dieselbe Aktion doppelt belegt. `StarField` bleibt deshalb Deko und heißt
+  weiter so.
 - **Spezialwaffen-Pickups** (Loadout und Slot-Limit sind vorbereitet).
-- **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
 - Freunde-Filter nach Pubkey in der Bestenliste; QR-Anzeige des Share-Codes
   (Format steht in `sharecode.py`).
 - **Weitere Stellgrößen des Directors:** Speed, Gefahrenintervall und
@@ -202,7 +243,7 @@ uv run meteorite-dash --fetch 579292414      # fremde Läufe zum Seed holen, pr�
 uv run ruff format .         # formatieren
 uv run ruff check .          # linten
 uv run mypy                  # Typprüfung (strict, über src + tests)
-uv run pytest                # Tests
+uv run pytest                # Tests (inkl. Doctests aus src/, --doctest-modules)
 uv run interrogate           # Docstring-Abdeckung (fail-under in pyproject.toml)
 ```
 
@@ -585,6 +626,11 @@ Relay der Briefkasten, die Simulation der Richter.
   nehmen ein injiziertes `random.Random` → deterministisch testbar.
 - Meteoriten-Größen und Bildvarianten liegen zentral in `METEORITE_VARIANTS`;
   neue Varianten dort ergänzen und weiter über `spawn_meteorite` erzeugen.
+  Unzerstörbare Meteoriten haben mit `INDESTRUCTIBLE_METEORITE_VARIANTS` eine
+  eigene Tabelle und mit `spawn_indestructible_meteorite` eine eigene Fabrik —
+  beides bewusst getrennt, damit ein neues Panzergestein die Größenverteilung
+  der normalen Meteoriten nicht verschiebt. Gemeinsam ist nur `_roll_meteorite`
+  (Reihenfolge der Würfe = Teil der Regeln).
 - `Spawner[T]` zieht timergesteuert aus einer **gewichteten Tabelle**
   (`SpawnEntry[T]`). Generisch über den Spawn-Typ: `Simulation` hält zwei
   Instanzen mit eigenem Timer und eigenem Seed-Stream — Gegner (`Entity`) und
@@ -730,8 +776,11 @@ Relay der Briefkasten, die Simulation der Richter.
 
 - `AssetLoader.load_ship` lädt/skaliert/rotiert Schiffsbilder aus dem
   ships-Ordner und tönt sie optional ein; `load_image` lädt generische Sprites
-  wie Meteoriten. Beide Wege **cachen** nach `(path, size, rotate_left, tint)`.
-  Bilder/Schriften nie pro Frame laden.
+  wie Meteoriten und kennt zusätzlich `sheen` (entsättigen + aufhellen, siehe
+  `IndestructibleMeteorite`). Beide Wege **cachen** nach
+  `(path, size, rotate_left, tint, sheen)`. Bilder/Schriften nie pro Frame
+  laden — deshalb sind die Reflexionsstufen eine feste Liste und keine stetige
+  Kurve: sonst läge pro Frame eine neue Surface im Cache.
 - Pfade nur über `image_path` / `sound_path` (relativ zum Paket).
 - `MusicPlayer` kapselt `pygame.mixer.music`; die Spiel-Playlist nutzt das
   `GAME_MUSIC_ENDED`-Userevent, um Tracks weiterzuschalten.
@@ -829,6 +878,16 @@ Relay der Briefkasten, die Simulation der Richter.
 ## 7. Tests
 
 - Framework: **pytest**, Tests unter `tests/`.
+- **Doctests:** `testpaths = ["tests", "src"]` plus
+  `addopts = "--doctest-modules"` in `pyproject.toml` — `uv run pytest` sammelt
+  die Beispiele aus den Docstrings mit ein, sie laufen also wirklich statt nur
+  dazustehen. Sie gehören in **reine, display-freie** Funktionen
+  (`mathutil.py`, `score.py`, `daily.py`, `phrase.py`, `viewport.py`,
+  `entities.IndestructibleMeteorite`); alles, was `pygame.display` oder Netz
+  braucht, bleibt ein normaler Test in `tests/`. Weil beim Sammeln jedes
+  `src`-Modul importiert wird, darf kein Modul beim Import SDL starten —
+  `pygame.init`/`set_mode` stehen ausschließlich in `App.run` und
+  `GameContext`.
 - **Headless:** `tests/conftest.py` setzt `SDL_VIDEODRIVER=dummy` und
   `SDL_AUDIODRIVER=dummy` (per `setdefault`, vor dem ersten `pygame`-Import), damit
   Tests ohne Display/Audio laufen. In CI sind dieselben Variablen für den

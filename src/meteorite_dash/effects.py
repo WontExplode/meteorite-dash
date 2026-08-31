@@ -45,6 +45,9 @@ from meteorite_dash.config import (
     HIT_SPARK_COUNT,
     HIT_SPARK_RADIUS,
     HIT_SPARK_TTL,
+    LIGHT_BAND_START_DEGREES,
+    LIGHT_SUN_PERIOD_SECONDS,
+    LIGHT_SUN_SWING_DEGREES,
     PICKUP_SPARK_COUNT,
     PICKUP_SPARK_RADIUS,
     PICKUP_SPARK_TTL,
@@ -54,6 +57,7 @@ from meteorite_dash.config import (
     SHIELD_FLASH_ALPHA,
     SHIELD_FLASH_COLOR,
     SHIELD_FLASH_SECONDS,
+    SIM_TICKS_PER_SECOND,
     Color,
 )
 from meteorite_dash.entities import DamageableEntity, Entity
@@ -61,6 +65,25 @@ from meteorite_dash.render import RenderContext
 
 _MAX_DT = 0.05  # Deckel gegen Riesen-Frames (Fenster verschoben o. Ä.)
 _SHIELD_RING_RADIUS = 46.0  # Referenz-px; wächst über die Blitzdauer
+
+
+def sun_angle(tick: int) -> float:
+    """Richtung der Lichtbänder nach `tick` Simulationsschritten, im Bogenmaß.
+
+    Die "Sonne" wandert wie eine echte: sie kippt die Streifen von
+    `LIGHT_BAND_START_DEGREES` um `LIGHT_SUN_SWING_DEGREES` weiter und wieder
+    zurück, eine volle Bewegung je `LIGHT_SUN_PERIOD_SECONDS`. Kein voller
+    Kreis — bei 180 Grad lägen die Streifen parallel zur Flugbahn und keine
+    Reflexion käme mehr zustande.
+
+    Aus dem Sim-Tick statt aus der Wandzeit, damit derselbe Lauf zweimal
+    gleich aussieht — ein Ghost neben dem Spieler steht in demselben Licht.
+    Der Wert ist reine Optik und geht in keinen Hash ein.
+    """
+    seconds = tick / SIM_TICKS_PER_SECOND
+    swing = math.radians(LIGHT_SUN_SWING_DEGREES) / 2.0
+    turned = swing * (1.0 - math.cos(math.tau * seconds / LIGHT_SUN_PERIOD_SECONDS))
+    return math.radians(LIGHT_BAND_START_DEGREES) + turned
 
 
 def _lerp_color(start: Color, end: Color, factor: float) -> Color:
