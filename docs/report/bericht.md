@@ -9,8 +9,10 @@ lang: de
 ---
 
 <!--
-STATUS: Grobstruktur (Stand 2026-08-30). Kapitel 2 mit Repo-Fakten gefüllt,
-Rest Stichpunkte. Alles mit "TODO" braucht Input der Autoren.
+STATUS: Erweiterte Fassung (Stand 2026-08-30 abends, nach Merge der PRs #47–#54:
+Docstring-Abdeckung, adaptiver Schwierigkeits-Director, Nostr-Sharing,
+Daily-Bestenliste, Share-Code). Kapitel 2–5 mit Repo-Fakten gefüllt.
+Alles mit "TODO" braucht Input der Autoren.
 
 FORMALE KRITERIEN (Issue #27) — Checkliste vor Abgabe:
 [ ] Dateiname: <Matrikel1>_<Matrikel2>_MeteoriteDash.pdf
@@ -49,9 +51,15 @@ Umgesetzte Variante (Abweichungen kurz begründen, Details in Kap. 5.4):
 
 - Statt „Sterne einsammeln“: Münzen in Mustern + Shop (Issue #14).
 - Statt „Leben“: HP-Modell aus Schiffsrumpf (`ShipSpec.hull`).
-- Zusätzlich: deterministische Simulation, Replays, Ghost, Daily Run (Issue #34).
-- Nicht umgesetzt: steigende Schwierigkeit (Issue #32/#33), unzerstörbare Meteoriten,
-  Spezialwaffen (Issue #12), Endbosse (Issue #10).
+- Statt fester Zeitrampe: adaptiver Schwierigkeits-Director, der die Belastung
+  aus dem Spielverhalten schätzt (Issues #32/#33); der Daily Run bleibt bewusst
+  konstant, damit alle Spieler denselben Lauf vergleichen.
+- Zusätzlich: deterministische Simulation, Replays, Ghost, Daily Run (Issue #34)
+  sowie darauf aufbauend Community-Features ohne eigenen Server — Läufe teilen
+  über öffentliche Nostr-Relays, Daily-Bestenliste, Weitergabe per
+  Drei-Wort-Code.
+- Nicht umgesetzt: unzerstörbare Meteoriten, Spezialwaffen (Issue #12),
+  Endbosse (Issue #10).
 - TODO: Warum die Prioritäten so gesetzt wurden.
 
 # 2 Grundlagen & Werkzeuge
@@ -68,8 +76,12 @@ Hinweis für den Text: Import bleibt `import pygame`, Abhängigkeit heißt `pyga
 
 ## 2.2 Bibliotheken & Pakete
 
-Laufzeit: einzige externe Abhängigkeit ist `pygame-ce`. Alles andere ist
-Standardbibliothek (u. a. `dataclasses`, `enum`, `collections.abc`, `random`, `pathlib`, `math`, `json`, `hashlib`).
+Laufzeit: `pygame-ce` trägt Spiel und Rendering. Mit den Community-Features
+kamen zwei kleine Netz-/Krypto-Abhängigkeiten hinzu: `websockets` (17.1)
+spricht die öffentlichen Nostr-Relays, `coincurve` (21.0.0) signiert und prüft
+Läufe per BIP-340-Schnorr-Signatur. Alles andere ist Standardbibliothek (u. a.
+`dataclasses`, `enum`, `collections.abc`, `random`, `pathlib`, `math`, `json`,
+`hashlib`, `secrets`, `threading`, `base64`).
 
 Entwicklung (`[dependency-groups] dev` in `pyproject.toml`):
 
@@ -78,6 +90,7 @@ Entwicklung (`[dependency-groups] dev` in `pyproject.toml`):
 | ruff | 0.15.15 | Formatierung + Linting (Regelgruppen F, E, W, I, N, UP, B, SIM, RUF; `line-length = 100`) |
 | mypy | 2.1.0 | Typprüfung `--strict` über `src` und `tests` |
 | pytest | 9.0.3 | Tests, headless über `SDL_VIDEODRIVER=dummy` / `SDL_AUDIODRIVER=dummy` |
+| interrogate | 1.7.0 | Docstring-Abdeckung (`fail-under = 80`, Stand: 100 %) |
 
 - TODO: Warum strict-Typisierung und Linter in einem Spielprojekt (Begründung:
   KI-generierter Code braucht mechanische Leitplanken? Teamgröße 2?).
@@ -88,19 +101,19 @@ Kennzahlen (Stand 2026-08-30, aus `git`/`gh`):
 
 - Repository: GitHub-Organisation `WontExplode`, Repo `meteorite-dash`
   (öffentlich: https://github.com/WontExplode/meteorite-dash).
-- 100 Commits, 2026-05-27 bis 2026-08-30, 20 gemergte Pull Requests.
-- Issues als Feature-Backlog (`gh issue list`): 24 Issues, davon 12 geschlossen.
-- Umfang: ca. 4 200 Zeilen in `src/`, ca. 2 900 Zeilen in `tests/`, 272 Tests
-  (`uv run pytest`: `272 passed in 19.61s`).
-- Git-Identitäten: `Julian Schiebener` (43 Commits), `Marco`/`MPReimann`/`cakebomb999`
-  (72 Commits — TODO: bestätigen, dass das eine Person ist), `claude[bot]` (2 Commits).
+- 131 Commits, 2026-05-27 bis 2026-08-30, 27 gemergte Pull Requests.
+- Issues als Feature-Backlog (`gh issue list`): 28 Issues, davon 15 geschlossen.
+- Umfang: ca. 7 000 Zeilen in `src/`, ca. 4 700 Zeilen in `tests/`, 356 Tests
+  (`uv run pytest`: `356 passed in 25.60s`).
+- Git-Identitäten: `Julian Schiebener` (57 Commits), `Marco`/`MPReimann`/`cakebomb999`
+  (71 Commits — TODO: bestätigen, dass das eine Person ist), `claude[bot]` (3 Commits).
 
 Prozess:
 
 - Feature-Branches + PR auf `main`; Merge nach Review.
 - CI (`.github/workflows/ci.yml`, GitHub Actions): `ruff format --check`,
-  `ruff check`, `mypy`, `pytest` — bei Push auf `main` und jedem PR.
-- Pre-commit-Hook (`.githooks/pre-commit`) führt dieselben vier Checks lokal aus.
+  `ruff check`, `mypy`, `interrogate`, `pytest` — bei Push auf `main` und jedem PR.
+- Pre-commit-Hook (`.githooks/pre-commit`) führt dieselben fünf Checks lokal aus.
 - `CLAUDE.md` im Repo: Architektur-Leitfaden für Menschen und KI (Konventionen,
   Referenzraum-Regel, Testpflicht).
 - Design-Spezifikationen vor der Implementierung in `docs/superpowers/specs/`
@@ -121,8 +134,9 @@ oder explizit ausschließen):
      Modell `sonnet`, max. 10 Turns, Prompt beschränkt auf neue Bugs und
      `CLAUDE.md`-Verstöße („Keine Stilfragen, nichts, was Linter oder Typechecker
      ohnehin finden“).
-   - `claude.yml`: reagiert auf `@claude`-Mentions in Issues/PRs; hat 2 Commits
-     erzeugt (Test für `set_vertical_position`, Konstanten nach `config.py`).
+   - `claude.yml`: reagiert auf `@claude`-Mentions in Issues/PRs; hat 3 Commits
+     erzeugt (Test für `set_vertical_position`, Konstanten nach `config.py`,
+     Thread-/Relay-Fix beim Code-Teilen).
 4. **GitHub Code Scanning / Copilot Autofix**: Commits „Potential fix for pull
    request finding 'Statement has no effect'“ (3×) — TODO: bestätigen, welches
    Werkzeug das war.
@@ -136,7 +150,8 @@ Architektur, prüft Diffs, mergt. Details zu Umfang je Modul in Kap. 3.6.
 ## 3.1 Programmstruktur
 
 - Datenfluss: `main.py` → `App` → aktive `Scene` → `Transition` → nächste Szene.
-- Szenen: `MainMenu`, `ShipSelection`, `ShopScene`, `GameScene`, `DeathScene`;
+- Szenen: `MainMenu`, `ShipSelection`, `ShopScene`, `GameScene`, `DeathScene`,
+  `LeaderboardScene` (Daily-Bestenliste), `CodeEntryScene` (Drei-Wort-Code);
   gemeinsame Basis `Scene` (Template-Method-Loop, 60 FPS, globale Events).
 - `GameContext` als geteilter Zustands-/Ressourcen-Container (Screen, Fonts,
   Musik, Assets, `GameState`, `Progress`, `Viewport`).
@@ -158,6 +173,26 @@ Architektur, prüft Diffs, mergt. Details zu Umfang je Modul in Kap. 3.6.
 - Münzen/Shop: `CoinFormation`-Muster, `Progress` + `persistence.py`.
 - Replay/Ghost/Daily: `Recorder` → `Replay` (RLE), `headless.verify`, `ghost.py`
   als zweite `Simulation` im Gleichschritt, `daily.py` (SHA-256 aus Salt + UTC-Datum).
+- Adaptive Schwierigkeit (Issues #32/#33, PRs #48/#49/#52/#54): `difficulty.py`
+  definiert den Director-Vertrag (`params(sim, rng) -> DifficultyParams`, jeden
+  Tick, nur aus Simulationssicht — keine Wandzeit, kein Fenster).
+  `adaptive_difficulty.py` schätzt aus sicheren Passagen, schadensfreier Zeit,
+  Schaden, Near Misses, HP und Munition eine individuelle Belastungsgrenze
+  („mastery“ gegen „stress“) und stellt darüber Welttempo, Gefahrenintervall
+  und Lightyears-Rate. `mode_directors.py` ist die Modusgrenze: Free bekommt
+  den adaptiven Director, Daily einen konstanten — der Tagesvergleich bleibt
+  fair. Der Director-Zustand fließt in den Simulationshash; Replays speichern
+  Director-Art und -Version, damit Headless-Prüfungen dieselbe Strategie
+  rekonstruieren. `F3` blendet ein rein visuelles Diagnose-HUD ein.
+- Community ohne eigenen Server (PR #53, aufbauend auf Replays): `identity.py`
+  (zufälliges Schlüsselpaar als Pseudonym), `sharecode.py` (kompaktes
+  Binärformat + Base64url), `nostr.py` (signierte NIP-01-Events an öffentliche
+  Relays), `exchange.py` (holen → Signatur prüfen → per `headless.verify`
+  komplett nachspielen → erst dann speichern), `leaderboard.py` (Top 5 je
+  Tages-Seed, bester Lauf je Spieler), `phrase.py` (Drei-Wort-Code aus dem
+  `state_hash`, deutsche Wortliste mit 2048 Wörtern). Geprüfte fremde Läufe
+  fliegen als Ghost mit oder laufen im Zuschauer-Modus der `GameScene`;
+  `METEORITE_DASH_OFFLINE=1` schaltet das Netz komplett ab.
 
 ## 3.3 Datenverarbeitung
 
@@ -167,6 +202,11 @@ Architektur, prüft Diffs, mergt. Details zu Umfang je Modul in Kap. 3.6.
   kein `pickle`.
 - Replay-Format: `RunConfig` + Eingaben (RLE) als JSON; `state_hash()` als
   Gleichheitsbeweis; Golden-Dateien `tests/replays/golden-*.json`.
+- Wire-Format fürs Teilen: `sharecode.py` packt ein Replay in ein kompaktes
+  Binärformat (~3,5 Byte pro Spielsekunde) mit CRC-32, als Base64url-Text
+  transportierbar — auch Grundlage für spätere QR-Codes. Eingehende Daten
+  (Relay-Events, Share-Codes, fremde Replay-Dateien) werden defensiv geparst
+  und nie ungeprüft übernommen: erst Signatur, dann komplettes Nachspielen.
 - TODO: ein Beispiel-JSON (gekürzt) in den Anhang.
 
 ## 3.4 Warum so? Verworfene Alternativen
@@ -180,6 +220,18 @@ Aus den Specs belegbar:
 - Randloses Strecken pro Achse statt Letterbox (Issue #6): TODO Begründung.
 - Trennung Simulation/Rendering (PR #38/#41): Resize darf Spielzustand nicht
   ändern; Determinismus als Voraussetzung für Replay/Ghost.
+- Nostr-Relays statt eigenem Server (PR #53): ein Server hätte Betrieb,
+  Accounts und serverseitiges Anti-Cheat gebraucht. Stattdessen sind
+  öffentliche Relays nur der Briefkasten; der Client prüft jeden fremden Lauf
+  selbst, indem er ihn deterministisch nachspielt — ein Relay kann Läufe
+  verschweigen, aber keinen erfinden.
+- Ghost als Re-Simulation statt Positionsliste: Replay-Datei bleibt klein, der
+  Ghost-Score läuft live mit, und jeder Ghost-Flug ist nebenbei ein
+  Determinismus-Test im laufenden Spiel.
+- Adaptiver Director als getrenntes Modul mit eigener Versionsnummer
+  (`ADAPTIVE_DIRECTOR_VERSION`, aktuell 2): Tuning-Änderungen brechen so weder
+  die gemeinsame `SIM_VERSION` noch die Golden-Replays des konstanten
+  Daily-Modus.
 - TODO: Wo war die Wahl willkürlich? (z. B. Zahlenwerte in `config.py`,
   Münz-Muster, 7 Schuss Munition).
 
@@ -207,8 +259,10 @@ Tabelle je Modul/Feature (TODO ausfüllen — Git-Historie als Ausgangspunkt):
 | Waffen, Munition, Schaden (`weapons.py`, `combat.py`) | #31 | Julian | TODO | |
 | Münzen + Shop + Persistenz | #40 | Marco | TODO | |
 | Simulation / Replay / Ghost / Daily | #41–#44 | Marco | TODO | |
+| Adaptiver Schwierigkeits-Director | #48, #49, #52, #54 | Julian | TODO | Vertrag `difficulty.py`, Regelkern `adaptive_difficulty.py`, `F3`-HUD |
+| Nostr-Sharing, Bestenliste, Share-Code | #53 | Marco | TODO | `identity.py`, `nostr.py`, `exchange.py`, `sharecode.py`, `phrase.py` |
 | Tests (`tests/`) | alle | beide | TODO | |
-| CI, Hooks, `CLAUDE.md` | #2–#4, #21 | Marco | TODO | |
+| CI, Hooks, `CLAUDE.md`, Docstrings | #2–#4, #21, #47 | Marco | TODO | |
 
 - Warum KI hier sinnvoll (Boilerplate, Tests, Typ-Annotationen …) — TODO.
 - Wo eigene Programmierung nötig (KI verstand Kontext nicht, fehlerhafter Code) — TODO
@@ -229,8 +283,9 @@ Tabelle je Modul/Feature (TODO ausfüllen — Git-Historie als Ausgangspunkt):
 ## 4.1 Funktionsnachweis
 
 - Screenshots (TODO anfertigen, PNG komprimiert): Hauptmenü, Schiffsauswahl,
-  Spiel mit HUD (Lightyears, Münzen, Waffe, Ghost-Δ), Shop, Death-Screen.
-- Test-Output: `272 passed` (Stand 2026-08-30); CI-Lauf grün (Screenshot oder Link).
+  Spiel mit HUD (Lightyears, Münzen, Waffe, Ghost-Δ), Shop, Death-Screen,
+  Daily-Bestenliste, Code-Eingabe, `F3`-Diagnose-HUD.
+- Test-Output: `356 passed` (Stand 2026-08-30); CI-Lauf grün (Screenshot oder Link).
 - Replay-Prüfung: Ausgabe von `uv run meteorite-dash --verify datei.json`
   (Trace + `PASS`).
 
@@ -244,13 +299,18 @@ Tabelle je Modul/Feature (TODO ausfüllen — Git-Historie als Ausgangspunkt):
 
 ## 5.1 Zielerreichung
 
-- Kern-Loop der Skizze vollständig; Erweiterungen teils (siehe 1.2).
+- Kern-Loop der Skizze vollständig; steigende Schwierigkeit als adaptiver
+  Director im Free Mode umgesetzt; darüber hinaus Replays, Ghost, Daily Run,
+  Bestenliste und Lauf-Weitergabe ohne eigenen Server (siehe 1.2).
 
 ## 5.2 Herausforderungen
 
 - TODO technisch: Resize/Vollbild-Bug (Issue #28), Determinismus
   (plattformstabiler Sinus in `mathutil.py`), Merge-Konflikte bei parallelen
-  Feature-Branches (PR #37 geschlossen, #40 neu).
+  Feature-Branches (PR #37 geschlossen, #40 neu; ebenso liefen adaptive
+  Schwierigkeit und Highscore-Sharing parallel und mussten mehrfach über
+  `main` zusammengeführt werden — Director-Felder im Replay-Format,
+  `SHARECODE_VERSION` 2).
 - TODO Zusammenarbeit mit KI: konkrete Fälle.
 
 ## 5.3 Kritische Reflexion
@@ -259,13 +319,20 @@ Tabelle je Modul/Feature (TODO ausfüllen — Git-Historie als Ausgangspunkt):
 
 ## 5.4 Abweichung vom ursprünglichen Plan
 
-- Sterne → Münzen/Shop; Leben → HP; Determinismus/Replay statt Schwierigkeitskurve.
+- Sterne → Münzen/Shop; Leben → HP; feste Zeitrampe → adaptiver Director auf
+  Basis der deterministischen Simulation; geplanter Server → Nostr-Relays plus
+  lokale Verifikation durch Nachspielen.
 - TODO: Gründe.
 
 ## 5.5 Ausblick
 
-- Offene Issues: #32/#33 Schwierigkeits-Director, #35 2D-Bewegung, #36 Boost,
-  #12 Waffen, #10 Bosse, #5 Mobile-Port, Server für Daily-Bestenliste.
+- Offene Issues: #33 weitere adaptive Stellgrößen (Gegnermix, Größenbias,
+  Schwarm-Events), #35 2D-Bewegung, #36 Boost, #12 Waffen, #10 Bosse,
+  #5 Mobile-Port, #51 Menü-Überarbeitung; Feinschliff #55–#58 (automatischer
+  erster Schuss, Feedback bei Kollision/Treffern, Balancing, Healthbars).
+- Sharing-Ausbau: Freunde-Filter nach Pubkey in der Bestenliste, QR-Anzeige
+  des Share-Codes (Wire-Format in `sharecode.py` steht). Bekannte Lücke:
+  Relays liefern die neuesten, nicht die besten N Läufe.
 
 # Literatur- & Quellenverzeichnis
 
@@ -278,7 +345,10 @@ Nummeriert nach Zitierreihenfolge `[n]`. Nur eintragen, was im Text zitiert wird
 - [5] pytest — https://docs.pytest.org/
 - [6] Claude Code Dokumentation — https://docs.claude.com/en/docs/claude-code/
 - [7] claude-code-action — https://github.com/anthropics/claude-code-action
-- [8] TODO: Quellen der Grafik-Assets (`AsteroidTiny…Large`, `CopperShip…GoldShip`)
+- [8] Nostr-Protokoll, NIP-01 — https://github.com/nostr-protocol/nips
+- [9] BIP-340: Schnorr Signatures for secp256k1 —
+  https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
+- [10] TODO: Quellen der Grafik-Assets (`AsteroidTiny…Large`, `CopperShip…GoldShip`)
   und Musik/Sounds (`gamemusic1-3.mp3`, `menumusic.mp3`, `gameovermusic.mp3`,
   `standard-gun.mp3`) — im Repo liegt keine Lizenz-/Attributionsdatei.
 
@@ -289,8 +359,12 @@ Nummeriert nach Zitierreihenfolge `[n]`. Nur eintragen, was im Text zitiert wird
 - Installation: `uv sync`, Start: `uv run meteorite-dash`.
 - Steuerung (aus `README.md`): Pfeiltasten, `Space` schießen, `R` Waffe,
   `Enter` bestätigen, `Escape` zurück, `F`/`F11` Vollbild.
-- Umgebungsvariablen: `METEORITE_DASH_SEED`, `METEORITE_DASH_SAVE_DIR`.
-- Replay prüfen: `uv run meteorite-dash --verify datei.json`.
+- Umgebungsvariablen: `METEORITE_DASH_SEED`, `METEORITE_DASH_SAVE_DIR`,
+  `METEORITE_DASH_OFFLINE=1` (kein Netz).
+- Replay prüfen/teilen/holen: `uv run meteorite-dash --verify datei.json`,
+  `--publish datei.json`, `--fetch <seed>`.
+- Death-Screen: `C` teilt den Lauf als Drei-Wort-Code, `Tab` öffnet nach einem
+  Daily Run die Bestenliste; Menüpunkt „Code eingeben“ holt fremde Läufe.
 
 ## B Ausgewählte Code-Snippets (max. 1 Seite je Snippet)
 
