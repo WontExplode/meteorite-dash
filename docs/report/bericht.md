@@ -1,3 +1,5 @@
+Entwurf für den entstehenden Bericht der im Sciebo als PDF vollständig ausgefüllt und gültig hochgeladen wurde. Hierbei handelt es sich nur um einen Entwurf und eine Einteilung für uns, für das gemeinsame endgültige ausfüllen.
+
 ---
 title: "Meteorite Dash — Projektbericht"
 subtitle: "TODO: Modul/Kurs, Semester, Dozent:in"
