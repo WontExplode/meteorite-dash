@@ -20,10 +20,12 @@ from meteorite_dash.config import (
     COIN_PATTERNS,
     COIN_RADIUS,
     COIN_SPAWN_INTERVAL_RANGE,
+    DEATH_DELAY_SECONDS,
     CoinPatternSpec,
 )
 from meteorite_dash.context import GameContext
 from meteorite_dash.entities import AmmoPickup, Meteorite
+from meteorite_dash.hitbox import solid
 from meteorite_dash.inputs import InputFrame
 from meteorite_dash.render import RenderContext
 from meteorite_dash.scenes.base import Transition
@@ -144,7 +146,7 @@ def test_pickup_total() -> None:
 
 def test_formation_collect_removes_hit_coins_only() -> None:
     formation = CoinFormation([_coin(50, 100), _coin(700, 500)], bonus=5)
-    pickup = formation.collect(pygame.Rect(50, 100, 64, 64))
+    pickup = formation.collect(solid(pygame.Rect(50, 100, 64, 64)))
     assert pickup == Pickup(1, 0)
     assert formation.collected == 1
     assert len(formation.coins) == 1
@@ -153,18 +155,18 @@ def test_formation_collect_removes_hit_coins_only() -> None:
 
 def test_formation_pays_bonus_when_completed() -> None:
     formation = CoinFormation([_coin(50, 100), _coin(90, 100)], bonus=5)
-    assert formation.collect(pygame.Rect(50, 100, 30, 30)) == Pickup(1, 0)
-    assert formation.collect(pygame.Rect(90, 100, 30, 30)) == Pickup(1, 5)
+    assert formation.collect(solid(pygame.Rect(50, 100, 30, 30))) == Pickup(1, 0)
+    assert formation.collect(solid(pygame.Rect(90, 100, 30, 30))) == Pickup(1, 5)
     assert formation.is_finished is True
     # Danach nichts mehr zu holen — kein doppelter Bonus.
-    assert formation.collect(pygame.Rect(0, 0, 800, 600)) == Pickup(0, 0)
+    assert formation.collect(solid(pygame.Rect(0, 0, 800, 600))) == Pickup(0, 0)
 
 
 def test_formation_no_bonus_after_missed_coin() -> None:
     formation = CoinFormation([_coin(-100, 100), _coin(50, 100)], bonus=5)
     formation.update(0.0, player_y=0)
     assert formation.missed == 1
-    assert formation.collect(pygame.Rect(50, 100, 30, 30)) == Pickup(1, 0)
+    assert formation.collect(solid(pygame.Rect(50, 100, 30, 30))) == Pickup(1, 0)
     assert formation.is_finished is True
 
 
@@ -172,7 +174,7 @@ def test_formation_all_missed_is_finished_without_bonus() -> None:
     formation = CoinFormation([_coin(-100, 100), _coin(-60, 100)], bonus=5)
     formation.update(0.0, player_y=0)
     assert formation.is_finished is True
-    assert formation.collect(pygame.Rect(0, 0, 800, 600)) == Pickup(0, 0)
+    assert formation.collect(solid(pygame.Rect(0, 0, 800, 600))) == Pickup(0, 0)
 
 
 # --- GameScene -------------------------------------------------------------
@@ -277,6 +279,7 @@ def test_game_scene_death_records_final_coins(context: GameContext) -> None:
         Meteorite(scene.sim.player.rect.copy(), speed_x=0.0, hp=10, contact_damage=999)
     )
     scene.step(InputFrame.NONE)
+    scene.update(DEATH_DELAY_SECONDS)
     assert scene._transition is Transition.DEATH_SCREEN
     assert context.state.final_coins == 7
 

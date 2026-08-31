@@ -18,9 +18,10 @@ from meteorite_dash.config import (
 )
 from meteorite_dash.context import GameContext
 from meteorite_dash.daily import daily_replay_name, daily_seed, today_utc
-from meteorite_dash.difficulty import ConstantDirector, DifficultyParams, DirectorKind
+from meteorite_dash.difficulty import DifficultyParams, DirectorKind
 from meteorite_dash.entities import Meteorite
 from meteorite_dash.inputs import InputFrame
+from meteorite_dash.ramp_difficulty import RampDirector
 from meteorite_dash.replay import Replay, ReplayStore, RunMode
 from meteorite_dash.scenes.base import Transition
 from meteorite_dash.scenes.death import DeathScene
@@ -72,7 +73,7 @@ def test_menu_offers_daily_run(context: GameContext) -> None:
     for _ in range(index):
         menu.handle_event(_keydown(pygame.K_DOWN))
     menu.handle_event(_keydown(pygame.K_RETURN))
-    assert menu._transition is Transition.START_DAILY
+    assert menu._transition is Transition.LOADOUT_DAILY
     menu.draw()
 
 
@@ -88,9 +89,10 @@ def test_app_starts_daily_scene_with_todays_seed(
         assert scene.label == today_utc().isoformat()
         assert scene.seed == daily_seed(today_utc())
         assert scene.recorder.mode is RunMode.DAILY
-        assert scene.recorder.director_kind is DirectorKind.CONSTANT
-        assert isinstance(scene.sim.director, ConstantDirector)
+        assert scene.recorder.director_kind is DirectorKind.RAMP
+        assert isinstance(scene.sim.director, RampDirector)
         scene.step(InputFrame.NONE)
+        # Schonzeit am Anfang: die Rampe steht noch bei 1.0 für alle gleich.
         assert scene.sim.difficulty == DifficultyParams()
         free = app._create_scene(Transition.START_GAME)
         assert isinstance(free, GameScene)

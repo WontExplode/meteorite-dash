@@ -47,7 +47,7 @@ DEATH_MUTED_COLOR: Color = (120, 120, 150)
 MUTED_TEXT_COLOR: Color = (120, 120, 150)
 OWNED_TEXT_COLOR: Color = (140, 255, 160)
 
-MENU_FONT_NAME = "arial"
+MENU_FONT_NAME = "default"
 MENU_FONT_SIZE = 42
 HINT_FONT_SIZE = 22
 DEATH_TITLE_FONT_SIZE = 84
@@ -65,10 +65,23 @@ MENU_ITEMS: tuple[tuple[str, MenuAction], ...] = (
 )
 
 MENU_ITEM_FONT_SIZE = 36  # kleiner als der Titel, damit sieben Einträge ins Bild passen
-MENU_ITEMS_TOP = 186  # Referenz-y des ersten Menüpunkts
-MENU_ITEM_SPACING = 44  # Referenz-px zwischen Menüpunkten
+# Referenz-y je Menüpunkt, gruppiert in Blöcke: Start | Daily/Community
+# (mit Status-Zeile darunter) + Code eingeben | Raumschiff/Shop | Beenden.
+MENU_ITEM_TOPS: tuple[int, ...] = (186, 240, 278, 316, 378, 416, 472)
 MENU_SELECTED_SHIP_TOP = 508
 MENU_HINT_TOP = 538
+
+# --- Hauptmenü-Styling (Endgame-Look wie der Death-Screen) ---
+MENU_TITLE_FONT_SIZE = 56
+MENU_TITLE_TOP = 120
+MENU_TITLE_SHADOW_COLOR: Color = (90, 55, 0)
+MENU_BORDER_COLOR: Color = (90, 140, 200)
+MENU_BORDER_INNER_COLOR: Color = (70, 70, 100)
+MENU_SCANLINE_COLOR: Color = (18, 18, 32)
+MENU_SCANLINE_GAP = 8
+# Rahmen-Rechtecke in Referenz-px (x, y, Breite, Höhe).
+MENU_BORDER_RECT: tuple[int, int, int, int] = (8, 8, 784, 584)
+MENU_BORDER_INNER_RECT: tuple[int, int, int, int] = (18, 18, 764, 564)
 
 MENU_MUSIC = "menumusic.mp3"
 DEATH_SOUND = "gameovermusic.mp3"
@@ -181,13 +194,60 @@ COINS_TOP_RIGHT: WindowSize = (776, 52)
 COIN_BONUS_TOP_RIGHT: WindowSize = (776, 80)
 COIN_BONUS_NOTICE_SECONDS = 1.2
 
+# --- Treffer-Feedback: Partikel, Blitze, Erschütterung (`effects.py`) ---
+# Reine Deko im Referenzraum, an Wandzeit gekoppelt — nie im Sim-Pfad.
+FEEDBACK_MAX_PARTICLES = 260  # Deckel, damit ein Getümmel die Framerate nicht frisst
+FEEDBACK_PARTICLE_SPEED: tuple[float, float] = (60.0, 240.0)  # Referenz-px/s
+FEEDBACK_DRAG = 1.8  # Partikel bremsen exponentiell ab
+
+HIT_SPARK_COLOR: Color = (255, 240, 180)
+HIT_SPARK_COUNT: tuple[int, int] = (4, 7)
+HIT_SPARK_TTL: tuple[float, float] = (0.12, 0.28)
+HIT_SPARK_RADIUS = 2.0
+
+EXPLOSION_COLORS: tuple[Color, ...] = ((255, 220, 120), (255, 150, 50), (200, 70, 40))
+EXPLOSION_COUNT: tuple[int, int] = (12, 18)
+EXPLOSION_TTL: tuple[float, float] = (0.3, 0.7)
+EXPLOSION_RADIUS = 3.5
+
+PICKUP_SPARK_COUNT: tuple[int, int] = (6, 10)
+PICKUP_SPARK_TTL: tuple[float, float] = (0.2, 0.45)
+PICKUP_SPARK_RADIUS = 2.5
+
+DAMAGE_FLASH_COLOR: Color = (255, 60, 60)
+DAMAGE_FLASH_ALPHA = 110
+DAMAGE_FLASH_SECONDS = 0.3
+SHIELD_FLASH_COLOR: Color = (120, 190, 255)
+SHIELD_FLASH_ALPHA = 90
+SHIELD_FLASH_SECONDS = 0.25
+DEATH_FLASH_COLOR: Color = (255, 120, 60)
+DEATH_FLASH_ALPHA = 150
+DEATH_FLASH_SECONDS = 0.6
+
+# Erschütterung als (Ausschlag in Referenz-px, Dauer in Sekunden).
+SHAKE_DESTROY: tuple[float, float] = (2.5, 0.12)
+SHAKE_CONTACT: tuple[float, float] = (8.0, 0.3)
+SHAKE_DEATH: tuple[float, float] = (14.0, 0.6)
+
+# HUD-Zeile leuchtet nach einem Ereignis kurz auf.
+HUD_FLASH_SECONDS = 0.35
+HUD_FLASH_COLOR: Color = (255, 255, 255)
+# Der Tod bleibt kurz stehen, damit Explosion und Blitz sichtbar werden.
+DEATH_DELAY_SECONDS = 0.7
+
+# --- Soundeffekte (`sfx.py`, prozedural erzeugt — keine Audiodateien nötig) ---
+SFX_VOLUME = 0.35
+
+
 # --- Shop, Zubehör & Fortschritt (Issue #14) ---
 # Speicherort: `METEORITE_DASH_SAVE_DIR` überschreibt das plattformübliche
 # Nutzer-Datenverzeichnis (XDG / AppData / Application Support).
 SAVE_DIR_ENV = "METEORITE_DASH_SAVE_DIR"
 SAVE_APP_DIR = "meteorite-dash"
 SAVE_FILENAME = "progress.json"
-SAVE_FORMAT_VERSION = 1
+# 2: Zubehör ist Vorratsware (`accessory_stock`) statt Einmalkauf. Ältere
+# Stände werden weiter gelesen — jedes gekaufte Teil zählt als ein Exemplar.
+SAVE_FORMAT_VERSION = 2
 
 # Zubehör-Effekte. Preise und Beschreibungen stehen im Katalog in `accessories.py`.
 SHIELD_CHARGES = 1  # blockierte Kollisionen pro Lauf
@@ -195,6 +255,9 @@ MAGNET_RADIUS = 140.0  # Referenz-px um die Schiffsmitte
 MAGNET_PULL_SPEED = 520.0  # Referenz-px/s, muss COIN_SPEED deutlich übersteigen
 AMMO_RESERVE_BONUS = 3  # zusätzliche Schüsse im Standard-Magazin
 ARMOR_HP_BONUS = 30  # zusätzliche Hüllenpunkte
+# Zubehör ist Verbrauchsware: gekauft wird auf Vorrat, ein Lauf verbraucht die
+# eingesetzten Teile. Der Deckel hält Lager und Speicherdatei überschaubar.
+ACCESSORY_MAX_STOCK = 99
 
 WALLET_TOP_RIGHT: WindowSize = (776, 24)
 SHIELD_HUD_TOP_LEFT: WindowSize = (24, 80)
@@ -212,7 +275,8 @@ SIM_DT = 1.0 / SIM_TICKS_PER_SECOND
 MAX_STEPS_PER_FRAME = 5
 # Bei jeder Änderung an Spielregeln/Physik/Spawn erhöhen: Replays älterer
 # Versionen bleiben lesbar, werden aber nicht mehr als Ghost/Referenz benutzt.
-SIM_VERSION = 1
+# 2: pixelgenaue Kollision über Masken statt Rechtecke (`hitbox.py`).
+SIM_VERSION = 2
 # Seeds sind 32-Bit-Zahlen — kurz genug zum Abtippen ("Rennen gegen Freunde").
 SEED_BITS = 32
 SEED_ENV = "METEORITE_DASH_SEED"
@@ -221,7 +285,9 @@ SEED_ENV = "METEORITE_DASH_SEED"
 # Alle Zeiten werden vom Director mit SIM_TICKS_PER_SECOND in feste Ticks
 # übersetzt. Die Werte beschreiben den Regelkern; Balancing erfolgt hier.
 CONSTANT_DIRECTOR_VERSION = 1
-ADAPTIVE_DIRECTOR_VERSION = 2
+# 3: adaptiver Free Mode läuft jetzt zusätzlich auf der Zeitrampe.
+ADAPTIVE_DIRECTOR_VERSION = 3
+RAMP_DIRECTOR_VERSION = 1
 
 DIFFICULTY_START_GRACE_SECONDS = 8.0
 DIFFICULTY_DAMAGE_HOLD_SECONDS = 6.0
@@ -246,8 +312,23 @@ DIFFICULTY_LOW_HP_INTENSITY_CAP = 0.35
 DIFFICULTY_RISE_PER_SECOND_MIN = 0.04
 DIFFICULTY_RISE_PER_SECOND_MAX = 0.16
 DIFFICULTY_FALL_PER_SECOND = 0.35
-DIFFICULTY_SPEED_MULTIPLIER_MAX = 1.75
-DIFFICULTY_SPAWN_INTERVAL_MULTIPLIER_MIN = 0.58
+# Band, in dem der adaptive Director um die Zeitrampe herum moduliert.
+DIFFICULTY_ADAPTIVE_SPEED_MULTIPLIER_MAX = 1.75
+DIFFICULTY_ADAPTIVE_SPAWN_INTERVAL_MULTIPLIER_MIN = 0.58
+
+# --- Zeitrampe (Issue #32): das Welttempo steigt in jedem Modus mit der Laufzeit ---
+# Theoretische Obergrenze — realistisch stirbt man lange vorher. Die Rampe
+# verkürzt zugleich die Spawn-Intervalle um denselben Faktor, damit der
+# räumliche Abstand der Gefahren gleich bleibt: schneller, nicht leerer.
+DIFFICULTY_RAMP_SPEED_MULTIPLIER_MAX = 10.0
+# Sekunden bis zur Obergrenze, linear — also rund +0.3 Tempo je Minute.
+DIFFICULTY_RAMP_FULL_SECONDS = 1800.0
+# Schonzeit am Start: davor bleibt die Rampe bei 1.0.
+DIFFICULTY_RAMP_GRACE_SECONDS = 10.0
+
+# Gemeinsamer Deckel über alle Directors zusammen (Rampe x adaptiv).
+DIFFICULTY_SPEED_MULTIPLIER_CAP = 10.0
+DIFFICULTY_SPAWN_INTERVAL_MULTIPLIER_FLOOR = 0.05
 
 # --- Replays (Issue #34) ---
 # Replays liegen neben `progress.json`; `last` ist immer der letzte, `best` der
@@ -264,6 +345,14 @@ GHOST_ALPHA = 110
 GHOST_TINT: Color = (150, 210, 255)
 GHOST_HUD_COLOR: Color = (150, 210, 255)
 GHOST_HUD_TOP_RIGHT: WindowSize = (776, 108)
+# Der Vorsprung in Lichtjahren wird zum waagerechten Versatz des Ghost-Schiffs:
+# wer weiter ist, schiebt den anderen nach hinten. Weich gesättigt (`tanh`),
+# damit große Abstände nicht aus dem Bild laufen; reines Rendering, der
+# Ghost-Zustand bleibt unberührt.
+GHOST_LEAD_MAX_OFFSET = 220.0  # Referenz-px, Grenzwert des Versatzes
+GHOST_LEAD_SOFT_LIGHT_YEARS = 90.0  # Vorsprung, der ~76 % davon erreicht
+GHOST_LEAD_MIN_X = 4  # solange er lebt, bleibt der Ghost am linken Rand sichtbar
+GHOST_FADE_SECONDS = 2.0  # danach fällt er zurück und blendet aus
 
 # --- Daily Run (Issue #34) ---
 # Der Tages-Seed ist ein Hash aus Salt + UTC-Datum: alle Spieler rechnen ihn
@@ -317,7 +406,8 @@ SHARE_REPLAY_PREFIX = "share-"  # Ablage geholter Codes: `share-<w1>-<w2>-<w3>`
 # --- Code eingeben (Szene) ---
 CODE_ENTRY_MAX_CHARS = 40
 CODE_ENTRY_TITLE_TOP = 90
-CODE_ENTRY_HINT_TOP = 150
+CODE_ENTRY_EXPLAIN_TOP = 138  # wofür der Code gut ist
+CODE_ENTRY_HINT_TOP = 166  # wie er aussieht
 CODE_ENTRY_BOX_RECT: tuple[int, int, int, int] = (100, 200, 600, 60)  # Referenz-px
 CODE_ENTRY_MESSAGE_TOP = 300
 CODE_ENTRY_RESULT_TOP = 360
@@ -325,7 +415,7 @@ CODE_ENTRY_ACTIONS_TOP = 400
 CODE_ENTRY_FOOTER_TOP = 535
 CODE_ENTRY_CURSOR_BLINK_MS = 500
 
-COMMUNITY_STATUS_TOP: int = 480  # Referenz-y der Community-Zeile im Hauptmenü
+COMMUNITY_STATUS_TOP: int = 344  # Referenz-y der Community-Zeile (im Daily-Block)
 COMMUNITY_STATUS_COLOR: Color = (150, 210, 255)
 
 # --- Daily-Bestenliste ---

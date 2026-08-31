@@ -18,6 +18,10 @@ class Transition(Enum):
 
     QUIT = auto()
     MAIN_MENU = auto()
+    # Ausrüstung wählen, danach startet die `LoadoutScene` den passenden Lauf.
+    LOADOUT_FREE = auto()
+    LOADOUT_DAILY = auto()
+    LOADOUT_RACE = auto()  # Rennen gegen einen per Code geholten Lauf
     START_GAME = auto()
     START_DAILY = auto()
     LEADERBOARD = auto()

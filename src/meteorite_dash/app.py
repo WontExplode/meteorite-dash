@@ -31,6 +31,7 @@ from meteorite_dash.scenes.code_entry import CodeEntryScene
 from meteorite_dash.scenes.death import DeathScene
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.scenes.leaderboard import LeaderboardScene
+from meteorite_dash.scenes.loadout import LoadoutScene
 from meteorite_dash.scenes.main_menu import MainMenu
 from meteorite_dash.scenes.ship_selection import ShipSelection
 from meteorite_dash.scenes.shop import ShopScene
@@ -44,6 +45,9 @@ _MENU_TRANSITIONS = (
     Transition.SHOP,
     Transition.LEADERBOARD,
     Transition.CODE_ENTRY,
+    Transition.LOADOUT_FREE,
+    Transition.LOADOUT_DAILY,
+    Transition.LOADOUT_RACE,
 )
 _GAME_TRANSITIONS = (
     Transition.START_GAME,
@@ -117,6 +121,13 @@ class App:
             return LeaderboardScene(self.context)
         if transition is Transition.CODE_ENTRY:
             return CodeEntryScene(self.context)
+        if transition is Transition.LOADOUT_FREE:
+            return LoadoutScene(self.context, start=Transition.START_GAME)
+        if transition is Transition.LOADOUT_DAILY:
+            return LoadoutScene(self.context, start=Transition.START_DAILY)
+        if transition is Transition.LOADOUT_RACE:
+            # `pending_replay` bleibt liegen, bis die `GameScene` es abholt.
+            return LoadoutScene(self.context, start=Transition.START_RACE)
         if transition in (Transition.START_RACE, Transition.SPECTATE):
             state = self.context.state
             replay, state.pending_replay = state.pending_replay, None

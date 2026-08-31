@@ -6,8 +6,8 @@ import pygame
 
 from meteorite_dash.adaptive_difficulty import AdaptiveDirector
 from meteorite_dash.config import (
-    DIFFICULTY_SPAWN_INTERVAL_MULTIPLIER_MIN,
-    DIFFICULTY_SPEED_MULTIPLIER_MAX,
+    DIFFICULTY_ADAPTIVE_SPAWN_INTERVAL_MULTIPLIER_MIN,
+    DIFFICULTY_ADAPTIVE_SPEED_MULTIPLIER_MAX,
 )
 from meteorite_dash.difficulty import DifficultyParams
 from meteorite_dash.entities import AmmoPickup, HunterEnemy, Meteorite, WaveEnemy
@@ -148,8 +148,10 @@ def test_outputs_stay_within_configured_bounds() -> None:
     director = AdaptiveDirector()
     params = _drive(director, _sim(), 60 * 180)
 
-    assert 1.0 <= params.speed_multiplier <= DIFFICULTY_SPEED_MULTIPLIER_MAX
-    assert DIFFICULTY_SPAWN_INTERVAL_MULTIPLIER_MIN <= params.spawn_interval_multiplier <= 1.0
+    assert 1.0 <= params.speed_multiplier <= DIFFICULTY_ADAPTIVE_SPEED_MULTIPLIER_MAX
+    assert (
+        DIFFICULTY_ADAPTIVE_SPAWN_INTERVAL_MULTIPLIER_MIN <= params.spawn_interval_multiplier <= 1.0
+    )
 
 
 def test_same_observations_produce_identical_director_state() -> None:

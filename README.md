@@ -11,6 +11,8 @@ immer mehr zurückgelegte Lichtjahre.
 - vertikale Raumschiffsteuerung
 - Standardwaffe mit 7 Schüssen und Munitions-Pickups
 - zerstörbare Meteoriten und Gegner mit HP; Spieler-HP aus Schiffsrumpf
+- pixelgenaue Kollision: Schiff, Meteoriten, Gegner und Münzen treffen über
+  ihre Silhouette, nicht über ihr Rechteck
 - Meteoriten in vier Größen mit zufälligen Farbvarianten
 - Gegner mit unterschiedlichen Bewegungsmustern
 - scrollendes Sternenfeld als Hintergrund
@@ -19,19 +21,28 @@ immer mehr zurückgelegte Lichtjahre.
   komplett eingesammelt gibt Bonus, eigener Münz-Score im HUD
 - Shop: Münzen aus allen Läufen werden gespeichert und kaufen Schiffe,
   Zubehör (Schild, Magnet, Extra-Munition, Panzerung) und Schiffsfarben
-- Zubehör wird pro Schiff in dessen Zubehörplätze gelegt und wirkt im Lauf
+- Zubehör ist Verbrauchsware: es wird auf Vorrat gekauft (mehrere Exemplare
+  derselben Art), vor jedem Lauf auf die Zubehörplätze des Schiffs gelegt und
+  mit dem Start verbraucht — Münzen bleiben also dauerhaft nützlich
 - Game-Over-Screen mit finalem Score
 - dynamische Fenstergröße und Vollbild über einen gemeinsamen `Viewport`
 - deterministische Simulation: fester Zeitschritt, Seed pro Lauf
   (`METEORITE_DASH_SEED` erzwingt einen), headless nachspielbar
+- Zeitrampe in beiden Modi: das Welttempo steigt mit der Laufzeit langsam an
+  (rund +0.3 je Minute, theoretisches Maximum 10x nach 30 Minuten); die
+  Spawn-Intervalle schrumpfen mit, das Bild wird also schneller statt leerer
 - adaptiver Free Mode: schadensfreie Passagen erhöhen Welttempo, Gefahren-Dichte
-  und Lightyears-Fortschritt schrittweise; Schaden, niedrige HP und gehäufte
-  Near Misses sorgen für Entlastung
+  und Lightyears-Fortschritt zusätzlich zur Rampe; Schaden, niedrige HP und
+  gehäufte Near Misses sorgen für Entlastung. Free und Daily teilen dieselbe
+  Obergrenze
 - Replays: jeder Lauf wird als `last.json` und modusspezifischer Rekord aufgezeichnet;
   Director-Art und Regelversion werden mitgespeichert, damit
   `uv run meteorite-dash --verify datei.json` ihn korrekt nachspielt
 - Daily Run: ein gemeinsamer Seed pro Tag für alle Spieler (ohne Server); der
   Tagesrekord fliegt als Ghost mit, der Game-Over-Screen zeigt den Vergleich
+- der Ghost fliegt so weit vorn oder hinten, wie es dem Lichtjahr-Abstand
+  entspricht: wer weiter ist, schiebt den anderen nach hinten. Ist der
+  Ghost-Lauf zu Ende, fällt er zurück und blendet aus
 - Community-Läufe über Nostr: eigene Rekorde gehen signiert an öffentliche
   Relays, fremde Läufe zum Tages-Seed werden geholt, nachgespielt und
   fliegen als Ghost mit — kein eigener Server, kein Account
@@ -39,14 +50,21 @@ immer mehr zurückgelegte Lichtjahre.
 - Lauf per Code weitergeben: `C` auf dem Game-Over-Screen veröffentlicht den
   Lauf unter drei Wörtern (z. B. `apfel berg wolke`); wer den Code im Menü
   eingibt, tritt gegen den Lauf an oder sieht ihn sich an
-- Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
+- Treffer-Feedback: Funken, Explosionen, roter Blitz und Erschütterung bei
+  Schaden, Aufleuchten der passenden HUD-Zeile
+- Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound; Treffer,
+  Explosionen, Münzen, Munition, Schild und Schaden klingen als prozedural
+  erzeugte Retro-Effekte (keine zusätzlichen Audiodateien)
+- das Hauptmenü merkt sich den zuletzt gewählten Punkt
 
 ## Steuerung
 
 - `Pfeil hoch` / `Pfeil runter`: Raumschiff bewegen oder Menüpunkt wechseln
 - `Pfeil links` / `Pfeil rechts`: Raumschiff in der Schiffsauswahl wechseln,
   Reiter im Shop wechseln
-- `Enter` im Shop: kaufen, ausrüsten/ablegen oder Farbe wählen
+- `Enter` im Shop: kaufen, Schiff auswählen oder Farbe wählen
+- Ausrüstung vor dem Lauf: `Space` setzt Zubehör ein bzw. legt es ab,
+  `Enter` startet den Lauf, `Escape` geht zurück ins Menü
 - `Space`: schießen (im Spiel)
 - `R`: Waffe wechseln (im Spiel, wenn mehrere Waffen vorhanden)
 - `Enter` / `Space`: Menüauswahl bestätigen
@@ -80,11 +98,14 @@ src/meteorite_dash/
   config.py            Zentrale Konstanten
   assets.py            Asset-Pfade und Bild-Caching
   audio.py             Musik und Sounds
+  sfx.py               Prozedural erzeugte Soundeffekte (ohne Audiodateien)
+  effects.py           Funken, Explosionen, Blitze und Erschütterung (Rendering)
   score.py             Lightyears-Score
   simulation.py        Deterministischer Spielkern (fester Tick, Seed-Streams, Events)
   inputs.py            InputFrame: Eingaben als Bitmaske pro Tick
   difficulty.py        Director-Vertrag (DifficultyParams) für den Schwierigkeitsgrad
   adaptive_difficulty.py  Adaptiver Schwierigkeits-Director des Free Mode
+  ramp_difficulty.py   Zeitrampe: Welttempo steigt mit der Laufzeit
   mode_directors.py    Getrennte Director-Auswahl und Regelversion je Spielmodus
   headless.py          Simulation ohne Fenster abspielen (Tests, Replay-Prüfung)
   replay.py            Replay-Format, Recorder und Ablage (JSON)
@@ -101,9 +122,10 @@ src/meteorite_dash/
   projectiles.py       Spieler-Projektile
   weapons.py           Waffen-Loadout und Munitionslogik
   combat.py            Projektil- und Kollisionsschaden
+  hitbox.py            Pixelgenaue Masken im Referenzraum
   ships.py             Schiffsdatenblätter, Slot-Limits, Preise und Farben
   accessories.py       Zubehör-Katalog (Schild, Magnet, Extra-Munition, Panzerung)
-  progress.py          Guthaben, Freischaltungen, Ausrüstung (Shop-Regeln)
+  progress.py          Guthaben, Freischaltungen, Zubehör-Vorrat (Shop-Regeln)
   persistence.py       JSON-Speicherstand im Nutzer-Datenverzeichnis
   coins.py             Münzen, Muster-Layouts und Formationen
   spawner.py           Timergesteuertes Spawning
@@ -113,6 +135,7 @@ src/meteorite_dash/
     main_menu.py       Hauptmenü
     ship_selection.py  Schiffsauswahl
     shop.py            Shop (Schiffe, Zubehör, Farben)
+    loadout.py         Ausrüstung vor dem Lauf: Vorrat auf die Plätze legen
     leaderboard.py     Daily-Bestenliste
     code_entry.py      Code eingeben, Lauf holen, antreten oder ansehen
     widgets.py         Geteilte Zeichen-Helfer (Münz-Guthaben)

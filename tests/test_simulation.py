@@ -13,6 +13,7 @@ from meteorite_dash.config import (
     AMMO_RESERVE_BONUS,
     ARMOR_HP_BONUS,
     COIN_RADIUS,
+    DEATH_DELAY_SECONDS,
     MAX_STEPS_PER_FRAME,
     SEED_BITS,
     SEED_ENV,
@@ -485,6 +486,7 @@ def test_scene_death_sets_final_state(context: GameContext) -> None:
     scene.sim.coins_collected = 3
     scene.sim.entities.append(_meteorite(scene.sim.player.rect.copy(), contact_damage=999))
     scene.update(SIM_DT)
+    scene.update(DEATH_DELAY_SECONDS)
     assert scene._transition is Transition.DEATH_SCREEN
     assert context.state.final_light_years > 42.0
     assert context.state.final_coins == 3

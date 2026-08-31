@@ -1,13 +1,15 @@
 """Musik und Soundeffekte über `pygame.mixer`.
 
 Die Spiel-Playlist meldet das Ende eines Tracks als `GAME_MUSIC_ENDED`-Userevent;
-die Szene ruft dann `advance_track`.
+die Szene ruft dann `advance_track`. Neben den Musikdateien hält der Player die
+prozeduralen Effekte aus `sfx.py` (Treffer, Explosion, Pickups, Schaden).
 """
 
 import pygame
 
 from meteorite_dash.assets import sound_path
-from meteorite_dash.config import GAME_MUSIC_TRACKS, MENU_MUSIC
+from meteorite_dash.config import GAME_MUSIC_TRACKS, MENU_MUSIC, SFX_VOLUME
+from meteorite_dash.sfx import Sfx, SoundBank
 
 GAME_MUSIC_ENDED = pygame.USEREVENT + 1
 
@@ -17,6 +19,8 @@ class MusicPlayer:
 
     def __init__(self) -> None:
         self.track_index = 0
+        # Effekte werden beim ersten Abspielen synthetisiert und dann gecacht.
+        self.sfx = SoundBank()
 
     def play_menu_loop(self) -> None:
         """Spielt die Menümusik als Endlosschleife ohne End-Event."""
@@ -31,8 +35,12 @@ class MusicPlayer:
         self._load_and_play(GAME_MUSIC_TRACKS[self.track_index])
 
     def play_sound_effect(self, filename: str) -> None:
-        """Spielt einen Soundeffekt einmalig ab (unabhängig von der Musik)."""
+        """Spielt einen Soundeffekt aus einer Datei einmalig ab (z. B. Waffensound)."""
         pygame.mixer.Sound(sound_path(filename)).play()
+
+    def play_effect(self, effect: Sfx, volume: float = 1.0) -> None:
+        """Spielt einen prozeduralen Effekt; ohne Mixer ein No-op (siehe `sfx.py`)."""
+        self.sfx.play(effect, SFX_VOLUME * volume)
 
     def advance_track(self) -> None:
         """Schaltet zyklisch zum nächsten Track der Spiel-Playlist."""

@@ -168,33 +168,17 @@ class ShopScene(Scene):
             self._show(_failure_text(result, spec.name, spec.price, self._ship))
 
     def _activate_accessory(self, spec: AccessorySpec) -> None:
-        """Kauft oder rüstet Zubehör.
+        """Legt ein weiteres Exemplar ins Lager.
 
-        Nicht besessen: kaufen und bei freiem Platz direkt ausrüsten. Besessen:
-        am gewählten Schiff ausrüsten bzw. ablegen. Fehler landen als Hinweis.
+        Zubehör ist Verbrauchsware: hier wird nur nachgekauft, eingesetzt wird
+        vor dem Lauf in der `LoadoutScene`.
         """
-        ship = self._ship
-        if not self._progress.owns_accessory(spec):
-            result = self._progress.buy_accessory(spec)
-            if result is not ShopResult.OK:
-                self._show(_failure_text(result, spec.name, spec.price, ship))
-                return
-            # Bequemlichkeit: direkt ausrüsten, wenn ein Platz frei ist.
-            if self._progress.toggle_accessory(ship, spec) is ShopResult.OK:
-                self._show(f"Gekauft: {spec.name} — ausgerüstet auf {ship.name}")
-            else:
-                self._show(f"Gekauft: {spec.name}")
-            self.context.save_progress()
-            return
-        result = self._progress.toggle_accessory(ship, spec)
+        result = self._progress.buy_accessory(spec)
         if result is ShopResult.OK:
-            if self._progress.is_equipped(ship, spec):
-                self._show(f"{spec.name} ausgerüstet auf {ship.name}")
-            else:
-                self._show(f"{spec.name} abgelegt")
+            self._show(f"Gekauft: {spec.name} — Vorrat {self._progress.accessory_count(spec)}")
             self.context.save_progress()
         else:
-            self._show(_failure_text(result, spec.name, spec.price, ship))
+            self._show(_failure_text(result, spec.name, spec.price, self._ship))
 
     def _activate_tint(self, spec: TintSpec) -> None:
         """Kauft die Farbe bei Bedarf und stellt sie am gewählten Schiff ein."""
@@ -234,12 +218,11 @@ class ShopScene(Scene):
         return ShopRow(spec.name, f"{spec.price} Münzen", COIN_COLOR, description)
 
     def _accessory_row(self, spec: AccessorySpec) -> ShopRow:
-        """Zeile für Zubehör: Preis, Gekauft oder Ausgerüstet (am gewählten Schiff)."""
-        if not self._progress.owns_accessory(spec):
-            return ShopRow(spec.name, f"{spec.price} Münzen", COIN_COLOR, spec.description)
-        if self._progress.is_equipped(self._ship, spec):
-            return ShopRow(spec.name, "Ausgerüstet", SELECTED_TEXT_COLOR, spec.description)
-        return ShopRow(spec.name, "Gekauft", OWNED_TEXT_COLOR, spec.description)
+        """Zeile für Zubehör: Vorrat im Lager und Stückpreis."""
+        count = self._progress.accessory_count(spec)
+        description = f"{spec.description} — hält einen Lauf"
+        color = OWNED_TEXT_COLOR if count > 0 else COIN_COLOR
+        return ShopRow(spec.name, f"x{count}   {spec.price} Münzen", color, description)
 
     def _default_tint_row(self) -> ShopRow:
         """Zeile 0 im Farben-Reiter: die kostenlose Standardfarbe des Schiffs."""
@@ -311,7 +294,7 @@ class ShopScene(Scene):
 
         hints = (
             "Links/Rechts: Reiter   Hoch/Runter: wählen",
-            "Enter: kaufen / ausrüsten   Escape: zurück",
+            "Enter: kaufen / wählen   Escape: zurück",
         )
         for hint_text, y in zip(hints, _HINT_YS, strict=True):
             hint = hint_font.render(hint_text, True, TEXT_COLOR)
@@ -361,4 +344,6 @@ def _failure_text(result: ShopResult, name: str, price: int, ship: ShipSpec) -> 
         return f"{name} zuerst kaufen"
     if result is ShopResult.ALREADY_OWNED:
         return f"{name} bereits gekauft"
+    if result is ShopResult.STOCK_FULL:
+        return f"Lager voll: {name}"
     return ""

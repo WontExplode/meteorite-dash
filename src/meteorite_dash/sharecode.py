@@ -35,7 +35,11 @@ from meteorite_dash.simulation import RunConfig, Snapshot
 _ALL_INPUTS = int(functools.reduce(operator.or_, InputFrame))
 _MODE_CODES: dict[RunMode, int] = {RunMode.FREE: 0, RunMode.DAILY: 1}
 _MODES_BY_CODE: dict[int, RunMode] = {code: mode for mode, code in _MODE_CODES.items()}
-_DIRECTOR_CODES: dict[DirectorKind, int] = {DirectorKind.CONSTANT: 0, DirectorKind.ADAPTIVE: 1}
+_DIRECTOR_CODES: dict[DirectorKind, int] = {
+    DirectorKind.CONSTANT: 0,
+    DirectorKind.ADAPTIVE: 1,
+    DirectorKind.RAMP: 2,
+}
 _DIRECTORS_BY_CODE: dict[int, DirectorKind] = {code: kind for kind, code in _DIRECTOR_CODES.items()}
 _RUN_LENGTH_ESCAPE = 15  # Lauflängen ab hier stehen als Varint hinter dem Byte
 _MAX_VARINT_BYTES = 10

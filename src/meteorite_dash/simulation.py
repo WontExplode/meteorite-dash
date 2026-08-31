@@ -152,14 +152,17 @@ class Snapshot(NamedTuple):
 class SimEvent(NamedTuple):
     """Eine Interaktion mit dem Zustand unmittelbar danach.
 
-    `GameScene` reagiert nur hierauf (Sound, Hinweise, Death-Screen); der
-    `headless.Trace` besteht aus diesen Events.
+    `GameScene` reagiert nur hierauf (Sound, Funken, Hinweise, Death-Screen);
+    der `headless.Trace` besteht aus diesen Events. `sound` und `position` sind
+    reine Render-Hinweise und gehören nicht zum Zustand.
     """
 
     kind: EventKind
     snapshot: Snapshot  # Zustand unmittelbar nach der Interaktion
     value: int = 0  # Schaden, Münzwert, Bonus — je nach Art
     sound: str | None = None  # nur für die Szene; nicht Teil des Zustands
+    # Wo es passiert ist (Referenzraum) — Ankerpunkt für Funken und Explosionen.
+    position: tuple[int, int] = (0, 0)
 
 
 class Simulation:
@@ -278,29 +281,27 @@ class Simulation:
             projectile.update(dt)
         self.projectiles = [p for p in self.projectiles if not p.is_off_screen]
 
-        collected = collect_pickups(self.player.rect, self.entities)
+        collected = collect_pickups(self.player, self.entities)
         if collected:
             self.loadout.refill_standard()
-            events.extend(self._event(EventKind.AMMO_PICKUP) for _ in collected)
+            events.extend(
+                self._event(EventKind.AMMO_PICKUP, position=pickup.rect.center)
+                for pickup in collected
+            )
 
         self._update_coins(dt, player_y, speed, events)
 
-        projectiles_before = len(self.projectiles)
-        entities_before = len(self.entities)
-        resolve_projectile_hits(self.projectiles, self.entities)
-        events.extend(
-            self._event(EventKind.HIT) for _ in range(projectiles_before - len(self.projectiles))
-        )
-        events.extend(
-            self._event(EventKind.DESTROYED) for _ in range(entities_before - len(self.entities))
-        )
+        for impact in resolve_projectile_hits(self.projectiles, self.entities):
+            events.append(self._event(EventKind.HIT, position=impact.position))
+            if impact.destroyed:
+                events.append(self._event(EventKind.DESTROYED, position=impact.position))
 
-        if self.shield_charges > 0 and absorb_contact(self.player.rect, self.entities):
+        if self.shield_charges > 0 and absorb_contact(self.player, self.entities):
             self.shield_charges -= 1
             events.append(self._event(EventKind.SHIELD))
         else:
             hp_before = self.player.hp
-            self.player.hp = apply_contact_damage(self.player.rect, self.player.hp, self.entities)
+            self.player.hp = apply_contact_damage(self.player, self.player.hp, self.entities)
             if self.player.hp != hp_before:
                 events.append(self._event(EventKind.CONTACT, value=hp_before - self.player.hp))
         if self.player.hp <= 0:
@@ -308,9 +309,21 @@ class Simulation:
             events.append(self._event(EventKind.DEATH))
         return events
 
-    def _event(self, kind: EventKind, *, value: int = 0, sound: str | None = None) -> SimEvent:
-        """Baut ein `SimEvent` mit dem Snapshot des aktuellen Zustands."""
-        return SimEvent(kind, self.snapshot(), value, sound)
+    def _event(
+        self,
+        kind: EventKind,
+        *,
+        value: int = 0,
+        sound: str | None = None,
+        position: tuple[int, int] | None = None,
+    ) -> SimEvent:
+        """Baut ein `SimEvent` mit dem Snapshot des aktuellen Zustands.
+
+        Ohne `position` gilt die Schiffsmitte — dort passieren Pickups,
+        Schildtreffer und Kollisionen ohnehin.
+        """
+        anchor = position if position is not None else self.player.rect.center
+        return SimEvent(kind, self.snapshot(), value, sound, anchor)
 
     def _update_shooting(self, dt: float, inputs: InputFrame, events: list[SimEvent]) -> None:
         """Feuert bei `FIRE`, wenn Cooldown abgelaufen und Munition vorhanden ist."""
@@ -320,9 +333,17 @@ class Simulation:
         fired_spec = self.loadout.active.spec
         if not self.loadout.fire():
             return
-        self.projectiles.append(spawn_projectile(self.player, damage=fired_spec.damage))
+        projectile = spawn_projectile(self.player, damage=fired_spec.damage)
+        self.projectiles.append(projectile)
         self._shoot_cooldown = fired_spec.fire_cooldown
-        events.append(self._event(EventKind.FIRED, value=fired_spec.damage, sound=fired_spec.sound))
+        events.append(
+            self._event(
+                EventKind.FIRED,
+                value=fired_spec.damage,
+                sound=fired_spec.sound,
+                position=projectile.rect.center,
+            )
+        )
 
     def _hazard_rects(self) -> list[object]:
         """Hitboxen aller Entities, die dem Spieler schaden."""
@@ -366,7 +387,7 @@ class Simulation:
             formation.update(dt, player_y, speed)
             if self.magnet_enabled:
                 formation.attract(self.player.rect.center, MAGNET_RADIUS, MAGNET_PULL_SPEED * dt)
-            pickup = formation.collect(self.player.rect)
+            pickup = formation.collect(self.player)
             if pickup.coins:
                 self.coins_collected += pickup.coins
                 events.append(self._event(EventKind.COIN, value=pickup.coins))

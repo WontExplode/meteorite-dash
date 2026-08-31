@@ -3,7 +3,13 @@
 from dataclasses import replace
 from pathlib import Path
 
-from meteorite_dash.config import GHOST_ALPHA, SIM_VERSION
+from meteorite_dash.config import (
+    GHOST_ALPHA,
+    GHOST_FADE_SECONDS,
+    GHOST_LEAD_MAX_OFFSET,
+    GHOST_LEAD_MIN_X,
+    SIM_VERSION,
+)
 from meteorite_dash.context import GameContext
 from meteorite_dash.ghost import Ghost
 from meteorite_dash.headless import scripted_inputs
@@ -167,3 +173,72 @@ def test_scene_draws_translucent_ghost(context: GameContext) -> None:
     assert image.get_alpha() == GHOST_ALPHA
     assert scene.ghost_image((64, 64)) is image  # gecacht
     assert scene.ghost_image((128, 128)).get_size() == (128, 128)
+
+
+# --- Versatz: wer weiter ist, schiebt den anderen nach hinten -------------------------
+
+
+def _scene_with_ghost(context: GameContext) -> GameScene:
+    scene = GameScene(context, seed=CONFIG.seed, mode=RunMode.DAILY, ghost=_daily_record())
+    scene.step(InputFrame.NONE)
+    return scene
+
+
+def test_ghost_offset_follows_the_lead(context: GameContext) -> None:
+    scene = _scene_with_ghost(context)
+    assert scene.ghost is not None
+    # Gleichstand: der Ghost fliegt auf gleicher Höhe wie der Spieler.
+    assert scene.ghost_offset_x() == 0.0
+    assert scene.ghost_draw_rect() == scene.ghost.rect
+
+    # Spieler voraus -> Ghost nach hinten (links), aber nie ganz aus dem Bild.
+    scene.sim.score.light_years = scene.ghost.light_years + 50.0
+    assert scene.ghost_offset_x() < 0.0
+    ahead = scene.ghost_draw_rect()
+    assert ahead is not None
+    assert ahead.x >= GHOST_LEAD_MIN_X
+    assert ahead.y == scene.ghost.rect.y  # nur waagerecht versetzt
+
+    # Spieler zurück -> Ghost fliegt vorweg.
+    scene.sim.score.light_years = scene.ghost.light_years - 50.0
+    behind = scene.ghost_draw_rect()
+    assert behind is not None
+    assert behind.x > scene.ghost.rect.x
+    scene.draw()
+
+
+def test_ghost_offset_saturates(context: GameContext) -> None:
+    scene = _scene_with_ghost(context)
+    assert scene.ghost is not None
+    scene.sim.score.light_years = scene.ghost.light_years + 10_000.0
+    assert -GHOST_LEAD_MAX_OFFSET <= scene.ghost_offset_x() <= -0.99 * GHOST_LEAD_MAX_OFFSET
+
+
+def test_finished_ghost_falls_back_and_fades(context: GameContext) -> None:
+    scene = GameScene(context, seed=CONFIG.seed, mode=RunMode.DAILY, ghost=_daily_record(ticks=20))
+    assert scene.ghost is not None
+    for _ in range(25):
+        scene.step(InputFrame.NONE)
+    assert scene.ghost.finished
+
+    # Vorbei heißt nicht sofort weg: er fällt sichtbar zurück und blendet aus.
+    scene.sim.score.light_years = scene.ghost.light_years + 30.0
+    scene.update(GHOST_FADE_SECONDS / 2)
+    faded = scene.ghost_draw_rect()
+    assert faded is not None
+    assert faded.x < scene.ghost.rect.x  # darf hinter den linken Rand rutschen
+    scene.draw()
+
+    scene.update(GHOST_FADE_SECONDS)
+    assert scene.ghost_draw_rect() is None
+    scene.draw()
+
+
+def test_ghost_offset_is_pure_rendering(context: GameContext) -> None:
+    with_ghost = GameScene(context, seed=CONFIG.seed, mode=RunMode.DAILY, ghost=_daily_record())
+    without = GameScene(context, seed=CONFIG.seed, mode=RunMode.DAILY)
+    for frame in scripted_inputs(11, 200):
+        with_ghost.step(frame)
+        with_ghost.ghost_draw_rect()
+        without.step(frame)
+    assert with_ghost.sim.state_hash() == without.sim.state_hash()

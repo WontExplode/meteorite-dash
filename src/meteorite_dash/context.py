@@ -30,6 +30,8 @@ class GameState:
     """
 
     selected_ship_index: int = 0
+    # Cursor des Hauptmenüs: bleibt beim Zurückkehren stehen, statt hochzuspringen.
+    menu_index: int = 0
     final_light_years: float = 0.0
     final_coins: int = 0
     final_seed: int = 0

@@ -31,6 +31,7 @@ class DirectorKind(Enum):
 
     CONSTANT = "constant"
     ADAPTIVE = "adaptive"
+    RAMP = "ramp"
 
 
 @dataclass(frozen=True)
@@ -76,7 +77,8 @@ class StatefulDirector(Protocol):
 
 
 class ConstantDirector:
-    """Standard ohne Rampe/Adaption — der Platzhalter, bis Issue #32/#33 landet."""
+    """Director ohne Rampe und ohne Adaption — feste Stellgrößen für Tests und
+    für ältere Replays, die noch unter dieser Strategie aufgezeichnet wurden."""
 
     def __init__(self, params: DifficultyParams | None = None) -> None:
         self._params = params or DifficultyParams()
@@ -84,3 +86,48 @@ class ConstantDirector:
     def params(self, sim: SimulationView, rng: random.Random) -> DifficultyParams:
         """Liefert immer dieselben Stellgrößen; `sim` und `rng` bleiben ungenutzt."""
         return self._params
+
+
+class CompositeDirector:
+    """Multipliziert die Stellgrößen mehrerer Directors und deckelt das Ergebnis.
+
+    So trägt die Zeitrampe das langfristige Tempo, während der adaptive Director
+    nur noch um sie herum moduliert. Der Deckel gilt für das Produkt, nicht für
+    die einzelnen Teile — sonst könnten zwei je erlaubte Faktoren gemeinsam
+    darüber hinausschießen.
+    """
+
+    def __init__(
+        self,
+        *directors: Director,
+        speed_cap: float,
+        interval_floor: float,
+    ) -> None:
+        if not directors:
+            raise ValueError("CompositeDirector braucht mindestens einen Director")
+        if speed_cap < 1.0 or not 0.0 < interval_floor <= 1.0:
+            raise ValueError("Unplausibler Deckel für den CompositeDirector")
+        self.directors = directors
+        self._speed_cap = speed_cap
+        self._interval_floor = interval_floor
+
+    def params(self, sim: SimulationView, rng: random.Random) -> DifficultyParams:
+        """Fragt jeden Teil-Director und verrechnet die Stellgrößen multiplikativ."""
+        speed = 1.0
+        interval = 1.0
+        for director in self.directors:
+            part = director.params(sim, rng)
+            speed *= part.speed_multiplier
+            interval *= part.spawn_interval_multiplier
+        return DifficultyParams(
+            speed_multiplier=min(speed, self._speed_cap),
+            spawn_interval_multiplier=max(interval, self._interval_floor),
+        )
+
+    def state_key(self) -> tuple[object, ...]:
+        """Zustand der zustandsbehafteten Teile; zustandslose tragen nichts bei."""
+        return tuple(
+            director.state_key()
+            for director in self.directors
+            if isinstance(director, StatefulDirector)
+        )

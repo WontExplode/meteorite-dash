@@ -57,6 +57,16 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Kampf / HP:** Spieler-HP aus `ShipSpec.hull`; zerstörbare Meteoriten und
   Gegner mit größenabhängigen HP; Projektil- und Kollisionsschaden über
   `combat.py`.
+- **Pixelgenaue Hitboxen** (`hitbox.py`): jedes kollidierende Objekt trägt neben
+  `rect` eine `mask` in Referenzgröße — Sprite-Alphakanal bei Schiff und
+  Meteoriten, gezeichnete Grundform bei Gegnern, Münzen und Projektilen.
+  `overlaps` prüft erst das Rechteck, dann die Masken. Ecken zweier Boxen
+  kosten damit kein Leben mehr.
+- **Treffer-Feedback** (`effects.py`, `sfx.py`): aus jedem `SimEvent` entstehen
+  Funken/Explosionen an `event.position`, roter Blitz und Erschütterung bei
+  Schaden, ein blauer Ring beim Schild und ein kurzes Aufleuchten der passenden
+  HUD-Zeile. Die Sounds sind prozedural synthetisiert (keine Audiodateien im
+  Repo); der Tod wartet `DEATH_DELAY_SECONDS` auf seine Explosion.
 - Schiffssystem (`ships.py`, Issue #11): `ShipSpec`-Datenblätter mit
   physikalischen Grundwerten (mass/thrust/hull, Slot-Zahlen) und abgeleiteten
   Spielwerten; 4 Schiffe mit Tint-Farbvarianten und Stat-Balken in der Auswahl.
@@ -66,23 +76,40 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   Muster zahlt Bonus. Eigener Münz-Score im HUD und Death-Screen; nach jedem
   Lauf wandern die Münzen ins persistente Guthaben.
 - **Shop & Fortschritt** (Issue #14): `Progress` (Guthaben, Freischaltungen,
-  Ausrüstung) wird als JSON im Nutzer-Datenverzeichnis gespeichert
+  Zubehör-Vorrat) wird als JSON im Nutzer-Datenverzeichnis gespeichert
   (`persistence.py`). `ShopScene` mit drei Reitern: Schiffe freischalten
-  (`ShipSpec.price`), Zubehör für die `accessory_slots` (Schild, Magnet,
-  Extra-Munition, Panzerung — `accessories.py`) und Farbvarianten (`TINTS` in
-  `ships.py`). Schiffsauswahl zeigt gesperrte Schiffe abgedunkelt mit Preis.
+  (`ShipSpec.price`), Zubehör nachkaufen (Schild, Magnet, Extra-Munition,
+  Panzerung — `accessories.py`) und Farbvarianten (`TINTS` in `ships.py`).
+  Schiffsauswahl zeigt gesperrte Schiffe abgedunkelt mit Preis.
+- **Zubehör als Verbrauchsware**: `accessory_stock` zählt die Exemplare je Art
+  (mehrfach kaufbar bis `ACCESSORY_MAX_STOCK`), die `LoadoutScene`
+  (`scenes/loadout.py`) legt sie vor jedem Lauf auf die `accessory_slots` des
+  Schiffs, und `GameScene.run_config` bucht sie beim Start ab
+  (`Progress.consume_loadout`). Damit behalten Münzen dauerhaft einen Zweck.
+  Jeder gespielte Lauf geht deshalb über die Ausrüstung: `LOADOUT_FREE`
+  (Start), `LOADOUT_DAILY` (Daily Run) und `LOADOUT_RACE` (Rennen gegen einen
+  per Code geholten Lauf; `pending_replay` bleibt dabei liegen). Zuschauen
+  verbraucht nichts — dort baut `GameScene` gar keine eigene `RunConfig`.
 - **Deterministische Simulation** (Issue #34): `Simulation` (`simulation.py`)
   tickt mit festem `SIM_DT`, Zufall aus Seed-Streams, Eingaben als
   `InputFrame`; jede Interaktion liefert ein `SimEvent` mit Snapshot
   (HP/Munition/Score/Münzen). `headless.run` spielt Eingabefolgen ohne Fenster
   ab, `state_hash()` beweist Gleichheit. Director-Vertrag (`difficulty.py`) für
   #32/#33 steht.
+- **Zeitrampe** (`ramp_difficulty.py`, Issue #32): das Welttempo steigt in
+  **jedem** Modus mit der Laufzeit — nach einer kurzen Schonzeit linear von
+  `1.0` bis `DIFFICULTY_RAMP_SPEED_MULTIPLIER_MAX` (10.0) über
+  `DIFFICULTY_RAMP_FULL_SECONDS` (30 Minuten), also rund +0.3 je Minute. Die
+  Rampe verkürzt die Spawn-Intervalle um denselben Faktor, damit der räumliche
+  Abstand der Gefahren gleich bleibt: schneller, nicht leerer. Der Daily Run
+  fährt sie pur — gleiche Laufzeit heißt für alle dasselbe Tempo.
 - **Adaptiver Director-Regelkern** (Issue #33): `AdaptiveDirector`
   (`adaptive_difficulty.py`) schätzt aus sicheren Passagen, schadensfreier Zeit,
   Schaden, Near Misses, HP und Munition eine individuelle Belastungsgrenze.
   Sein vollständiger Zustand fließt über `state_key()` in den Simulationshash.
-  `mode_directors.py` liefert für Free eine frische adaptive, für Daily weiterhin
-  eine konstante Instanz. Replays speichern Director-Art und getrennte
+  `mode_directors.py` liefert für Free die Rampe **mal** eine frische adaptive
+  Instanz (`CompositeDirector`, gedeckelt bei `DIFFICULTY_SPEED_MULTIPLIER_CAP`
+  = 10.0), für Daily die pure Rampe. Replays speichern Director-Art und getrennte
   Regelversion, sodass Headless-Prüfungen dieselbe Strategie rekonstruieren.
   Speed, Gefahrenintervall und Lightyears-Rate reagieren auf die Intensität;
   `F3` blendet ein rein visuelles Diagnose-HUD ein.
@@ -120,6 +147,14 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   `state_hash`, deutsche Wortliste `assets/words_de.txt`, 2048³ Kombinationen),
   Menüpunkt „Code eingeben“ holt ihn, prüft ihn und bietet „antreten“
   (Ghost) oder „ansehen“ (Zuschauer-Modus der `GameScene`).
+- **Hauptmenü im Endgame-Look** (`menu_fx.py`, `scenes/main_menu.py`):
+  Sternenfeld, Scanlines und Doppelrahmen wie der Death-Screen; Menüpunkte in
+  thematischen Blöcken (`MENU_ITEM_TOPS`: Start | Daily/Community | Hangar |
+  Beenden). Deko-Meteoriten prallen federnd an den Buchstaben von Titel und
+  Menüpunkten ab (Ink-Box des gerenderten Texts), zwei Deko-Gegner auf der
+  Spielerseite links jagen und zerschießen sie (Funken/Trümmer-Partikel).
+  Reines Rendering wie `StarField` (Wandzeit, ungeseedeter Zufall, Referenzraum
+  + `RenderContext`) — kein Sim-Pfad, keine Wirkung auf Replays.
 - Strikte Typprüfung, Linting, Tests, CI.
 
 **Noch NICHT vorhanden** (aus dem Spec — meist als GitHub-Issue getrackt):
@@ -127,21 +162,11 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Sammelbare Sterne** für Punkte (`StarField` ist nur Deko, nicht einsammelbar).
 - **Spezialwaffen-Pickups** (Loadout und Slot-Limit sind vorbereitet).
 - **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
-- **Steigende Schwierigkeit** über die Zeit (Vertrag in `difficulty.py`,
-  Umsetzung Issues #32/#33 — nicht Teil von #34).
 - Freunde-Filter nach Pubkey in der Bestenliste; QR-Anzeige des Share-Codes
   (Format steht in `sharecode.py`).
-- **Produktive Schwierigkeitssteuerung:** Der adaptive Regelkern ist vorhanden,
-  wird aber noch nicht in den Free Mode injiziert. Die feste Daily-Zeitrampe
-  bleibt eine getrennte Aufgabe des zweiten Modus.
-- **Weitere adaptive Stellgrößen und Diagnose-HUD:** Free nutzt bereits Speed-
-  und Spawnintervallfaktor. Gegnermix, Größenbias und das geplante verborgene
-  Debug-HUD sind noch nicht umgesetzt; die feste Daily-Zeitrampe bleibt eine
-  getrennte Aufgabe des zweiten Modus.
-- **Weitere adaptive Stellgrößen:** Free nutzt Speed-, Gefahrenintervall- und
-  Score-Faktor. Gegnermix, Größenbias und Schwarm-Events sind noch nicht
-  umgesetzt; die feste Daily-Zeitrampe bleibt eine getrennte Aufgabe des
-  zweiten Modus.
+- **Weitere Stellgrößen des Directors:** Speed, Gefahrenintervall und
+  Score-Faktor stehen. Gegnermix, Größenbias und Schwarm-Events sind noch nicht
+  umgesetzt.
 - Server-Anbindung für Daily-Bestenlisten (Issue #34 „+ Server funktion“):
   Replay-Datei ist die Upload-Einheit, `headless.verify` die Prüfung.
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
@@ -205,9 +230,11 @@ main.main()                 Entry-Point, ruft App().run()
       ├─ MainMenu            Transition zurück → App wählt nächste Szene
       ├─ ShipSelection
       ├─ ShopScene          Münzen gegen Schiffe, Zubehör, Farben
+      ├─ LoadoutScene       Zubehör-Vorrat vor dem Lauf auf die Plätze legen
       ├─ LeaderboardScene   Daily-Bestenliste aus dem ReplayStore
       ├─ CodeEntryScene     Drei-Wort-Code tippen -> Lauf holen -> Rennen/Ansehen
       ├─ GameScene          Fixstep-Loop um `Simulation` (simulation.py) + Rendering
+      │                     plus Feedback (effects.py, sfx.py) aus den SimEvents
       └─ DeathScene         Game-Over-Screen mit finalem Lightyears-Score
 ```
 
@@ -231,7 +258,8 @@ Ein `@dataclass`, der alle geteilten Ressourcen hält und **Fenster-Resize +
 Vollbild** besitzt (`apply_resize`, `toggle_fullscreen`). Beim Resize aktualisiert
 er Screen, `Viewport` und `StarField` gemeinsam — Größenlogik lebt hier, nicht in
 den Szenen. `GameState` hält den eigentlichen Spielzustand (aktuell
-`selected_ship_index`, `final_light_years`, `final_coins` und den persistenten
+`selected_ship_index`, `menu_index` — der Menü-Cursor überlebt den
+Szenenwechsel —, `final_light_years`, `final_coins` und den persistenten
 `progress`); neue Session-Felder (Leben, Munition …) kommen hierher, alles, was
 über den Neustart hinaus gelten soll, in `Progress`. `GameContext.store`
 (`SaveStore | None`) schreibt den Fortschritt; `save_progress()` ist ohne Store
@@ -258,8 +286,10 @@ fenster-unabhängig bleibt.
 **ausschließlich im Referenzraum** — Hitboxen, Geschwindigkeiten, Spawn-Fläche
 (`REFERENCE_SIZE`). Die Fenstergröße erreicht die Logik nie. Beim Zeichnen bekommt
 jedes Objekt einen `RenderContext` (`render.py`: Surface, Viewport, optionaler
-`AssetLoader`); `ctx.rect(ref_rect)` liefert das Fenster-Rechteck, `ctx.image`
-das Sprite in genau dieser Größe aus dem Cache. Resize/Vollbild ändern damit nur
+`AssetLoader`); `ctx.rect(ref_rect)` liefert das Fenster-Rechteck, `ctx.point(x, y)` den
+Punkt, `ctx.image` das Sprite in genau dieser Größe aus dem Cache. `offset`
+ist die Erschütterung aus `effects.Effects` — sie verschiebt alles, was durch
+den Kontext gezeichnet wird; HUD-Code geht bewusst direkt über den `Viewport`. Resize/Vollbild ändern damit nur
 das Bild, nie den Spielzustand — Grundlage für Determinismus und Replays.
 
 ### Simulation & Determinismus (Issue #34)
@@ -316,20 +346,36 @@ Replays zu brechen:
   einen kanonischen `StatefulDirector.state_key()`; `Simulation.state_key()`
   nimmt ihn in den Hash auf. Zustandslose Directors verändern bestehende Hashes
   dadurch nicht.
-- `ConstantDirector` bleibt der unveränderte Daily-Standard; der adaptive Free-
-  Teil wird über `Simulation(director=…)` injiziert.
+- `RampDirector` (`ramp_difficulty.py`) ist die Zeitachse: zustandslos, rein aus
+  `sim.tick`, linear von `1.0` bis `DIFFICULTY_RAMP_SPEED_MULTIPLIER_MAX` über
+  `DIFFICULTY_RAMP_FULL_SECONDS` nach `DIFFICULTY_RAMP_GRACE_SECONDS` Schonzeit.
+  Er setzt `spawn_interval_multiplier = 1 / speed`, hält die Gefahren-Dichte
+  also räumlich konstant — genau wie `Simulation._update_coins` es für Münzen
+  tut. Weil er keinen Zustand hat, taucht er nicht im Hash auf.
 - `AdaptiveDirector` lebt bewusst separat in `adaptive_difficulty.py`: sichere
   Passagen und schadensfreies Spielen erhöhen `mastery`; Schaden und gehäufte
   Near Misses erhöhen `stress`. Die Intensität steigt geglättet und fällt
-  schneller, mit Start-Schonzeit, Damage-Hold und Low-HP-Cap. Seine Parameter
-  stehen als `DIFFICULTY_*`-Konstanten in `config.py`.
+  schneller, mit Start-Schonzeit, Damage-Hold und Low-HP-Cap. Sein Band ist
+  bewusst schmal (`DIFFICULTY_ADAPTIVE_SPEED_MULTIPLIER_MAX` = 1.75): er
+  moduliert um die Rampe herum, er ersetzt sie nicht. Seine Parameter stehen als
+  `DIFFICULTY_*`-Konstanten in `config.py`.
+- `CompositeDirector` (`difficulty.py`) multipliziert die Stellgrößen mehrerer
+  Directors und deckelt erst das **Produkt**
+  (`DIFFICULTY_SPEED_MULTIPLIER_CAP` = 10.0,
+  `DIFFICULTY_SPAWN_INTERVAL_MULTIPLIER_FLOOR`). Sein `state_key()` sammelt nur
+  die zustandsbehafteten Teile.
+- `ConstantDirector` ist nur noch der feste Testfall und die Strategie älterer
+  Replays (`DirectorKind.CONSTANT`) — kein Modus benutzt ihn mehr.
 - `mode_directors.py` ist die einzige Modusgrenze: Free wird auf
-  `DirectorKind.ADAPTIVE`, Daily auf `DirectorKind.CONSTANT` abgebildet.
-  Factory und getrennte Regelversionen werden von `GameScene`, Ghost und
-  Headless-Replay gemeinsam genutzt. Änderungen nur am Tuning erhöhen die
-  betreffende Director-Version, nicht die gemeinsame `SIM_VERSION`.
-  `ADAPTIVE_DIRECTOR_VERSION` wurde für die Score-/Münzkopplung auf 2 erhöht;
-  die konstante Daily-Version und ihre Golden-Replays bleiben unverändert.
+  `DirectorKind.ADAPTIVE` (Rampe × adaptiv), Daily auf `DirectorKind.RAMP`
+  (pure Rampe) abgebildet. Factory und getrennte Regelversionen werden von
+  `GameScene`, Ghost und Headless-Replay gemeinsam genutzt. Änderungen nur am
+  Tuning erhöhen die betreffende Director-Version, nicht die gemeinsame
+  `SIM_VERSION` — die Simulation selbst bleibt unberührt, deshalb gelten die
+  Golden-Replays (konstanter Director) unverändert weiter.
+  `ADAPTIVE_DIRECTOR_VERSION` steht wegen der Rampe auf 3,
+  `RAMP_DIRECTOR_VERSION` auf 1. Ältere Daily-Rekorde tragen noch
+  `DirectorKind.CONSTANT` und fliegen deshalb nicht mehr als Ghost mit.
 
 ### Replays (Issue #34)
 
@@ -385,8 +431,16 @@ Replays zu brechen:
   einen Ghost, Free mit erzwungenem Seed den adaptiven Bestlauf. `step()` rückt
   Ghost und Spieler gemeinsam vor; der Ghost fasst die Spieler-Simulation nie
   an. Zeichnen: `ghost_image(size)` = getöntes Schiff (`GHOST_TINT`) mit
-  `GHOST_ALPHA`, pro Größe gecacht; Ghost hinter dem Spieler, verschwindet mit
-  `finished`. HUD `GHOST <ly> ±Δ` über `GHOST_HUD_TOP_RIGHT`.
+  `GHOST_ALPHA`, pro Größe gecacht. `ghost_offset_x()` macht aus dem
+  Lichtjahr-Vorsprung einen waagerechten Versatz (`tanh`-gesättigt auf
+  `GHOST_LEAD_MAX_OFFSET`): wer weiter ist, schiebt den anderen nach hinten.
+  Solange der Ghost lebt, hält ihn `GHOST_LEAD_MIN_X` am linken Rand sichtbar;
+  nach `finished` fällt er frei zurück und blendet über `GHOST_FADE_SECONDS`
+  aus (`ghost_draw_rect()` liefert dann `None`). Alles reines Rendering —
+  Wandzeit, kein Sim-Zustand. HUD `GHOST <ly> ±Δ` über `GHOST_HUD_TOP_RIGHT`.
+  Achtung: bei der puren Rampe (Daily) sind die Lichtjahre beider Läufe zu
+  jedem Tick gleich — ein Abstand entsteht erst, wenn einer stirbt. Im
+  adaptiven Free Mode driften sie schon vorher auseinander.
 - Daily-Ghost gegen Freunde: Ein kompatibles Daily-Replay kann in den
   `replays/`-Ordner gelegt werden. Free-Replays werden nur bei erzwungenem
   Seed (`METEORITE_DASH_SEED`) oder per Share-Code zum Ghost.
@@ -400,7 +454,7 @@ Replays zu brechen:
 - `RunMode` (`replay.py`): `FREE` | `DAILY`, im Replay gespeichert (`mode`,
   `label` = Datum). `Transition.START_DAILY` → `App._create_scene` baut
   `GameScene(seed=daily_seed(today), mode=DAILY, label=datum)`; Menüpunkt
-  „Daily Run“ in `MENU_ITEMS` (`MENU_ITEM_SPACING` hält fünf Einträge im Bild).
+  „Daily Run“ in `MENU_ITEMS` (Positionen in `MENU_ITEM_TOPS`).
 - Rekord: `GameScene.record_name()` — `best` im freien Lauf, `daily-<datum>`
   im Daily; `_store_replay` überschreibt nur bei größerer Lichtjahr-Zahl.
   Ghost = kompatibles `best_for_seed(daily_seed, mode=DAILY, ...)`, also
@@ -426,6 +480,9 @@ Briefkasten, die Simulation ist der Richter.
   Wire-Format — auch für späteres QR/Tippen. Format-Änderung →
   `SHARECODE_VERSION` erhöhen (2 seit den Director-Feldern; ohne sie käme ein
   adaptiver Free-Lauf als „konstant“ an und fiele bei `headless.verify` durch).
+  Eine neue `DirectorKind` braucht nur einen freien Code in `_DIRECTOR_CODES`
+  (0 = konstant, 1 = adaptiv, 2 = Rampe); ältere Clients lehnen unbekannte
+  Codes sauber ab, statt den Lauf falsch zu deuten.
 - `identity.py`: `Identity` = 32 Byte Zufall (`secrets`), Pubkey x-only,
   BIP-340-Schnorr über `coincurve`. `IdentityStore` speichert
   `identity.json` neben `progress.json` (0600, atomar); fehlend/kaputt →
@@ -490,7 +547,10 @@ Relay der Briefkasten, die Simulation der Richter.
   `headless.verify` besteht, wird gespeichert (`author` = Pubkey).
 - `CodeEntryScene`: Buchstaben/Leerzeichen/Bindestrich (`event.unicode`),
   `Enter` sucht bzw. startet das Rennen, `Tab` = ansehen, `Esc` zurück; ohne
-  Exchange nur schon geholte Codes aus dem Store. Ergebnis wandert über
+  Exchange nur schon geholte Codes aus dem Store. Die beiden Kopfzeilen sagen,
+  wozu der Code dient (`EXPLAIN_PURPOSE`) und wie er aussieht (`HINT_FORMAT`,
+  zugleich die Fehlermeldung) — die 2048-Wörter-Liste ist Implementierung und
+  gehört nicht in die UI. Ergebnis wandert über
   `GameState.pending_replay` + `Transition.START_RACE` / `SPECTATE` in
   `App._create_scene`.
 - Rennen (`START_RACE`): `GameScene(seed, ghost=replay, mode=replay.mode,
@@ -561,6 +621,49 @@ Relay der Briefkasten, die Simulation der Richter.
 - Spieler startet mit `ShipSpec.hp`; bei 0 HP → Death-Screen. Kollision
   entfernt das Hindernis und zieht `contact_damage` ab.
 
+### Hitboxen (pixelgenau)
+
+- `hitbox.py` ist die einzige Stelle, die Masken baut und cacht. Alles läuft in
+  **Referenz-px** (`REFERENCE_SIZE`), nie in Fenstergröße — dieselbe Asset-Datei
+  plus dieselbe Zielgröße ergibt auf jedem Rechner dieselbe Maske.
+- `HasHitbox` = `rect` + gleich große `mask`. Wer kollidiert, liefert beides:
+  `Player` (`ship_mask`), `Meteorite` (`image_mask`, ohne Bild `circle_mask`),
+  `WaveEnemy`/`HunterEnemy` (`left_triangle_mask` — dieselbe Silhouette, die sie
+  zeichnen), `Coin` (`circle_mask`, unabhängig von der Dreh-Animation),
+  `AmmoPickup`/`Projectile` (`solid_mask`).
+- `overlaps(a, b)` prüft erst `colliderect` (sortiert fast alle Paare aus), dann
+  `Mask.overlap`. Alle Berührungen gehen darüber: `combat.py`,
+  `entities.collides_with_any` / `collect_pickups`, `CoinFormation.collect`.
+  `coins.is_clear` (Spawn-Abstand) bleibt bewusst grob auf Rechtecken.
+- `hitbox.solid(rect)` liefert eine `Box` mit voller Maske — für Tests, die sich
+  wie die alte Rechteck-Kollision verhalten sollen.
+- Neue Entity: `mask` überschreiben, sobald die gezeichnete Form ihr Rechteck
+  nicht füllt. Maskengröße **muss** `rect.size` entsprechen.
+- Die Masken sind Teil der Spielregeln: `pygame.image.load` +
+  `transform.scale` + `mask.from_surface` müssen bit-gleich bleiben, sonst
+  laufen Replays auseinander. Sprite-Datei oder Referenzgröße ändern heißt
+  `SIM_VERSION` erhöhen und Golden-Replays neu erzeugen.
+
+### Treffer-Feedback (Optik & Sound)
+
+- `SimEvent` trägt neben `sound` ein `position` (Referenzraum) — beides reine
+  Render-Hinweise, nicht Teil des Zustands und nicht im Hash. `HIT`/`DESTROYED`
+  bekommen den Aufschlagpunkt aus `combat.Impact`, alles andere die
+  Schiffsmitte.
+- `effects.Effects` ist die Deko-Schicht der `GameScene`: Wandzeit,
+  ungeseedeter Zufall, Referenzraum — dieselben Regeln wie `StarField` und
+  `menu_fx`. `hit`/`explosion`/`pickup`/`damage`/`shield`/`death` bündeln die
+  `config`-Werte; `offset` ist die Erschütterung für den `RenderContext`,
+  `draw_overlay` der Vollbild-Blitz (unter dem HUD).
+- `sfx.py` synthetisiert die Effekte aus Rezepten (`Segment`-Folgen je Stimme,
+  Stimmen werden gemischt) und packt sie ins Format des laufenden Mixers.
+  Ohne Mixer oder bei exotischer Bittiefe bleibt alles still. Neuer Effekt =
+  `Sfx`-Wert + Eintrag in `RECIPES`; `MusicPlayer.play_effect` spielt ihn.
+- `GameScene._feedback` ist die einzige Übersetzung Event -> Ausgabe;
+  `_flash_hud`/`_hud_color` lassen die betroffene HUD-Zeile kurz aufleuchten.
+  Bei `DEATH` steht der Endstand sofort, der Szenenwechsel wartet
+  `DEATH_DELAY_SECONDS`.
+
 ### Münzen (Collectibles)
 
 - `coins.py`: `Coin(Entity)` (prozedural gezeichnete Gold-Scheibe mit
@@ -582,10 +685,13 @@ Relay der Briefkasten, die Simulation der Richter.
 ### Shop, Zubehör & Persistenz (Issue #14)
 
 - `progress.py`: `Progress` ist reine Logik — Guthaben (`coins`),
-  `unlocked_ships`, `owned_accessories`, `owned_tints`, `equipped` (Schiffsname
-  → Zubehör-IDs) und `tints` (Schiffsname → Farb-ID). Kauf-/Ausrüst-Methoden
-  liefern ein `ShopResult` (`OK`, `TOO_EXPENSIVE`, `NO_FREE_SLOT`, …); die Szene
-  übersetzt das in Text. Kostenlose Schiffe (`price == 0`) sind immer frei.
+  `unlocked_ships`, `accessory_stock` (Zubehör-ID → Exemplare im Lager),
+  `owned_tints`, `equipped` (Schiffsname → Zubehör-IDs für den nächsten Lauf)
+  und `tints` (Schiffsname → Farb-ID). Kauf-/Ausrüst-Methoden liefern ein
+  `ShopResult` (`OK`, `TOO_EXPENSIVE`, `NO_FREE_SLOT`, `STOCK_FULL`, …); die
+  Szene übersetzt das in Text. Kostenlose Schiffe (`price == 0`) sind immer
+  frei. `consume_loadout(ship)` bucht die eingesetzten Teile beim Laufstart ab
+  und nimmt ein leer gewordenes Teil von den Plätzen **aller** Schiffe.
 - `persistence.py`: `SaveStore(path)` liest/schreibt `Progress` als JSON —
   atomar (Temp-Datei + `os.replace`), defensiv geparst (`Progress.from_dict`
   verwirft falsche Typen und unbekannte IDs), kaputte/fehlende Datei → frischer
@@ -596,10 +702,12 @@ Relay der Briefkasten, die Simulation der Richter.
   `accessories.ACCESSORIES` (Kind, Name, Beschreibung, Preis), `TintSpec` in
   `ships.TINTS`. Effektstärken (`SHIELD_CHARGES`, `MAGNET_RADIUS`,
   `AMMO_RESERVE_BONUS`, `ARMOR_HP_BONUS`) stehen in `config.py`.
-- Zubehör wird **einmal gekauft** und pro Schiff ausgerüstet, begrenzt durch
-  `ShipSpec.accessory_slots`. Farben ebenso: einmal kaufen, pro Schiff
-  wählen; `Progress.ship_tint(spec)` liefert die effektive Färbung (gekaufte
-  Farbe oder `ShipSpec.tint`).
+- Zubehör wird **auf Vorrat gekauft** (beliebig oft, Deckel
+  `ACCESSORY_MAX_STOCK`), vor dem Lauf in der `LoadoutScene` auf die
+  `ShipSpec.accessory_slots` gelegt und mit dem Start verbraucht — je Art
+  höchstens ein Exemplar pro Lauf (Effekte stapeln nicht). Farben dagegen:
+  einmal kaufen, pro Schiff wählen; `Progress.ship_tint(spec)` liefert die
+  effektive Färbung (gekaufte Farbe oder `ShipSpec.tint`).
 - Effekte wendet `Simulation.__init__` aus der `RunConfig` an (Zubehör-IDs
   liefert `GameScene.run_config`): Panzerung → `Player(extra_hp=…)`,
   Extra-Munition → `WeaponLoadout(standard_ammo_bonus=…)`, Schild →
@@ -607,8 +715,9 @@ Relay der Briefkasten, die Simulation der Richter.
   HUD `SCHILD xN`), Magnet → `CoinFormation.attract` zieht Münzen im Radius
   heran.
 - `ShopScene` (`scenes/shop.py`): Reiter Schiffe / Zubehör / Farben, `rows()`
-  baut die Zeilen aus `Progress`, `_activate` kauft/rüstet/wählt und ruft
-  danach `context.save_progress()`. Wallet oben rechts über
+  baut die Zeilen aus `Progress`, `_activate` kauft/wählt und ruft danach
+  `context.save_progress()`; der Zubehör-Reiter zeigt den Vorrat (`x3`) und
+  kauft nur nach — eingesetzt wird in der `LoadoutScene`. Wallet oben rechts über
   `scenes/widgets.draw_wallet` — auch im Hauptmenü und in der Schiffsauswahl.
 - `ShipSelection` hält einen eigenen `cursor`; nur ein freigeschaltetes Schiff
   wird per Enter in `GameState.selected_ship_index` übernommen.
@@ -674,18 +783,20 @@ Relay der Briefkasten, die Simulation der Richter.
 
 ### Neues Feature — typische Schritte
 
-- **Gegner/Hindernis:** `Entity`-Subklasse mit `draw(ctx)` und ggf.
-  `state_key()` → `spawn_*`-Fabrik `(rng, area)` → Gewicht in
-  `simulation.SPAWN_TABLE` → Logik-Test mit gesetztem Seed → `SIM_VERSION`
-  erhöhen.
+- **Gegner/Hindernis:** `Entity`-Subklasse mit `draw(ctx)`, passender `mask`
+  (siehe Hitboxen) und ggf. `state_key()` → `spawn_*`-Fabrik `(rng, area)` →
+  Gewicht in `simulation.SPAWN_TABLE` → Logik-Test mit gesetztem Seed →
+  `SIM_VERSION` erhöhen.
 - **Waffe/Pickup:** Konstanten in `config.py`, Logik in `weapons.py` /
   `projectiles.py`, Integration in `Simulation.step` (+ passender `EventKind`),
   Sound/HUD in `GameScene._on_event`.
 - **Director (#32/#33):** Klasse mit `params(sim, rng) -> DifficultyParams`
   (Protokoll in `difficulty.py`), bei internem Zustand zusätzlich
-  `StatefulDirector.state_key()`, über `Simulation(director=…)` einhängen,
-  Replay-/Versionsauswirkung prüfen und mit einem Headless-Test nach dem Muster
-  `test_director_keeps_replays_bit_identical`.
+  `StatefulDirector.state_key()`. Einhängen über `mode_directors` — entweder
+  als eigene `DirectorKind` (dann auch Code in `sharecode._DIRECTOR_CODES` und
+  eigene `*_DIRECTOR_VERSION`) oder als weiterer Teil im `CompositeDirector`.
+  Danach Replay-/Versionsauswirkung prüfen und einen Headless-Test nach dem
+  Muster `test_director_keeps_replays_bit_identical` schreiben.
 - **Szene/Screen** (z. B. Game-Over, Issue #15): `Scene`-Subklasse +
   `Transition` + Verdrahtung in `App._create_scene`; Menüpunkte in
   `MENU_ITEMS` + `_ACTION_TRANSITIONS` (`scenes/main_menu.py`).
@@ -695,11 +806,11 @@ Relay der Briefkasten, die Simulation der Richter.
 - **Münz-Muster:** Layout-Funktion in `coins.py` + Eintrag in `LAYOUTS` +
   `CoinPatternSpec` in `COIN_PATTERNS` (`config.py`) → Test in
   `tests/test_coins.py` (Determinismus, passt ins Fenster).
-- **Zubehör:** `AccessoryKind` + `AccessorySpec` in `accessories.py`,
-  Effektstärke in `config.py`, Effekt in `Simulation.__init__` / `step` (oder
-  als reine Funktion in `combat.py` / `coins.py`) → Tests in
-  `tests/test_shop.py`.
-  `Progress` braucht keine Änderung — IDs kommen aus dem Katalog.
+- **Zubehör:** `AccessoryKind` + `AccessorySpec` in `accessories.py` (Preis pro
+  Exemplar, es hält einen Lauf), Effektstärke in `config.py`, Effekt in
+  `Simulation.__init__` / `step` (oder als reine Funktion in `combat.py` /
+  `coins.py`) → Tests in `tests/test_shop.py`. `Progress`, `ShopScene` und
+  `LoadoutScene` brauchen keine Änderung — IDs kommen aus dem Katalog.
 - **Shop-Artikel / Farbe:** `TintSpec` in `ships.TINTS` bzw. `price` am
   `ShipSpec`; Persistenz übernimmt neue IDs automatisch, alte Speicherstände
   bleiben lesbar.
@@ -727,7 +838,9 @@ Relay der Briefkasten, die Simulation der Richter.
   (`test_simulation.py`), Münzen (`test_coins.py`), Fortschritt/Persistenz
   (`test_progress.py`, mit `tmp_path`), Replays (`test_replay.py`, Golden in
   `tests/replays/`), Ghost (`test_ghost.py`), Daily (`test_daily.py`),
-  Shop/Zubehör (`test_shop.py`), Skalierung/Resize (`test_viewport.py`),
+  Shop/Zubehör/Ausrüstung (`test_shop.py`), Skalierung/Resize (`test_viewport.py`),
+  Hitboxen (`test_hitbox.py`), Feedback/Sound (`test_feedback.py`),
+  Zeitrampe (`test_ramp_difficulty.py`),
   Share-Code (`test_sharecode.py`), Nostr (`test_nostr.py`), Bestenliste
   (`test_leaderboard.py`), Phrase (`test_phrase.py`) und Code-Weitergabe
   (`test_share.py`) sind getrennt. Der `FakeRelay` liegt in
@@ -806,6 +919,19 @@ demselben defensiven Muster.
   ungeseedeter `random` und Set-Iteration haben in `simulation.py`,
   `entities.py`, `coins.py`, `player.py`, `spawner.py`, `combat.py` nichts
   verloren — sonst laufen Replays auseinander. Regeländerung → `SIM_VERSION`.
+- **Masken gehören zu den Regeln.** `hitbox.py` liest Sprites (ohne Display,
+  ohne `convert_alpha`) und baut daraus Kollisionsmasken in Referenzgröße. Wer
+  eine Sprite-Datei austauscht oder `PLAYER_SIZE`/`METEORITE_VARIANTS`-Radien
+  ändert, ändert die Kollision — `SIM_VERSION` erhöhen und
+  `UPDATE_GOLDEN=1 uv run pytest tests/test_replay.py -k golden` laufen lassen.
+- **Leertaste bestätigt auch das Menü.** `GameScene` gibt `FIRE` erst frei,
+  nachdem die Taste einmal los war (`_fire_armed`) — sonst kostet der Start
+  sofort einen Schuss. Direkte `scene.step(InputFrame.FIRE)`-Aufrufe (Tests,
+  Replay, Ghost) umgehen die Sperre bewusst.
+- **Tod ist verzögert.** `_on_event` schreibt bei `DEATH` sofort Endstand und
+  Replay, wechselt aber erst nach `DEATH_DELAY_SECONDS` zum Death-Screen.
+  Tests, die den `Transition` prüfen, brauchen danach ein
+  `scene.update(DEATH_DELAY_SECONDS)`.
 - **Exakte Tick-Vielfache im Test:** `scene.update(3 * SIM_DT)` liefert dank
   `_STEP_EPSILON` drei Ticks; ohne den Epsilon frisst Float-Rundung einen.
 - **Threads nur im Exchange.** `RunExchange` ist der einzige Ort mit Threads;
