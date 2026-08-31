@@ -40,6 +40,9 @@ immer mehr zurückgelegte Lichtjahre.
   `uv run meteorite-dash --verify datei.json` ihn korrekt nachspielt
 - Daily Run: ein gemeinsamer Seed pro Tag für alle Spieler (ohne Server); der
   Tagesrekord fliegt als Ghost mit, der Game-Over-Screen zeigt den Vergleich
+- der Ghost fliegt so weit vorn oder hinten, wie es dem Lichtjahr-Abstand
+  entspricht: wer weiter ist, schiebt den anderen nach hinten. Ist der
+  Ghost-Lauf zu Ende, fällt er zurück und blendet aus
 - Community-Läufe über Nostr: eigene Rekorde gehen signiert an öffentliche
   Relays, fremde Läufe zum Tages-Seed werden geholt, nachgespielt und
   fliegen als Ghost mit — kein eigener Server, kein Account

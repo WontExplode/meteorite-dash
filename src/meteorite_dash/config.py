@@ -47,7 +47,7 @@ DEATH_MUTED_COLOR: Color = (120, 120, 150)
 MUTED_TEXT_COLOR: Color = (120, 120, 150)
 OWNED_TEXT_COLOR: Color = (140, 255, 160)
 
-MENU_FONT_NAME = "gigi"
+MENU_FONT_NAME = "amoria"
 MENU_FONT_SIZE = 42
 HINT_FONT_SIZE = 22
 DEATH_TITLE_FONT_SIZE = 84
@@ -345,6 +345,14 @@ GHOST_ALPHA = 110
 GHOST_TINT: Color = (150, 210, 255)
 GHOST_HUD_COLOR: Color = (150, 210, 255)
 GHOST_HUD_TOP_RIGHT: WindowSize = (776, 108)
+# Der Vorsprung in Lichtjahren wird zum waagerechten Versatz des Ghost-Schiffs:
+# wer weiter ist, schiebt den anderen nach hinten. Weich gesättigt (`tanh`),
+# damit große Abstände nicht aus dem Bild laufen; reines Rendering, der
+# Ghost-Zustand bleibt unberührt.
+GHOST_LEAD_MAX_OFFSET = 220.0  # Referenz-px, Grenzwert des Versatzes
+GHOST_LEAD_SOFT_LIGHT_YEARS = 90.0  # Vorsprung, der ~76 % davon erreicht
+GHOST_LEAD_MIN_X = 4  # solange er lebt, bleibt der Ghost am linken Rand sichtbar
+GHOST_FADE_SECONDS = 2.0  # danach fällt er zurück und blendet aus
 
 # --- Daily Run (Issue #34) ---
 # Der Tages-Seed ist ein Hash aus Salt + UTC-Datum: alle Spieler rechnen ihn

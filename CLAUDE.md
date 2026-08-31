@@ -431,8 +431,16 @@ Replays zu brechen:
   einen Ghost, Free mit erzwungenem Seed den adaptiven Bestlauf. `step()` rückt
   Ghost und Spieler gemeinsam vor; der Ghost fasst die Spieler-Simulation nie
   an. Zeichnen: `ghost_image(size)` = getöntes Schiff (`GHOST_TINT`) mit
-  `GHOST_ALPHA`, pro Größe gecacht; Ghost hinter dem Spieler, verschwindet mit
-  `finished`. HUD `GHOST <ly> ±Δ` über `GHOST_HUD_TOP_RIGHT`.
+  `GHOST_ALPHA`, pro Größe gecacht. `ghost_offset_x()` macht aus dem
+  Lichtjahr-Vorsprung einen waagerechten Versatz (`tanh`-gesättigt auf
+  `GHOST_LEAD_MAX_OFFSET`): wer weiter ist, schiebt den anderen nach hinten.
+  Solange der Ghost lebt, hält ihn `GHOST_LEAD_MIN_X` am linken Rand sichtbar;
+  nach `finished` fällt er frei zurück und blendet über `GHOST_FADE_SECONDS`
+  aus (`ghost_draw_rect()` liefert dann `None`). Alles reines Rendering —
+  Wandzeit, kein Sim-Zustand. HUD `GHOST <ly> ±Δ` über `GHOST_HUD_TOP_RIGHT`.
+  Achtung: bei der puren Rampe (Daily) sind die Lichtjahre beider Läufe zu
+  jedem Tick gleich — ein Abstand entsteht erst, wenn einer stirbt. Im
+  adaptiven Free Mode driften sie schon vorher auseinander.
 - Daily-Ghost gegen Freunde: Ein kompatibles Daily-Replay kann in den
   `replays/`-Ordner gelegt werden. Free-Replays werden nur bei erzwungenem
   Seed (`METEORITE_DASH_SEED`) oder per Share-Code zum Ghost.

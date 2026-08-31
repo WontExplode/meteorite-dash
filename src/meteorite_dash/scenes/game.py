@@ -1,5 +1,6 @@
 """Spiel-Szene: Fixstep-Loop um `Simulation`, Eingabe-Übersetzung, Ghost und HUD."""
 
+import math
 from collections.abc import Iterator
 
 import pygame
@@ -19,13 +20,18 @@ from meteorite_dash.config import (
     DIFFICULTY_DEBUG_HUD_LINE_SPACING,
     DIFFICULTY_DEBUG_HUD_TOP_LEFT,
     GHOST_ALPHA,
+    GHOST_FADE_SECONDS,
     GHOST_HUD_COLOR,
     GHOST_HUD_TOP_RIGHT,
+    GHOST_LEAD_MAX_OFFSET,
+    GHOST_LEAD_MIN_X,
+    GHOST_LEAD_SOFT_LIGHT_YEARS,
     GHOST_TINT,
     HP_HUD_TOP_LEFT,
     HUD_FLASH_COLOR,
     HUD_FLASH_SECONDS,
     MAX_STEPS_PER_FRAME,
+    REFERENCE_SIZE,
     REPLAY_BEST_NAME,
     REPLAY_LAST_NAME,
     SCORE_ALPHA,
@@ -128,6 +134,9 @@ class GameScene(Scene):
                 ghost_replay = candidate
         self.ghost = Ghost(ghost_replay) if ghost_replay is not None else None
         self._ghost_images: dict[tuple[int, int], pygame.Surface] = {}
+        # Deckkraft des Ghosts: voll, solange sein Lauf läuft; danach blendet er
+        # aus, während ihn der eigene Vorsprung nach hinten schiebt.
+        self._ghost_fade = 1.0
         self._accumulator = 0.0
         # Flanken (Waffenwechsel) aus Events, bis zum nächsten Tick gesammelt.
         self._pending = InputFrame.NONE
@@ -243,6 +252,8 @@ class GameScene(Scene):
         # Deko läuft mit Wandzeit; nur die Simulation tickt fest.
         self.context.starfield.update(dt)
         self.effects.update(dt)
+        if self.ghost is not None and self.ghost.finished:
+            self._ghost_fade = max(0.0, self._ghost_fade - dt / GHOST_FADE_SECONDS)
         self._bonus_notice_ttl = max(0.0, self._bonus_notice_ttl - dt)
         self._hud_flash = {key: ttl - dt for key, ttl in self._hud_flash.items() if ttl - dt > 0.0}
         if self._death_delay > 0.0:
@@ -441,12 +452,43 @@ class GameScene(Scene):
         self._draw_difficulty_debug()
         pygame.display.flip()
 
+    def ghost_offset_x(self) -> float:
+        """Waagerechter Versatz des Ghost-Schiffs aus dem Lichtjahr-Vorsprung.
+
+        Negativ heißt: der Spieler ist weiter, der Ghost fällt nach hinten.
+        `tanh` sättigt den Versatz weich, damit ein großer Abstand den Ghost
+        nicht schlagartig aus dem Bild wirft.
+        """
+        assert self.ghost is not None
+        delta = self.ghost.delta(self.sim.light_years)
+        return -GHOST_LEAD_MAX_OFFSET * math.tanh(delta / GHOST_LEAD_SOFT_LIGHT_YEARS)
+
+    def ghost_draw_rect(self) -> pygame.Rect | None:
+        """Referenz-Rechteck des Ghost-Schiffs inklusive Versatz; `None` = unsichtbar.
+
+        Solange der Ghost lebt, bleibt er am linken Rand hängen statt zu
+        verschwinden — er ist die einzige Referenz. Ist sein Lauf zu Ende,
+        darf er zurückfallen und aus dem Bild fliegen.
+        """
+        if self.ghost is None:
+            return None
+        rect = self.ghost.rect.move(round(self.ghost_offset_x()), 0)
+        if not self.ghost.finished:
+            rect.x = max(rect.x, GHOST_LEAD_MIN_X)
+            return rect
+        if self._ghost_fade <= 0.0 or rect.right <= 0 or rect.left >= REFERENCE_SIZE[0]:
+            return None
+        return rect
+
     def _draw_ghost(self, ctx: RenderContext) -> None:
-        """Ghost-Schiff hinter dem Spieler, solange der Ghost-Lauf nicht beendet ist."""
-        if self.ghost is None or self.ghost.finished:
+        """Ghost-Schiff halbtransparent, um seinen Rückstand nach hinten versetzt."""
+        target_ref = self.ghost_draw_rect()
+        if target_ref is None:
             return
-        target = ctx.rect(self.ghost.rect)
-        ctx.surface.blit(self.ghost_image(target.size), target)
+        target = ctx.rect(target_ref)
+        image = self.ghost_image(target.size)
+        image.set_alpha(round(GHOST_ALPHA * self._ghost_fade))
+        ctx.surface.blit(image, target)
 
     def _draw_player(self, ctx: RenderContext) -> None:
         """Spielerschiff an der Simulationsposition, in Fenstergröße."""
