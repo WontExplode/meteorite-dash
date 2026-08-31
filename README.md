@@ -51,7 +51,8 @@ immer mehr zurückgelegte Lichtjahre.
   Lauf unter drei Wörtern (z. B. `apfel berg wolke`); wer den Code im Menü
   eingibt, tritt gegen den Lauf an oder sieht ihn sich an
 - Treffer-Feedback: Funken, Explosionen, roter Blitz und Erschütterung bei
-  Schaden, Aufleuchten der passenden HUD-Zeile
+  Schaden, Aufleuchten der passenden HUD-Zeile; getroffene Gegner und
+  Meteoriten zeigen nach dem ersten Treffer eine dünne Lebensleiste
 - Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound; Treffer,
   Explosionen, Münzen, Munition, Schild und Schaden klingen als prozedural
   erzeugte Retro-Effekte (keine zusätzlichen Audiodateien)
@@ -99,7 +100,7 @@ src/meteorite_dash/
   assets.py            Asset-Pfade und Bild-Caching
   audio.py             Musik und Sounds
   sfx.py               Prozedural erzeugte Soundeffekte (ohne Audiodateien)
-  effects.py           Funken, Explosionen, Blitze und Erschütterung (Rendering)
+  effects.py           Funken, Explosionen, Blitze, Erschütterung, Lebensleisten
   score.py             Lightyears-Score
   simulation.py        Deterministischer Spielkern (fester Tick, Seed-Streams, Events)
   inputs.py            InputFrame: Eingaben als Bitmaske pro Tick
