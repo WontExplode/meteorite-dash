@@ -1,3 +1,4 @@
+import math
 import random
 
 import pygame
@@ -11,22 +12,36 @@ from meteorite_dash.config import (
     DEATH_DELAY_SECONDS,
     DRAG,
     GAME_MUSIC_TRACKS,
+    INDESTRUCTIBLE_METEORITE_COLOR,
+    INDESTRUCTIBLE_METEORITE_SHEEN,
+    INDESTRUCTIBLE_METEORITE_VARIANTS,
+    LIGHT_BAND_PERIOD,
+    LIGHT_BAND_START_DEGREES,
+    LIGHT_SUN_PERIOD_SECONDS,
+    LIGHT_SUN_SWING_DEGREES,
     MENU_ITEMS,
     METEORITE_COLOR,
+    METEORITE_SPEED,
     METEORITE_VARIANTS,
     SHOOT_COOLDOWN,
+    SIM_TICKS_PER_SECOND,
     STANDARD_WEAPON_DAMAGE,
+    STANDARD_WEAPON_MAX_AMMO,
+    Color,
 )
 from meteorite_dash.context import GameContext, GameState
+from meteorite_dash.effects import sun_angle
 from meteorite_dash.entities import (
     AmmoPickup,
     Entity,
     HunterEnemy,
+    IndestructibleMeteorite,
     Meteorite,
     WaveEnemy,
     collect_pickups,
     collides_with_any,
     spawn_ammo_pickup,
+    spawn_indestructible_meteorite,
     spawn_meteorite,
 )
 from meteorite_dash.hitbox import solid
@@ -40,6 +55,7 @@ from meteorite_dash.scenes.main_menu import MainMenu
 from meteorite_dash.scenes.ship_selection import ShipSelection
 from meteorite_dash.score import DistanceScore, format_light_years
 from meteorite_dash.ships import SHIPS, ShipSpec
+from meteorite_dash.simulation import SPAWN_TABLE
 from meteorite_dash.spawner import SpawnEntry, Spawner
 from meteorite_dash.viewport import Viewport
 from meteorite_dash.weapons import STANDARD_WEAPON, WeaponKind, WeaponLoadout, WeaponSpec
@@ -57,6 +73,7 @@ class DummyAssets(AssetLoader):
     def __init__(self) -> None:
         super().__init__()
         self.loaded: list[tuple[str, tuple[int, int]]] = []
+        self.sheens: list[Color | None] = []
 
     def load_image(
         self,
@@ -64,8 +81,11 @@ class DummyAssets(AssetLoader):
         size: tuple[int, int],
         *,
         rotate_left: bool = False,
+        tint: Color | None = None,
+        sheen: Color | None = None,
     ) -> pygame.Surface:
         self.loaded.append((filename, size))
+        self.sheens.append(sheen)
         return pygame.Surface(size)
 
 
@@ -328,6 +348,7 @@ def test_spawn_meteorite_uses_configured_sizes_and_images(
         assets = DummyAssets()
         meteorite.draw(RenderContext(pygame.Surface((800, 600)), Viewport(800, 600), assets))
         assert assets.loaded == [(meteorite.image_name, (expected_size, expected_size))]
+        assert assets.sheens == [None]  # nur Panzergestein glänzt
 
 
 def test_meteorite_draw_scales_image_to_viewport(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -643,6 +664,201 @@ def test_resolve_projectile_hits_destroy_enemy() -> None:
     resolve_projectile_hits(projectiles, entities)
     assert projectiles == []
     assert entities == []
+
+
+def test_indestructible_meteorite_survives_a_full_magazine() -> None:
+    """Kein Schuss knackt es — aber jeder Schuss ist weg."""
+    meteorite = spawn_indestructible_meteorite(random.Random(0), (200, 600))
+    meteorite.rect.topleft = (100, 100)
+    entities: list[Entity] = [meteorite]
+    hp_before = meteorite.hp
+
+    for _shot in range(STANDARD_WEAPON_MAX_AMMO):
+        projectile = Projectile(
+            pygame.Rect(meteorite.rect.centerx, meteorite.rect.centery, 16, 8),
+            speed_x=100.0,
+            damage=STANDARD_WEAPON_DAMAGE,
+        )
+        projectiles = [projectile]
+        impacts = resolve_projectile_hits(projectiles, entities)
+        # Treffer zählt (Funken im HUD), Projektil ist verbraucht, Fels steht.
+        assert [impact.destroyed for impact in impacts] == [False]
+        assert projectiles == []
+
+    assert entities == [meteorite]
+    assert meteorite.hp == hp_before
+
+
+def test_indestructible_meteorite_still_costs_hp_on_contact() -> None:
+    meteorite = spawn_indestructible_meteorite(random.Random(0), (200, 600))
+    player = solid(meteorite.rect.copy())
+    entities: list[Entity] = [meteorite]
+
+    hp = apply_contact_damage(player, 100, entities)
+
+    assert hp == 100 - meteorite.contact_damage
+    assert entities == []
+
+
+def test_spawn_indestructible_meteorite_is_deterministic_and_fits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert (
+        spawn_indestructible_meteorite(random.Random(7), (800, 600)).rect
+        == spawn_indestructible_meteorite(random.Random(7), (800, 600)).rect
+    )
+
+    for variant in INDESTRUCTIBLE_METEORITE_VARIANTS:
+        monkeypatch.setattr("meteorite_dash.entities.INDESTRUCTIBLE_METEORITE_VARIANTS", (variant,))
+        meteorite = spawn_indestructible_meteorite(random.Random(3), (800, 600))
+        size = variant.radius * 2
+        assert meteorite.rect.size == (size, size)
+        assert meteorite.image_name in variant.images
+        assert meteorite.contact_damage == variant.contact_damage
+        assert meteorite.rect.bottom <= 600
+
+
+def test_indestructible_meteorite_reflects_twice_per_crossing() -> None:
+    """Zwei Lichtstreifen liegen schräg über dem Feld — jeder Fels blitzt zweimal auf."""
+    angle = sun_angle(0)
+    for y in range(0, 517, 43):
+        meteorite = IndestructibleMeteorite(
+            pygame.Rect(800, y, 84, 84),
+            METEORITE_SPEED,
+            "AsteroidMedium.png",
+            hp=1,
+            contact_damage=1,
+        )
+        flashes = 0
+        was_lit = False
+        for x in range(800, -85, -2):
+            meteorite.rect.x = x
+            is_lit = meteorite.lit_fraction(angle) > 0.0
+            flashes += is_lit and not was_lit
+            was_lit = is_lit
+        assert flashes == 2, f"Flughöhe {y}"
+
+
+def test_reflection_snaps_bright_then_fades() -> None:
+    """Unsymmetrisches Profil: kurzer Anstieg, langes Abklingen."""
+    meteorite = IndestructibleMeteorite(
+        pygame.Rect(0, 0, 84, 84), METEORITE_SPEED, "AsteroidMedium.png", hp=1, contact_damage=1
+    )
+    # Waagerechte Streifen (Normale senkrecht): die Höhe allein entscheidet,
+    # steigende Höhe entspricht dem Flug durch den Streifen.
+    angle = 0.0
+    period = round(LIGHT_BAND_PERIOD)
+    lit = []
+    for y in range(period):
+        meteorite.rect.centerx = 0
+        meteorite.rect.centery = y
+        lit.append(meteorite.lit_fraction(angle))
+
+    peak = lit.index(max(lit))
+    assert max(lit) == pytest.approx(1.0, abs=0.01)  # Streifenmitte: volle Reflexion
+    assert min(lit) == 0.0  # dazwischen: Schatten
+
+    rise = sum(1 for value in lit[:peak] if value > 0)
+    fade = sum(1 for value in lit[peak:] if value > 0)
+    assert fade > 3 * rise  # klingt deutlich länger ab, als es angeht
+
+    # Dünner Streifen: der weitaus größte Teil des Weges liegt im Schatten.
+    assert sum(1 for value in lit if value > 0) / len(lit) < 0.25
+
+
+def test_sun_swings_with_the_run_and_never_lies_flat() -> None:
+    """Ein Pendel, kein Kreis — parallel zur Flugbahn gäbe es keine Reflexion mehr."""
+    start = math.radians(LIGHT_BAND_START_DEGREES)
+    swing = math.radians(LIGHT_SUN_SWING_DEGREES)
+    period = round(LIGHT_SUN_PERIOD_SECONDS * SIM_TICKS_PER_SECOND)
+
+    assert sun_angle(0) == pytest.approx(start)
+    assert sun_angle(period // 2) == pytest.approx(start + swing)  # Umkehrpunkt
+    assert sun_angle(period) == pytest.approx(start)  # und zurück
+    assert sun_angle(period // 4) > sun_angle(0)  # wandert mit der Laufzeit
+
+    for tick in range(0, 4 * period, period // 40):
+        assert start <= sun_angle(tick) <= start + swing
+
+    # Aus dem Tick, nicht aus der Wandzeit: zweimal derselbe Lauf, zweimal
+    # dasselbe Licht — auch für den Ghost daneben.
+    assert sun_angle(1234) == sun_angle(1234)
+
+
+def test_reflections_never_stop_while_the_sun_swings() -> None:
+    """Über den ganzen Sonnenbogen bleiben es zwei bis drei Reflexionen, nie weniger."""
+    period = round(LIGHT_SUN_PERIOD_SECONDS * SIM_TICKS_PER_SECOND)
+    for tick in range(0, period, period // 12):
+        angle = sun_angle(tick)
+        for y in range(0, 517, 86):
+            meteorite = IndestructibleMeteorite(
+                pygame.Rect(800, y, 84, 84),
+                METEORITE_SPEED,
+                "AsteroidMedium.png",
+                hp=1,
+                contact_damage=1,
+            )
+            flashes = 0
+            was_lit = False
+            for x in range(800, -85, -1):
+                meteorite.rect.x = x
+                is_lit = meteorite.lit_fraction(angle) > 0.0
+                flashes += is_lit and not was_lit
+                was_lit = is_lit
+            assert flashes >= 2, f"Tick {tick}, Höhe {y}"
+
+
+def test_indestructible_meteorite_draws_a_brightened_sprite() -> None:
+    meteorite = spawn_indestructible_meteorite(random.Random(0), (800, 600))
+    assets = DummyAssets()
+    ctx = RenderContext(
+        pygame.Surface((800, 600)), Viewport(800, 600), assets, sun_angle=sun_angle(0)
+    )
+    meteorite.draw(ctx)
+
+    assert assets.loaded == [(meteorite.image_name, meteorite.rect.size)]
+    assert assets.sheens == [meteorite.sheen(sun_angle(0))]
+
+
+def test_indestructible_sheen_is_a_rising_neutral_grey_ramp() -> None:
+    previous = 0
+    for red, green, blue in INDESTRUCTIBLE_METEORITE_SHEEN:
+        assert red == green == blue  # neutral, kein Farbstich
+        assert red > previous  # jede Stufe heller als die vorige
+        previous = red
+
+
+def test_indestructible_sprite_is_desaturated_and_brightened(context: GameContext) -> None:
+    """Aus dem blaustichigen Dunkelgestein wird echtes Metall — grau, nicht cremig."""
+    loader = context.assets  # `convert_alpha` braucht ein gesetztes Display
+    size = (42, 42)
+    plain = loader.load_image("AsteroidMedium.png", size)
+    metal = loader.load_image("AsteroidMedium.png", size, sheen=INDESTRUCTIBLE_METEORITE_SHEEN[-1])
+
+    opaque = [
+        (plain.get_at((x, y)), metal.get_at((x, y)))
+        for x in range(0, size[0], 3)
+        for y in range(0, size[1], 3)
+        if plain.get_at((x, y)).a > 200
+    ]
+    assert opaque
+    for before, after in opaque:
+        assert after.r == after.g == after.b  # entsättigt
+        assert after.r > max(before.r, before.g, before.b)  # und heller
+        assert after.a == before.a  # Silhouette und damit Maske unverändert
+
+
+def test_indestructible_meteorite_without_assets_falls_back_to_metallic_circle() -> None:
+    surface = pygame.Surface((800, 600))
+    meteorite = IndestructibleMeteorite(
+        pygame.Rect(100, 100, 40, 40), 0.0, "AsteroidSmall.png", hp=1, contact_damage=1
+    )
+    meteorite.draw(RenderContext(surface, Viewport(800, 600)))
+    assert surface.get_at((120, 120))[:3] == INDESTRUCTIBLE_METEORITE_COLOR
+
+
+def test_spawn_table_offers_indestructible_meteorites() -> None:
+    assert spawn_indestructible_meteorite in [entry.factory for entry in SPAWN_TABLE]
 
 
 def test_apply_contact_damage() -> None:

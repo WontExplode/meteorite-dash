@@ -23,6 +23,12 @@ from meteorite_dash.config import (
     HUNTER_ENEMY_HP,
     HUNTER_ENEMY_SPEED,
     HUNTER_VERTICAL_SPEED,
+    INDESTRUCTIBLE_METEORITE_COLOR,
+    INDESTRUCTIBLE_METEORITE_SHEEN,
+    INDESTRUCTIBLE_METEORITE_VARIANTS,
+    LIGHT_BAND_EDGE_WIDTH,
+    LIGHT_BAND_FADE_WIDTH,
+    LIGHT_BAND_PERIOD,
     METEORITE_COLOR,
     METEORITE_SPEED,
     METEORITE_VARIANTS,
@@ -33,6 +39,7 @@ from meteorite_dash.config import (
     WAVE_ENEMY_SPEED,
     WAVE_FREQUENCY,
     Color,
+    MeteoriteVariant,
 )
 from meteorite_dash.hitbox import (
     HasHitbox,
@@ -174,6 +181,85 @@ class Meteorite(DamageableEntity):
         pygame.draw.circle(ctx.surface, METEORITE_COLOR, target.center, radius)
 
 
+class IndestructibleMeteorite(Meteorite):
+    """Panzergestein: nimmt keinen Schaden, schluckt den Treffer aber.
+
+    Die Projektskizze verlangt Meteoriten, die man nicht wegschießen kann,
+    sondern umfliegen muss. Getroffen wird er trotzdem — das Projektil ist
+    weg und es funkt (`EventKind.HIT`). Genau das ist die Lehre: Munition
+    hilft hier nicht. Damit das vor dem ersten Schuss klar ist, trägt er
+    einen metallischen Schimmer statt der Steinfarbe.
+    """
+
+    def take_damage(self, amount: int) -> bool:
+        """Schluckt den Treffer folgenlos; HP bleiben, zerstört wird hier nie etwas.
+
+        >>> fels = IndestructibleMeteorite(
+        ...     pygame.Rect(800, 100, 84, 84), METEORITE_SPEED, hp=1, contact_damage=40
+        ... )
+        >>> fels.take_damage(9999)
+        False
+        >>> fels.hp
+        1
+
+        Der normale Meteorit zerbricht dagegen:
+
+        >>> stein = Meteorite(
+        ...     pygame.Rect(800, 100, 84, 84), METEORITE_SPEED, hp=40, contact_damage=30
+        ... )
+        >>> stein.take_damage(40)
+        True
+        """
+        return False
+
+    def lit_fraction(self, sun_angle: float) -> float:
+        """Wie stark der Fels gerade im Licht steht: 0.0 im Schatten, 1.0 mitten im Streifen.
+
+        Die Streifen liegen als parallele Bänder über dem Referenzraum, im
+        Abstand `LIGHT_BAND_PERIOD` und um `sun_angle` gedreht. Gemessen wird
+        die Lage des Mittelpunkts längs der Streifen-Normalen; wie weit die
+        vom nächsten Streifenzentrum entfernt ist, entscheidet über die
+        Helligkeit. Weil der Fels quer zu den Streifen fliegt, durchquert er
+        auf dem Weg nach links gut zwei davon — er blitzt also zweimal auf.
+
+        Das Profil ist unsymmetrisch: Anstieg über `LIGHT_BAND_EDGE_WIDTH`,
+        Abklingen über das längere `LIGHT_BAND_FADE_WIDTH`. Der Fels blitzt
+        auf und glüht nach, statt gleichmäßig hell durch ein Band zu fahren.
+        """
+        normal = sun_angle + math.pi / 2
+        distance = self.rect.centerx * math.cos(normal) + self.rect.centery * math.sin(normal)
+        # Lage innerhalb einer Streifenperiode, auf -0.5 .. 0.5 um das Zentrum.
+        # Der Fels wandert darin von negativ nach positiv: erst hinein, dann hinaus.
+        phase = (distance / LIGHT_BAND_PERIOD) % 1.0
+        offset = phase - 1.0 if phase > 0.5 else phase
+        width = LIGHT_BAND_EDGE_WIDTH if offset < 0.0 else LIGHT_BAND_FADE_WIDTH
+        return max(0.0, 1.0 - abs(offset) / width)
+
+    def sheen(self, sun_angle: float) -> Color:
+        """Helligkeitsstufe für das Sprite, gerastert auf `INDESTRUCTIBLE_METEORITE_SHEEN`.
+
+        Gerastert, nicht stufenlos: jede Stufe ist eine eigene Surface im
+        Bild-Cache. Eine stetige Kurve hieße eine neue Surface pro Frame.
+        """
+        steps = len(INDESTRUCTIBLE_METEORITE_SHEEN)
+        return INDESTRUCTIBLE_METEORITE_SHEEN[round(self.lit_fraction(sun_angle) * (steps - 1))]
+
+    def draw(self, ctx: RenderContext) -> None:
+        """Graues Metall, aufgehellt wo ein Lichtstreifen darüberläuft."""
+        target = ctx.rect(self.rect)
+        sheen = self.sheen(ctx.sun_angle)
+        image = ctx.image(self.image_name, target.size, sheen=sheen) if self.image_name else None
+        if image is not None:
+            ctx.surface.blit(image, target)
+            return
+
+        radius = max(1, target.width // 2)
+        pygame.draw.circle(ctx.surface, INDESTRUCTIBLE_METEORITE_COLOR, target.center, radius)
+        lift = round(70 * self.lit_fraction(ctx.sun_angle))
+        highlight = tuple(min(255, channel + lift) for channel in INDESTRUCTIBLE_METEORITE_COLOR)
+        pygame.draw.circle(ctx.surface, highlight, target.center, radius, max(1, radius // 4))
+
+
 class WaveEnemy(DamageableEntity):
     """Gegner auf Sinus-Bahn um seine Start-Höhe (`amplitude`, `frequency`)."""
 
@@ -293,15 +379,39 @@ def collect_pickups(player: HasHitbox, entities: list[Entity]) -> list[Entity]:
     return collected
 
 
-def spawn_meteorite(rng: random.Random, area: tuple[int, int]) -> Meteorite:
-    """`area` ist die Spawn-Fläche im Referenzraum (`REFERENCE_SIZE`), nicht das Fenster."""
+def _roll_meteorite(
+    rng: random.Random,
+    area: tuple[int, int],
+    variants: tuple[MeteoriteVariant, ...],
+) -> tuple[pygame.Rect, str, MeteoriteVariant]:
+    """Würfelt Größe, Bildvariante und Höhe. Reihenfolge der Würfe ist Teil der Regeln."""
     width, height = area
-    variant = rng.choice(METEORITE_VARIANTS)
+    variant = rng.choice(variants)
     diameter = variant.radius * 2
     image_name = rng.choice(variant.images)
     y = rng.randint(0, max(0, height - diameter))
+    return pygame.Rect(width, y, diameter, diameter), image_name, variant
+
+
+def spawn_meteorite(rng: random.Random, area: tuple[int, int]) -> Meteorite:
+    """`area` ist die Spawn-Fläche im Referenzraum (`REFERENCE_SIZE`), nicht das Fenster."""
+    rect, image_name, variant = _roll_meteorite(rng, area, METEORITE_VARIANTS)
     return Meteorite(
-        pygame.Rect(width, y, diameter, diameter),
+        rect,
+        METEORITE_SPEED,
+        image_name,
+        hp=variant.hp,
+        contact_damage=variant.contact_damage,
+    )
+
+
+def spawn_indestructible_meteorite(
+    rng: random.Random, area: tuple[int, int]
+) -> IndestructibleMeteorite:
+    """Panzergestein am rechten Rand; `area` ist der Referenzraum, nicht das Fenster."""
+    rect, image_name, variant = _roll_meteorite(rng, area, INDESTRUCTIBLE_METEORITE_VARIANTS)
+    return IndestructibleMeteorite(
+        rect,
         METEORITE_SPEED,
         image_name,
         hp=variant.hp,
