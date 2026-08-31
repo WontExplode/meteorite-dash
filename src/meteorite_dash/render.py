@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import pygame
 
 from meteorite_dash.assets import AssetLoader
+from meteorite_dash.config import Color
 from meteorite_dash.viewport import Viewport
 
 
@@ -25,6 +26,10 @@ class RenderContext:
     # Erschütterung in Referenz-px (`effects.Effects.offset`): verschiebt alles,
     # was durch diesen Kontext gezeichnet wird — HUD-Code umgeht ihn bewusst.
     offset: tuple[float, float] = (0.0, 0.0)
+    # Richtung der Lichtbänder im Bogenmaß (`effects.sun_angle`). Global wie
+    # `offset`, weil die "Sonne" über der ganzen Szene steht und nicht an einer
+    # einzelnen Entity hängt. Szenen ohne Beleuchtung lassen sie auf 0.
+    sun_angle: float = 0.0
 
     def rect(self, ref: pygame.Rect) -> pygame.Rect:
         """Referenz-Rechteck -> Fenster: Position pro Achse gestreckt, Größe höhen-gebunden."""
@@ -42,8 +47,15 @@ class RenderContext:
         offset_x, offset_y = self.offset
         return self.viewport.point(ref_x + offset_x, ref_y + offset_y)
 
-    def image(self, filename: str, size: tuple[int, int]) -> pygame.Surface | None:
+    def image(
+        self,
+        filename: str,
+        size: tuple[int, int],
+        *,
+        tint: Color | None = None,
+        sheen: Color | None = None,
+    ) -> pygame.Surface | None:
         """Sprite in Fenstergröße aus dem Asset-Cache; None ohne Loader (Fallback-Form)."""
         if self.assets is None:
             return None
-        return self.assets.load_image(filename, size)
+        return self.assets.load_image(filename, size, tint=tint, sheen=sheen)

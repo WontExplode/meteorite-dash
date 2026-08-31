@@ -19,11 +19,29 @@ def today_utc() -> date:
 
 
 def daily_seed(day: date) -> int:
-    """Seed des Tages: SHA-256 über Salt und ISO-Datum, auf `SEED_BITS` gekürzt."""
+    """Seed des Tages: SHA-256 über Salt und ISO-Datum, auf `SEED_BITS` gekürzt.
+
+    >>> from datetime import date
+    >>> daily_seed(date(2026, 8, 31))
+    1484649728
+
+    Der Wert hängt nur am Datum — deshalb spielen alle denselben Lauf, ohne
+    dass ein Server ihn verteilt:
+
+    >>> daily_seed(date(2026, 8, 31)) == daily_seed(date(2026, 8, 31))
+    True
+    >>> daily_seed(date(2026, 8, 31)) == daily_seed(date(2026, 9, 1))
+    False
+    """
     digest = hashlib.sha256(f"{DAILY_SEED_SALT}:{day.isoformat()}".encode()).digest()
     return int.from_bytes(digest[:8], "big") % (1 << SEED_BITS)
 
 
 def daily_replay_name(day: date) -> str:
-    """Name des Tagesrekords im `ReplayStore`: `daily-<datum>`."""
+    """Name des Tagesrekords im `ReplayStore`: `daily-<datum>`.
+
+    >>> from datetime import date
+    >>> daily_replay_name(date(2026, 8, 31))
+    'daily-2026-08-31'
+    """
     return f"{DAILY_REPLAY_PREFIX}{day.isoformat()}"

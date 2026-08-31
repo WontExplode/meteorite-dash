@@ -48,7 +48,7 @@ from meteorite_dash.config import (
 )
 from meteorite_dash.context import GameContext
 from meteorite_dash.difficulty import DirectorKind
-from meteorite_dash.effects import Effects
+from meteorite_dash.effects import Effects, sun_angle
 from meteorite_dash.ghost import Ghost
 from meteorite_dash.identity import short_pubkey
 from meteorite_dash.inputs import InputFrame, from_pressed
@@ -429,7 +429,13 @@ class GameScene(Scene):
         wackelt, Sternenfeld und HUD bleiben ruhig und lesbar.
         """
         screen = self.context.screen
-        ctx = RenderContext(screen, self.context.viewport, self.context.assets, self.effects.offset)
+        ctx = RenderContext(
+            screen,
+            self.context.viewport,
+            self.context.assets,
+            self.effects.offset,
+            sun_angle(self.sim.tick),
+        )
         screen.fill(BACKGROUND_COLOR)
         self.context.starfield.draw(screen)
         for entity in self.sim.entities:
