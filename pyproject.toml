@@ -51,7 +51,10 @@ select = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# `src` ist mitgesammelt, damit die Doctests in den Docstrings wirklich laufen
+# und nicht nur dastehen.
+testpaths = ["tests", "src"]
+addopts = "--doctest-modules"
 
 [tool.interrogate]
 ignore-init-method = true

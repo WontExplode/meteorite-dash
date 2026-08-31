@@ -18,7 +18,21 @@ _SIN_COEFFS: tuple[float, ...] = tuple((-1.0) ** k / math.factorial(2 * k + 1) f
 
 
 def det_sin(x: float) -> float:
-    """Sinus aus Grundrechenarten: gleiches Bitmuster auf jeder Plattform."""
+    """Sinus aus Grundrechenarten: gleiches Bitmuster auf jeder Plattform.
+
+    >>> round(det_sin(0.0), 12)
+    0.0
+    >>> round(det_sin(math.pi / 2), 12)
+    1.0
+    >>> round(det_sin(math.pi), 12)
+    0.0
+
+    Auch weit außerhalb einer Periode, denn die Bahn eines `WaveEnemy` läuft
+    minutenlang weiter:
+
+    >>> round(det_sin(100 * TWO_PI + math.pi / 6), 9)
+    0.5
+    """
     x = x % TWO_PI  # [0, 2pi)
     if x > math.pi:
         x -= TWO_PI  # (-pi, pi]
@@ -36,5 +50,11 @@ def det_sin(x: float) -> float:
 
 
 def det_hypot(dx: float, dy: float) -> float:
-    """Euklidischer Abstand über `sqrt` (IEEE-exakt) statt libm-`hypot`."""
+    """Euklidischer Abstand über `sqrt` (IEEE-exakt) statt libm-`hypot`.
+
+    >>> det_hypot(3.0, 4.0)
+    5.0
+    >>> det_hypot(0.0, 0.0)
+    0.0
+    """
     return math.sqrt(dx * dx + dy * dy)

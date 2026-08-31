@@ -57,7 +57,21 @@ def normalize(text: str) -> str | None:
     """Nutzereingabe -> kanonische Phrase (`w1 w2 w3`) oder `None`.
 
     Tolerant bei Groß-/Kleinschreibung, Trennzeichen und `ß`; streng bei der
-    Wortzahl und bei Wörtern, die nicht in der Liste stehen."""
+    Wortzahl und bei Wörtern, die nicht in der Liste stehen.
+
+    >>> normalize("  ABEND-abfahrt  Abstand ")
+    'abend abfahrt abstand'
+
+    Alles, was keine gültige Phrase ist, kommt als `None` zurück — die
+    `CodeEntryScene` zeigt dann einen Hinweis, statt abzustürzen:
+
+    >>> normalize("abend abfahrt") is None
+    True
+    >>> normalize("abend abfahrt kaesekuchen") is None
+    True
+    >>> normalize("") is None
+    True
+    """
     cleaned = text.strip().lower().replace("ß", "ss")
     parts = [part for part in _SEPARATORS.split(cleaned) if part]
     if len(parts) != PHRASE_WORD_COUNT or any(part not in _index() for part in parts):

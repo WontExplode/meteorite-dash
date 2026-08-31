@@ -81,7 +81,18 @@ class Viewport:
     # --- reference-space -> screen mappers --------------------------------
 
     def px(self, ref_x: float) -> int:
-        """Map a reference x-coordinate to a screen x (stretched, edge-to-edge)."""
+        """Map a reference x-coordinate to a screen x (stretched, edge-to-edge).
+
+        Bei Referenzgröße ist die Abbildung die Identität:
+
+        >>> Viewport(800, 600).px(400)
+        400
+
+        Doppelte Fenstergröße streckt die Position mit:
+
+        >>> Viewport(1600, 1200).px(400)
+        800
+        """
         return round(ref_x * self.scale_x)
 
     def py(self, ref_y: float) -> int:
@@ -93,7 +104,19 @@ class Viewport:
         return (self.px(ref_x), self.py(ref_y))
 
     def s(self, ref_value: float) -> int:
-        """Scale a size or pixel length uniformly (height-tied)."""
+        """Scale a size or pixel length uniformly (height-tied).
+
+        Größen hängen nur an der Höhe. Ein breiteres Fenster macht Sprites
+        deshalb nicht größer — die vertikale Ausweich-Schwierigkeit bleibt
+        gleich:
+
+        >>> Viewport(800, 600).s(64)
+        64
+        >>> Viewport(2400, 600).s(64)
+        64
+        >>> Viewport(800, 1200).s(64)
+        128
+        """
         return round(ref_value * self.scale)
 
     def font_size(self, ref_size: int) -> int:
