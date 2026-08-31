@@ -47,7 +47,7 @@ DEATH_MUTED_COLOR: Color = (120, 120, 150)
 MUTED_TEXT_COLOR: Color = (120, 120, 150)
 OWNED_TEXT_COLOR: Color = (140, 255, 160)
 
-MENU_FONT_NAME = "default"
+MENU_FONT_NAME = "gigi"
 MENU_FONT_SIZE = 42
 HINT_FONT_SIZE = 22
 DEATH_TITLE_FONT_SIZE = 84
@@ -398,7 +398,8 @@ SHARE_REPLAY_PREFIX = "share-"  # Ablage geholter Codes: `share-<w1>-<w2>-<w3>`
 # --- Code eingeben (Szene) ---
 CODE_ENTRY_MAX_CHARS = 40
 CODE_ENTRY_TITLE_TOP = 90
-CODE_ENTRY_HINT_TOP = 150
+CODE_ENTRY_EXPLAIN_TOP = 138  # wofür der Code gut ist
+CODE_ENTRY_HINT_TOP = 166  # wie er aussieht
 CODE_ENTRY_BOX_RECT: tuple[int, int, int, int] = (100, 200, 600, 60)  # Referenz-px
 CODE_ENTRY_MESSAGE_TOP = 300
 CODE_ENTRY_RESULT_TOP = 360

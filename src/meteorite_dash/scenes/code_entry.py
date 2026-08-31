@@ -7,6 +7,7 @@ from meteorite_dash.config import (
     CODE_ENTRY_ACTIONS_TOP,
     CODE_ENTRY_BOX_RECT,
     CODE_ENTRY_CURSOR_BLINK_MS,
+    CODE_ENTRY_EXPLAIN_TOP,
     CODE_ENTRY_FOOTER_TOP,
     CODE_ENTRY_HINT_TOP,
     CODE_ENTRY_MAX_CHARS,
@@ -28,7 +29,8 @@ from meteorite_dash.replay import Replay
 from meteorite_dash.scenes.base import Scene, Transition
 
 _ALLOWED_CHARS = frozenset("abcdefghijklmnopqrstuvwxyz -")
-HINT_FORMAT = "DREI WÖRTER AUS DER LISTE, Z. B. apfel berg wolke"
+EXPLAIN_PURPOSE = "GEGEN DEN LAUF EINES ANDEREN ANTRETEN ODER IHN ANSEHEN"
+HINT_FORMAT = "DER CODE SIND DREI WÖRTER, Z. B. apfel berg wolke"
 OFFLINE_LOCAL_ONLY = "OFFLINE — NUR SCHON GEHOLTE CODES"
 
 
@@ -130,6 +132,8 @@ class CodeEntryScene(Scene):
 
         title = title_font.render("CODE EINGEBEN", True, TEXT_COLOR)
         screen.blit(title, title.get_rect(center=(center_x, vp.py(CODE_ENTRY_TITLE_TOP))))
+        explain = hint_font.render(EXPLAIN_PURPOSE, True, MUTED_TEXT_COLOR)
+        screen.blit(explain, explain.get_rect(center=(center_x, vp.py(CODE_ENTRY_EXPLAIN_TOP))))
         hint = hint_font.render(HINT_FORMAT, True, MUTED_TEXT_COLOR)
         screen.blit(hint, hint.get_rect(center=(center_x, vp.py(CODE_ENTRY_HINT_TOP))))
 

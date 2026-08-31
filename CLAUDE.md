@@ -539,7 +539,10 @@ Relay der Briefkasten, die Simulation der Richter.
   `headless.verify` besteht, wird gespeichert (`author` = Pubkey).
 - `CodeEntryScene`: Buchstaben/Leerzeichen/Bindestrich (`event.unicode`),
   `Enter` sucht bzw. startet das Rennen, `Tab` = ansehen, `Esc` zurück; ohne
-  Exchange nur schon geholte Codes aus dem Store. Ergebnis wandert über
+  Exchange nur schon geholte Codes aus dem Store. Die beiden Kopfzeilen sagen,
+  wozu der Code dient (`EXPLAIN_PURPOSE`) und wie er aussieht (`HINT_FORMAT`,
+  zugleich die Fehlermeldung) — die 2048-Wörter-Liste ist Implementierung und
+  gehört nicht in die UI. Ergebnis wandert über
   `GameState.pending_replay` + `Transition.START_RACE` / `SPECTATE` in
   `App._create_scene`.
 - Rennen (`START_RACE`): `GameScene(seed, ghost=replay, mode=replay.mode,
