@@ -21,6 +21,7 @@ src/meteorite_dash/inputs.py
 src/meteorite_dash/leaderboard.py
 src/meteorite_dash/main.py
 src/meteorite_dash/mathutil.py
+src/meteorite_dash/menu_fx.py
 src/meteorite_dash/mode_directors.py
 src/meteorite_dash/nostr.py
 src/meteorite_dash/persistence.py
@@ -96,6 +97,7 @@ tests/test_daily.py
 tests/test_ghost.py
 tests/test_leaderboard.py
 tests/test_logic.py
+tests/test_menu_fx.py
 tests/test_mode_directors.py
 tests/test_nostr.py
 tests/test_package.py

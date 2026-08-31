@@ -65,10 +65,23 @@ MENU_ITEMS: tuple[tuple[str, MenuAction], ...] = (
 )
 
 MENU_ITEM_FONT_SIZE = 36  # kleiner als der Titel, damit sieben Einträge ins Bild passen
-MENU_ITEMS_TOP = 186  # Referenz-y des ersten Menüpunkts
-MENU_ITEM_SPACING = 44  # Referenz-px zwischen Menüpunkten
+# Referenz-y je Menüpunkt, gruppiert in Blöcke: Start | Daily/Community
+# (mit Status-Zeile darunter) + Code eingeben | Raumschiff/Shop | Beenden.
+MENU_ITEM_TOPS: tuple[int, ...] = (186, 240, 278, 316, 378, 416, 472)
 MENU_SELECTED_SHIP_TOP = 508
 MENU_HINT_TOP = 538
+
+# --- Hauptmenü-Styling (Endgame-Look wie der Death-Screen) ---
+MENU_TITLE_FONT_SIZE = 56
+MENU_TITLE_TOP = 120
+MENU_TITLE_SHADOW_COLOR: Color = (90, 55, 0)
+MENU_BORDER_COLOR: Color = (90, 140, 200)
+MENU_BORDER_INNER_COLOR: Color = (70, 70, 100)
+MENU_SCANLINE_COLOR: Color = (18, 18, 32)
+MENU_SCANLINE_GAP = 8
+# Rahmen-Rechtecke in Referenz-px (x, y, Breite, Höhe).
+MENU_BORDER_RECT: tuple[int, int, int, int] = (8, 8, 784, 584)
+MENU_BORDER_INNER_RECT: tuple[int, int, int, int] = (18, 18, 764, 564)
 
 MENU_MUSIC = "menumusic.mp3"
 DEATH_SOUND = "gameovermusic.mp3"
@@ -325,7 +338,7 @@ CODE_ENTRY_ACTIONS_TOP = 400
 CODE_ENTRY_FOOTER_TOP = 535
 CODE_ENTRY_CURSOR_BLINK_MS = 500
 
-COMMUNITY_STATUS_TOP: int = 480  # Referenz-y der Community-Zeile im Hauptmenü
+COMMUNITY_STATUS_TOP: int = 344  # Referenz-y der Community-Zeile (im Daily-Block)
 COMMUNITY_STATUS_COLOR: Color = (150, 210, 255)
 
 # --- Daily-Bestenliste ---

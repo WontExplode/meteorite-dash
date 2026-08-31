@@ -120,6 +120,14 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   `state_hash`, deutsche Wortliste `assets/words_de.txt`, 2048³ Kombinationen),
   Menüpunkt „Code eingeben“ holt ihn, prüft ihn und bietet „antreten“
   (Ghost) oder „ansehen“ (Zuschauer-Modus der `GameScene`).
+- **Hauptmenü im Endgame-Look** (`menu_fx.py`, `scenes/main_menu.py`):
+  Sternenfeld, Scanlines und Doppelrahmen wie der Death-Screen; Menüpunkte in
+  thematischen Blöcken (`MENU_ITEM_TOPS`: Start | Daily/Community | Hangar |
+  Beenden). Deko-Meteoriten prallen federnd an den Buchstaben von Titel und
+  Menüpunkten ab (Ink-Box des gerenderten Texts), zwei Deko-Gegner auf der
+  Spielerseite links jagen und zerschießen sie (Funken/Trümmer-Partikel).
+  Reines Rendering wie `StarField` (Wandzeit, ungeseedeter Zufall, Referenzraum
+  + `RenderContext`) — kein Sim-Pfad, keine Wirkung auf Replays.
 - Strikte Typprüfung, Linting, Tests, CI.
 
 **Noch NICHT vorhanden** (aus dem Spec — meist als GitHub-Issue getrackt):
@@ -400,7 +408,7 @@ Replays zu brechen:
 - `RunMode` (`replay.py`): `FREE` | `DAILY`, im Replay gespeichert (`mode`,
   `label` = Datum). `Transition.START_DAILY` → `App._create_scene` baut
   `GameScene(seed=daily_seed(today), mode=DAILY, label=datum)`; Menüpunkt
-  „Daily Run“ in `MENU_ITEMS` (`MENU_ITEM_SPACING` hält fünf Einträge im Bild).
+  „Daily Run“ in `MENU_ITEMS` (Positionen in `MENU_ITEM_TOPS`).
 - Rekord: `GameScene.record_name()` — `best` im freien Lauf, `daily-<datum>`
   im Daily; `_store_replay` überschreibt nur bei größerer Lichtjahr-Zahl.
   Ghost = kompatibles `best_for_seed(daily_seed, mode=DAILY, ...)`, also
