@@ -423,7 +423,7 @@ class GameScene(Scene):
         return replay
 
     def draw(self) -> None:
-        """Zeichnet Sternenfeld, Welt (inkl. Effekte), Blitz und HUD.
+        """Zeichnet Sternenfeld, Welt (inkl. Lebensleisten und Effekte), Blitz und HUD.
 
         Die Erschütterung steckt im `offset` des `RenderContext`: die Welt
         wackelt, Sternenfeld und HUD bleiben ruhig und lesbar.
@@ -440,6 +440,7 @@ class GameScene(Scene):
         self.context.starfield.draw(screen)
         for entity in self.sim.entities:
             entity.draw(ctx)
+        self.effects.draw_health_bars(ctx, self.sim.entities)
         # Münzen über den Gefahren: Collectibles bleiben sichtbar, auch wenn ein
         # langsamerer Gegner kurz überholt wird.
         for formation in self.sim.formations:

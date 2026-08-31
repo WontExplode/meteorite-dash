@@ -11,6 +11,7 @@ from meteorite_dash.config import (
     COIN_RADIUS,
     DEATH_DELAY_SECONDS,
     FEEDBACK_MAX_PARTICLES,
+    HEALTH_BAR_FLASH_SECONDS,
     HUD_FLASH_COLOR,
     HUD_FLASH_SECONDS,
     SIM_DT,
@@ -18,13 +19,13 @@ from meteorite_dash.config import (
 )
 from meteorite_dash.context import GameContext
 from meteorite_dash.effects import Effects
-from meteorite_dash.entities import AmmoPickup, Meteorite
+from meteorite_dash.entities import AmmoPickup, Meteorite, WaveEnemy
 from meteorite_dash.inputs import InputFrame
 from meteorite_dash.render import RenderContext
 from meteorite_dash.scenes.base import Transition
 from meteorite_dash.scenes.game import GameScene
 from meteorite_dash.sfx import RECIPES, Sfx, SoundBank
-from meteorite_dash.simulation import EventKind
+from meteorite_dash.simulation import EventKind, SimEvent
 from meteorite_dash.viewport import Viewport
 
 
@@ -102,6 +103,91 @@ def test_effects_draw_without_error(context: GameContext) -> None:
     ctx = RenderContext(context.screen, Viewport(800, 600), context.assets, effects.offset)
     effects.draw(ctx)
     effects.draw_overlay(context.screen)
+
+
+# --- Lebensleisten über getroffenen Zielen --------------------------------------
+
+
+def test_health_bar_stays_hidden_until_first_hit(context: GameContext) -> None:
+    effects = Effects(Random(5))
+    meteorite = _meteorite(pygame.Rect(200, 200, 40, 40), hp=40)
+    ctx = RenderContext(context.screen, Viewport(800, 600), context.assets)
+    effects.draw_health_bars(ctx, [meteorite])
+    assert effects._health_bars == {}
+
+    meteorite.take_damage(10)
+    effects.draw_health_bars(ctx, [meteorite])
+    fx = effects._health_bars[id(meteorite)]
+    assert fx.hp == 30
+    assert fx.flash_ttl == HEALTH_BAR_FLASH_SECONDS
+    assert fx.shake_ttl > 0.0
+
+
+def test_health_bar_punches_again_on_further_damage(context: GameContext) -> None:
+    effects = Effects(Random(6))
+    enemy = WaveEnemy(pygame.Rect(300, 120, 44, 44), 0.0)
+    enemy.take_damage(10)
+    ctx = RenderContext(context.screen, Viewport(800, 600), context.assets)
+    effects.draw_health_bars(ctx, [enemy])
+    for _ in range(20):
+        effects.update(0.05)
+    fx = effects._health_bars[id(enemy)]
+    assert fx.flash_ttl == 0.0
+    assert fx.shake_ttl == 0.0
+
+    enemy.take_damage(5)
+    effects.draw_health_bars(ctx, [enemy])
+    fx = effects._health_bars[id(enemy)]
+    assert fx.hp == enemy.hp
+    assert fx.flash_ttl == HEALTH_BAR_FLASH_SECONDS
+    assert fx.shake_ttl > 0.0
+
+
+def test_health_bar_is_forgotten_when_the_target_is_gone(context: GameContext) -> None:
+    effects = Effects(Random(7))
+    meteorite = _meteorite(pygame.Rect(100, 80, 40, 40), hp=40)
+    meteorite.take_damage(10)
+    ctx = RenderContext(context.screen, Viewport(800, 600), context.assets)
+    effects.draw_health_bars(ctx, [meteorite])
+    assert id(meteorite) in effects._health_bars
+
+    effects.draw_health_bars(ctx, [])
+    assert effects._health_bars == {}
+
+    pickup = AmmoPickup(pygame.Rect(0, 0, *AMMO_PICKUP_SIZE), 0.0)
+    effects.draw_health_bars(ctx, [pickup])
+    assert effects._health_bars == {}
+
+
+def test_health_bar_draw_without_error(context: GameContext) -> None:
+    effects = Effects(Random(8))
+    meteorite = _meteorite(pygame.Rect(50, 10, 40, 40), hp=40)
+    meteorite.take_damage(10)
+    ctx = RenderContext(context.screen, Viewport(800, 600), context.assets, effects.offset)
+    effects.draw_health_bars(ctx, [meteorite])
+    effects.update(0.016)
+    effects.draw_health_bars(ctx, [meteorite])
+
+
+def test_scene_shows_health_bar_after_a_hit(context: GameContext) -> None:
+    scene = GameScene(context, seed=11)
+    player = scene.sim.player
+    target = _meteorite(
+        pygame.Rect(player.rect.right + 60, player.rect.centery - 20, 40, 40), hp=40
+    )
+    scene.sim.entities.append(target)
+    scene.draw()
+    assert id(target) not in scene.effects._health_bars
+
+    events: list[SimEvent] = []
+    for _ in range(30):
+        events = scene.step(InputFrame.FIRE if not scene.sim.projectiles else InputFrame.NONE)
+        if any(event.kind is EventKind.HIT for event in events):
+            break
+    assert any(event.kind is EventKind.HIT for event in events)
+    assert target.hp < target.max_hp
+    scene.draw()
+    assert id(target) in scene.effects._health_bars
 
 
 # --- Verdrahtung in der Spielszene ----------------------------------------------

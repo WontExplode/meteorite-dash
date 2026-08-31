@@ -1,4 +1,4 @@
-"""Treffer-Feedback fürs Spiel: Funken, Explosionen, Blitze und Erschütterung.
+"""Treffer-Feedback fürs Spiel: Funken, Explosionen, Blitze, Erschütterung, Lebensleisten.
 
 Reines Rendering wie `starfield.py` und `menu_fx.py`: Wandzeit, ungeseedeter
 Zufall, Referenzraum, Zeichnen über den `RenderContext`. Nichts davon berührt
@@ -6,10 +6,12 @@ die Simulation — Replays und Hashes bleiben unverändert.
 
 `GameScene` löst die Effekte aus den `SimEvent`s aus; die Erschütterung kommt
 als `offset` zurück und wandert in den `RenderContext`, damit die Welt wackelt
-und das HUD ruhig bleibt.
+und das HUD ruhig bleibt. Lebensleisten liest `Effects` direkt vom aktuellen
+HP-Stand der Entities — sichtbar erst nach dem ersten Treffer.
 """
 
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass
 from random import Random
 
@@ -29,6 +31,16 @@ from meteorite_dash.config import (
     FEEDBACK_DRAG,
     FEEDBACK_MAX_PARTICLES,
     FEEDBACK_PARTICLE_SPEED,
+    HEALTH_BAR_FILL_HIGH,
+    HEALTH_BAR_FILL_LOW,
+    HEALTH_BAR_FLASH_COLOR,
+    HEALTH_BAR_FLASH_SECONDS,
+    HEALTH_BAR_GAP,
+    HEALTH_BAR_HEIGHT,
+    HEALTH_BAR_INSET,
+    HEALTH_BAR_SHAKE_AMPLITUDE,
+    HEALTH_BAR_SHAKE_SECONDS,
+    HEALTH_BAR_TRACK_COLOR,
     HIT_SPARK_COLOR,
     HIT_SPARK_COUNT,
     HIT_SPARK_RADIUS,
@@ -48,6 +60,7 @@ from meteorite_dash.config import (
     SIM_TICKS_PER_SECOND,
     Color,
 )
+from meteorite_dash.entities import DamageableEntity, Entity
 from meteorite_dash.render import RenderContext
 
 _MAX_DT = 0.05  # Deckel gegen Riesen-Frames (Fenster verschoben o. Ä.)
@@ -73,6 +86,16 @@ def sun_angle(tick: int) -> float:
     return math.radians(LIGHT_BAND_START_DEGREES) + turned
 
 
+def _lerp_color(start: Color, end: Color, factor: float) -> Color:
+    """Mischt zwei Farben; `factor` 0 = `start`, 1 = `end`."""
+    t = max(0.0, min(1.0, factor))
+    return (
+        round(start[0] + (end[0] - start[0]) * t),
+        round(start[1] + (end[1] - start[1]) * t),
+        round(start[2] + (end[2] - start[2]) * t),
+    )
+
+
 @dataclass
 class Particle:
     """Kurzlebiger Funke im Referenzraum; schrumpft mit ablaufender Lebenszeit."""
@@ -87,11 +110,26 @@ class Particle:
     color: Color
 
 
+@dataclass
+class HealthBarFx:
+    """Render-Stand einer Lebensleiste: letzter HP-Wert plus Aufleuchten/Wackeln."""
+
+    hp: int
+    flash_ttl: float = 0.0
+    shake_ttl: float = 0.0
+
+    def punch(self) -> None:
+        """Startet Aufleuchten und Wackeln neu (erster Treffer oder weiterer Schaden)."""
+        self.flash_ttl = HEALTH_BAR_FLASH_SECONDS
+        self.shake_ttl = HEALTH_BAR_SHAKE_SECONDS
+
+
 class Effects:
-    """Deko-Schicht der Spielszene: Partikel, Vollbild-Blitz und Erschütterung.
+    """Deko-Schicht der Spielszene: Partikel, Vollbild-Blitz, Erschütterung, Lebensleisten.
 
     Die semantischen Methoden (`hit`, `explosion`, …) bündeln die Werte aus
     `config.py`, damit die Szene nur noch sagen muss, *was* passiert ist.
+    Lebensleisten entstehen aus dem aktuellen HP-Stand — ohne Sim-Zustand.
     """
 
     def __init__(self, rng: Random | None = None) -> None:
@@ -108,6 +146,7 @@ class Effects:
         self._ring: tuple[float, float, float, Color] | None = None  # x, y, ttl, Farbe
         self._ring_max_ttl = 1.0
         self._overlay: pygame.Surface | None = None
+        self._health_bars: dict[int, HealthBarFx] = {}
 
     # --- Auslöser ----------------------------------------------------------
 
@@ -173,7 +212,7 @@ class Effects:
         return self._offset
 
     def update(self, dt: float) -> None:
-        """Rückt Partikel, Blitz, Ring und Erschütterung um `dt` Wandzeit vor."""
+        """Rückt Partikel, Blitz, Ring, Erschütterung und Lebensleisten um `dt` vor."""
         dt = min(dt, _MAX_DT)
         self._update_particles(dt)
         self._flash_ttl = max(0.0, self._flash_ttl - dt)
@@ -182,6 +221,12 @@ class Effects:
             ttl -= dt
             self._ring = None if ttl <= 0 else (x, y, ttl, color)
         self._update_shake(dt)
+        self._update_health_bars(dt)
+
+    def _update_health_bars(self, dt: float) -> None:
+        for fx in self._health_bars.values():
+            fx.flash_ttl = max(0.0, fx.flash_ttl - dt)
+            fx.shake_ttl = max(0.0, fx.shake_ttl - dt)
 
     def _update_particles(self, dt: float) -> None:
         remaining: list[Particle] = []
@@ -224,6 +269,57 @@ class Effects:
             radius = max(1, vp.s(_SHIELD_RING_RADIUS * (0.4 + grow)))
             width = max(1, vp.s(3 * (1.0 - grow)))
             pygame.draw.circle(ctx.surface, color, ctx.point(x, y), radius, width)
+
+    def draw_health_bars(self, ctx: RenderContext, entities: Iterable[Entity]) -> None:
+        """Zeichnet dünne Leisten über getroffenen Zielen; unversehrte bleiben ohne.
+
+        Liest nur `hp`/`max_hp` — neuer oder tieferer Schaden startet Aufleuchten
+        und Wackeln. Zerstörte oder wieder volle Ziele fallen aus dem Tracking.
+        """
+        alive: dict[int, HealthBarFx] = {}
+        for entity in entities:
+            if not isinstance(entity, DamageableEntity):
+                continue
+            if entity.hp >= entity.max_hp:
+                continue
+            key = id(entity)
+            fx = self._health_bars.get(key)
+            if fx is None:
+                fx = HealthBarFx(hp=entity.hp)
+                fx.punch()
+            elif entity.hp < fx.hp:
+                fx.punch()
+            fx.hp = entity.hp
+            alive[key] = fx
+            self._draw_health_bar(ctx, entity, fx)
+        self._health_bars = alive
+
+    def _draw_health_bar(
+        self, ctx: RenderContext, entity: DamageableEntity, fx: HealthBarFx
+    ) -> None:
+        width = max(1, entity.rect.width - 2 * HEALTH_BAR_INSET)
+        height = HEALTH_BAR_HEIGHT
+        x = float(entity.rect.centerx) - width / 2
+        y = float(entity.rect.top - HEALTH_BAR_GAP - height)
+        if fx.shake_ttl > 0.0:
+            fade = fx.shake_ttl / HEALTH_BAR_SHAKE_SECONDS
+            amplitude = HEALTH_BAR_SHAKE_AMPLITUDE * fade
+            x += self.random.uniform(-amplitude, amplitude)
+            y += self.random.uniform(-amplitude, amplitude)
+        y = max(0.0, y)
+        track = pygame.Rect(round(x), round(y), width, height)
+        pygame.draw.rect(ctx.surface, HEALTH_BAR_TRACK_COLOR, ctx.rect(track))
+        if entity.hp <= 0 or entity.max_hp <= 0:
+            return
+        ratio = entity.hp / entity.max_hp
+        fill_width = max(1, round(width * ratio))
+        fill = pygame.Rect(track.x, track.y, fill_width, height)
+        color = _lerp_color(HEALTH_BAR_FILL_LOW, HEALTH_BAR_FILL_HIGH, ratio)
+        if fx.flash_ttl > 0.0:
+            color = _lerp_color(
+                color, HEALTH_BAR_FLASH_COLOR, fx.flash_ttl / HEALTH_BAR_FLASH_SECONDS
+            )
+        pygame.draw.rect(ctx.surface, color, ctx.rect(fill))
 
     def draw_overlay(self, surface: pygame.Surface) -> None:
         """Legt den Vollbild-Blitz über das fertige Bild (unter dem HUD)."""

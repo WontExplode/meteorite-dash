@@ -65,8 +65,10 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Treffer-Feedback** (`effects.py`, `sfx.py`): aus jedem `SimEvent` entstehen
   Funken/Explosionen an `event.position`, roter Blitz und Erschütterung bei
   Schaden, ein blauer Ring beim Schild und ein kurzes Aufleuchten der passenden
-  HUD-Zeile. Die Sounds sind prozedural synthetisiert (keine Audiodateien im
-  Repo); der Tod wartet `DEATH_DELAY_SECONDS` auf seine Explosion.
+  HUD-Zeile. Getroffene Gegner und Meteoriten bekommen nach dem ersten Treffer
+  eine dünne Lebensleiste (Aufleuchten + kleines Wackeln bei weiterem Schaden).
+  Die Sounds sind prozedural synthetisiert (keine Audiodateien im Repo); der
+  Tod wartet `DEATH_DELAY_SECONDS` auf seine Explosion.
 - Schiffssystem (`ships.py`, Issue #11): `ShipSpec`-Datenblätter mit
   physikalischen Grundwerten (mass/thrust/hull, Slot-Zahlen) und abgeleiteten
   Spielwerten; 4 Schiffe mit Tint-Farbvarianten und Stat-Balken in der Auswahl.
@@ -700,7 +702,9 @@ Relay der Briefkasten, die Simulation der Richter.
   ungeseedeter Zufall, Referenzraum — dieselben Regeln wie `StarField` und
   `menu_fx`. `hit`/`explosion`/`pickup`/`damage`/`shield`/`death` bündeln die
   `config`-Werte; `offset` ist die Erschütterung für den `RenderContext`,
-  `draw_overlay` der Vollbild-Blitz (unter dem HUD).
+  `draw_overlay` der Vollbild-Blitz (unter dem HUD). `draw_health_bars` liest
+  `hp`/`max_hp` der Entities: unsichtbar bei vollem Leben, danach eine dünne
+  Leiste mit Aufleuchten und Wackeln bei Schaden — kein Sim-Zustand, kein Hash.
 - `sfx.py` synthetisiert die Effekte aus Rezepten (`Segment`-Folgen je Stimme,
   Stimmen werden gemischt) und packt sie ins Format des laufenden Mixers.
   Ohne Mixer oder bei exotischer Bittiefe bleibt alles still. Neuer Effekt =

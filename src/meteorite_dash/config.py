@@ -312,6 +312,19 @@ SHAKE_DESTROY: tuple[float, float] = (2.5, 0.12)
 SHAKE_CONTACT: tuple[float, float] = (8.0, 0.3)
 SHAKE_DEATH: tuple[float, float] = (14.0, 0.6)
 
+# Lebensleiste über getroffenen Gegnern/Meteoriten (`effects.py`, reines Rendering).
+# Unsichtbar, solange HP voll sind; nach dem ersten Treffer eine dünne Spur.
+HEALTH_BAR_HEIGHT = 2
+HEALTH_BAR_GAP = 3  # Abstand über der Hitbox
+HEALTH_BAR_INSET = 2  # etwas schmaler als die Hitbox
+HEALTH_BAR_TRACK_COLOR: Color = (24, 24, 32)
+HEALTH_BAR_FILL_HIGH: Color = (90, 220, 120)
+HEALTH_BAR_FILL_LOW: Color = (220, 70, 70)
+HEALTH_BAR_FLASH_COLOR: Color = (255, 250, 230)
+HEALTH_BAR_FLASH_SECONDS = 0.16
+HEALTH_BAR_SHAKE_AMPLITUDE = 2.0  # Referenz-px
+HEALTH_BAR_SHAKE_SECONDS = 0.12
+
 # HUD-Zeile leuchtet nach einem Ereignis kurz auf.
 HUD_FLASH_SECONDS = 0.35
 HUD_FLASH_COLOR: Color = (255, 255, 255)
