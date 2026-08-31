@@ -7,7 +7,7 @@ immer mehr zurückgelegte Lichtjahre.
 ## Features
 
 - Hauptmenü mit Start, Daily Run, Daily Bestenliste, Code eingeben,
-  Schiffsauswahl und Shop
+  Schiffsauswahl und Shop; Sternenfeld und Deko wie auf dem Game-Over-Screen
 - vertikale Raumschiffsteuerung
 - Standardwaffe mit 7 Schüssen und Munitions-Pickups
 - zerstörbare Meteoriten und Gegner mit HP; Spieler-HP aus Schiffsrumpf
@@ -30,8 +30,8 @@ immer mehr zurückgelegte Lichtjahre.
 - Shop: Münzen aus allen Läufen werden gespeichert und kaufen Schiffe,
   Zubehör (Schild, Magnet, Extra-Munition, Panzerung) und Schiffsfarben
 - Zubehör ist Verbrauchsware: es wird auf Vorrat gekauft (mehrere Exemplare
-  derselben Art), vor jedem Lauf auf die Zubehörplätze des Schiffs gelegt und
-  mit dem Start verbraucht — Münzen bleiben also dauerhaft nützlich
+  derselben Art), vor jedem Lauf in der Ausrüstung auf die Zubehörplätze des
+  Schiffs gelegt und mit dem Start verbraucht — Münzen bleiben dauerhaft nützlich
 - Game-Over-Screen mit finalem Score
 - dynamische Fenstergröße und Vollbild über einen gemeinsamen `Viewport`
 - deterministische Simulation: fester Zeitschritt, Seed pro Lauf
@@ -87,6 +87,8 @@ immer mehr zurückgelegte Lichtjahre.
 
 ## Entwicklung
 
+Voraussetzung: **Python 3.13+** und [uv](https://docs.astral.sh/uv/).
+
 ```terminal
 uv sync
 uv run meteorite-dash
@@ -127,6 +129,7 @@ src/meteorite_dash/
   phrase.py            Drei-Wort-Phrase aus dem Lauf-Hash (assets/words_de.txt)
   leaderboard.py       Bestenliste aus gespeicherten Läufen (Logik)
   mathutil.py          Plattformstabiler Sinus/Abstand für die Simulation
+  player.py            Spielerschiff: Bewegung, HP, Hitbox
   entities.py          Gegner, Hindernisse und Munitions-Pickups
   projectiles.py       Spieler-Projektile
   weapons.py           Waffen-Loadout und Munitionslogik
@@ -139,6 +142,7 @@ src/meteorite_dash/
   coins.py             Münzen, Muster-Layouts und Formationen
   spawner.py           Timergesteuertes Spawning
   starfield.py         Bewegter Sternenhintergrund
+  menu_fx.py           Menü-Deko: Scanlines, Rahmen, prallende Meteoriten
   scenes/
     base.py            Basis-Szene mit gemeinsamer Loop
     main_menu.py       Hauptmenü
@@ -150,6 +154,8 @@ src/meteorite_dash/
     widgets.py         Geteilte Zeichen-Helfer (Münz-Guthaben)
     game.py            Spielszene
     death.py           Game-Over-Screen
+tests/                 pytest (headless) plus Golden-Replays
+docs/report/           Projektbericht (Abgabe)
 ```
 
 ## Checks
