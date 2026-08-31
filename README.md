@@ -11,6 +11,8 @@ immer mehr zurückgelegte Lichtjahre.
 - vertikale Raumschiffsteuerung
 - Standardwaffe mit 7 Schüssen und Munitions-Pickups
 - zerstörbare Meteoriten und Gegner mit HP; Spieler-HP aus Schiffsrumpf
+- pixelgenaue Kollision: Schiff, Meteoriten, Gegner und Münzen treffen über
+  ihre Silhouette, nicht über ihr Rechteck
 - Meteoriten in vier Größen mit zufälligen Farbvarianten
 - Gegner mit unterschiedlichen Bewegungsmustern
 - scrollendes Sternenfeld als Hintergrund
@@ -39,7 +41,12 @@ immer mehr zurückgelegte Lichtjahre.
 - Lauf per Code weitergeben: `C` auf dem Game-Over-Screen veröffentlicht den
   Lauf unter drei Wörtern (z. B. `apfel berg wolke`); wer den Code im Menü
   eingibt, tritt gegen den Lauf an oder sieht ihn sich an
-- Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound
+- Treffer-Feedback: Funken, Explosionen, roter Blitz und Erschütterung bei
+  Schaden, Aufleuchten der passenden HUD-Zeile
+- Menü-Musik, Game-Playlist, Game-Over-Sound und Schuss-Sound; Treffer,
+  Explosionen, Münzen, Munition, Schild und Schaden klingen als prozedural
+  erzeugte Retro-Effekte (keine zusätzlichen Audiodateien)
+- das Hauptmenü merkt sich den zuletzt gewählten Punkt
 
 ## Steuerung
 
@@ -80,6 +87,8 @@ src/meteorite_dash/
   config.py            Zentrale Konstanten
   assets.py            Asset-Pfade und Bild-Caching
   audio.py             Musik und Sounds
+  sfx.py               Prozedural erzeugte Soundeffekte (ohne Audiodateien)
+  effects.py           Funken, Explosionen, Blitze und Erschütterung (Rendering)
   score.py             Lightyears-Score
   simulation.py        Deterministischer Spielkern (fester Tick, Seed-Streams, Events)
   inputs.py            InputFrame: Eingaben als Bitmaske pro Tick
@@ -101,6 +110,7 @@ src/meteorite_dash/
   projectiles.py       Spieler-Projektile
   weapons.py           Waffen-Loadout und Munitionslogik
   combat.py            Projektil- und Kollisionsschaden
+  hitbox.py            Pixelgenaue Masken im Referenzraum
   ships.py             Schiffsdatenblätter, Slot-Limits, Preise und Farben
   accessories.py       Zubehör-Katalog (Schild, Magnet, Extra-Munition, Panzerung)
   progress.py          Guthaben, Freischaltungen, Ausrüstung (Shop-Regeln)

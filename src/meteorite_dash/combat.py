@@ -1,10 +1,13 @@
-"""Kampflogik: Projektiltreffer und Kollisionsschaden, rein logisch und headless testbar."""
+"""Kampflogik: Projektiltreffer und Kollisionsschaden, rein logisch und headless testbar.
 
-from typing import Protocol, runtime_checkable
+Alle Berührungen laufen pixelgenau über `hitbox.overlaps` — der Rechteck-Test
+ist nur noch die schnelle Vorauswahl darin.
+"""
 
-import pygame
+from typing import NamedTuple, Protocol, runtime_checkable
 
 from meteorite_dash.entities import DamageableEntity, Entity
+from meteorite_dash.hitbox import HasHitbox, overlaps
 from meteorite_dash.projectiles import Projectile
 
 
@@ -19,10 +22,22 @@ class Damageable(Protocol):
         """Wendet Schaden an. Gibt True zurück, wenn das Ziel zerstört wurde."""
 
 
-def resolve_projectile_hits(projectiles: list[Projectile], entities: list[Entity]) -> None:
-    """Entfernt getroffene Projektile und zerstörte Gegner/Hindernisse."""
+class Impact(NamedTuple):
+    """Ein Projektiltreffer: Aufschlagpunkt (Referenzraum) und ob das Ziel zerbrach.
+
+    Rein beschreibend — die `Simulation` macht daraus `HIT`/`DESTROYED`-Events,
+    die Szene daraus Funken und Explosionen.
+    """
+
+    position: tuple[int, int]
+    destroyed: bool
+
+
+def resolve_projectile_hits(projectiles: list[Projectile], entities: list[Entity]) -> list[Impact]:
+    """Entfernt getroffene Projektile und zerstörte Gegner; liefert die Treffer."""
     spent_projectiles: set[int] = set()
     destroyed_entities: set[int] = set()
+    impacts: list[Impact] = []
 
     for projectile_index, projectile in enumerate(projectiles):
         for entity_index, entity in enumerate(entities):
@@ -30,11 +45,13 @@ def resolve_projectile_hits(projectiles: list[Projectile], entities: list[Entity
                 continue
             if not isinstance(entity, Damageable):
                 continue
-            if not projectile.rect.colliderect(entity.rect):
+            if not overlaps(projectile, entity):
                 continue
-            if entity.take_damage(projectile.damage):
+            destroyed = entity.take_damage(projectile.damage)
+            if destroyed:
                 destroyed_entities.add(entity_index)
             spent_projectiles.add(projectile_index)
+            impacts.append(Impact(projectile.rect.clip(entity.rect).center, destroyed))
             break
 
     if spent_projectiles:
@@ -47,10 +64,11 @@ def resolve_projectile_hits(projectiles: list[Projectile], entities: list[Entity
         entities[:] = [
             entity for index, entity in enumerate(entities) if index not in destroyed_entities
         ]
+    return impacts
 
 
 def _split_contact_hits(
-    player_rect: pygame.Rect, entities: list[Entity]
+    player: HasHitbox, entities: list[Entity]
 ) -> tuple[list[DamageableEntity], list[Entity]]:
     """Teilt in Gefahren, die den Spieler gerade berühren, und alle übrigen."""
     hits: list[DamageableEntity] = []
@@ -59,7 +77,7 @@ def _split_contact_hits(
         if (
             entity.damages_player
             and isinstance(entity, DamageableEntity)
-            and player_rect.colliderect(entity.rect)
+            and overlaps(player, entity)
         ):
             hits.append(entity)
         else:
@@ -67,19 +85,19 @@ def _split_contact_hits(
     return hits, remaining
 
 
-def apply_contact_damage(player_rect: pygame.Rect, hp: int, entities: list[Entity]) -> int:
+def apply_contact_damage(player: HasHitbox, hp: int, entities: list[Entity]) -> int:
     """Wendet Kollisionsschaden auf den Spieler an und entfernt getroffene Gegner."""
     if hp <= 0:
         return hp
 
-    hits, remaining = _split_contact_hits(player_rect, entities)
+    hits, remaining = _split_contact_hits(player, entities)
     entities[:] = remaining
     return max(0, hp - sum(hit.contact_damage for hit in hits))
 
 
-def absorb_contact(player_rect: pygame.Rect, entities: list[Entity]) -> bool:
+def absorb_contact(player: HasHitbox, entities: list[Entity]) -> bool:
     """Schild: entfernt berührende Gefahren ohne Schaden. True, wenn etwas geblockt wurde."""
-    hits, remaining = _split_contact_hits(player_rect, entities)
+    hits, remaining = _split_contact_hits(player, entities)
     if not hits:
         return False
     entities[:] = remaining

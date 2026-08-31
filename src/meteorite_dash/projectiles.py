@@ -8,6 +8,7 @@ from meteorite_dash.config import (
     PROJECTILE_SPEED,
     REFERENCE_SIZE,
 )
+from meteorite_dash.hitbox import solid_mask
 from meteorite_dash.player import Player
 from meteorite_dash.render import RenderContext
 
@@ -20,6 +21,11 @@ class Projectile:
         self._x = float(rect.x)
         self.speed_x = speed_x
         self.damage = damage
+
+    @property
+    def mask(self) -> pygame.mask.Mask:
+        """Volle Fläche — das Projektil ist ein gefülltes Rechteck."""
+        return solid_mask(self.rect.size)
 
     def update(self, dt: float) -> None:
         """Bewegt das Projektil dt-basiert nach rechts; Position float, `rect` gerundet."""

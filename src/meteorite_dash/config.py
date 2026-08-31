@@ -47,7 +47,7 @@ DEATH_MUTED_COLOR: Color = (120, 120, 150)
 MUTED_TEXT_COLOR: Color = (120, 120, 150)
 OWNED_TEXT_COLOR: Color = (140, 255, 160)
 
-MENU_FONT_NAME = "arial"
+MENU_FONT_NAME = "amoria"
 MENU_FONT_SIZE = 42
 HINT_FONT_SIZE = 22
 DEATH_TITLE_FONT_SIZE = 84
@@ -194,6 +194,51 @@ COINS_TOP_RIGHT: WindowSize = (776, 52)
 COIN_BONUS_TOP_RIGHT: WindowSize = (776, 80)
 COIN_BONUS_NOTICE_SECONDS = 1.2
 
+# --- Treffer-Feedback: Partikel, Blitze, Erschütterung (`effects.py`) ---
+# Reine Deko im Referenzraum, an Wandzeit gekoppelt — nie im Sim-Pfad.
+FEEDBACK_MAX_PARTICLES = 260  # Deckel, damit ein Getümmel die Framerate nicht frisst
+FEEDBACK_PARTICLE_SPEED: tuple[float, float] = (60.0, 240.0)  # Referenz-px/s
+FEEDBACK_DRAG = 1.8  # Partikel bremsen exponentiell ab
+
+HIT_SPARK_COLOR: Color = (255, 240, 180)
+HIT_SPARK_COUNT: tuple[int, int] = (4, 7)
+HIT_SPARK_TTL: tuple[float, float] = (0.12, 0.28)
+HIT_SPARK_RADIUS = 2.0
+
+EXPLOSION_COLORS: tuple[Color, ...] = ((255, 220, 120), (255, 150, 50), (200, 70, 40))
+EXPLOSION_COUNT: tuple[int, int] = (12, 18)
+EXPLOSION_TTL: tuple[float, float] = (0.3, 0.7)
+EXPLOSION_RADIUS = 3.5
+
+PICKUP_SPARK_COUNT: tuple[int, int] = (6, 10)
+PICKUP_SPARK_TTL: tuple[float, float] = (0.2, 0.45)
+PICKUP_SPARK_RADIUS = 2.5
+
+DAMAGE_FLASH_COLOR: Color = (255, 60, 60)
+DAMAGE_FLASH_ALPHA = 110
+DAMAGE_FLASH_SECONDS = 0.3
+SHIELD_FLASH_COLOR: Color = (120, 190, 255)
+SHIELD_FLASH_ALPHA = 90
+SHIELD_FLASH_SECONDS = 0.25
+DEATH_FLASH_COLOR: Color = (255, 120, 60)
+DEATH_FLASH_ALPHA = 150
+DEATH_FLASH_SECONDS = 0.6
+
+# Erschütterung als (Ausschlag in Referenz-px, Dauer in Sekunden).
+SHAKE_DESTROY: tuple[float, float] = (2.5, 0.12)
+SHAKE_CONTACT: tuple[float, float] = (8.0, 0.3)
+SHAKE_DEATH: tuple[float, float] = (14.0, 0.6)
+
+# HUD-Zeile leuchtet nach einem Ereignis kurz auf.
+HUD_FLASH_SECONDS = 0.35
+HUD_FLASH_COLOR: Color = (255, 255, 255)
+# Der Tod bleibt kurz stehen, damit Explosion und Blitz sichtbar werden.
+DEATH_DELAY_SECONDS = 0.7
+
+# --- Soundeffekte (`sfx.py`, prozedural erzeugt — keine Audiodateien nötig) ---
+SFX_VOLUME = 0.35
+
+
 # --- Shop, Zubehör & Fortschritt (Issue #14) ---
 # Speicherort: `METEORITE_DASH_SAVE_DIR` überschreibt das plattformübliche
 # Nutzer-Datenverzeichnis (XDG / AppData / Application Support).
@@ -225,7 +270,8 @@ SIM_DT = 1.0 / SIM_TICKS_PER_SECOND
 MAX_STEPS_PER_FRAME = 5
 # Bei jeder Änderung an Spielregeln/Physik/Spawn erhöhen: Replays älterer
 # Versionen bleiben lesbar, werden aber nicht mehr als Ghost/Referenz benutzt.
-SIM_VERSION = 1
+# 2: pixelgenaue Kollision über Masken statt Rechtecke (`hitbox.py`).
+SIM_VERSION = 2
 # Seeds sind 32-Bit-Zahlen — kurz genug zum Abtippen ("Rennen gegen Freunde").
 SEED_BITS = 32
 SEED_ENV = "METEORITE_DASH_SEED"

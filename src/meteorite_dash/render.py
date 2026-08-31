@@ -22,16 +22,25 @@ class RenderContext:
     viewport: Viewport
     # Ohne Loader (Tests) zeichnen Entities ihre Fallback-Formen.
     assets: AssetLoader | None = None
+    # Erschütterung in Referenz-px (`effects.Effects.offset`): verschiebt alles,
+    # was durch diesen Kontext gezeichnet wird — HUD-Code umgeht ihn bewusst.
+    offset: tuple[float, float] = (0.0, 0.0)
 
     def rect(self, ref: pygame.Rect) -> pygame.Rect:
         """Referenz-Rechteck -> Fenster: Position pro Achse gestreckt, Größe höhen-gebunden."""
         vp = self.viewport
+        offset_x, offset_y = self.offset
         return pygame.Rect(
-            vp.px(ref.x),
-            vp.py(ref.y),
+            vp.px(ref.x + offset_x),
+            vp.py(ref.y + offset_y),
             max(1, vp.s(ref.width)),
             max(1, vp.s(ref.height)),
         )
+
+    def point(self, ref_x: float, ref_y: float) -> tuple[int, int]:
+        """Referenzpunkt -> Fensterkoordinate, inklusive Erschütterung."""
+        offset_x, offset_y = self.offset
+        return self.viewport.point(ref_x + offset_x, ref_y + offset_y)
 
     def image(self, filename: str, size: tuple[int, int]) -> pygame.Surface | None:
         """Sprite in Fenstergröße aus dem Asset-Cache; None ohne Loader (Fallback-Form)."""

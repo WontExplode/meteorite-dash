@@ -19,6 +19,7 @@ from meteorite_dash.config import (
 )
 from meteorite_dash.context import GameContext
 from meteorite_dash.entities import Entity, Meteorite
+from meteorite_dash.hitbox import solid
 from meteorite_dash.inputs import InputFrame
 from meteorite_dash.persistence import SaveStore
 from meteorite_dash.player import Player
@@ -331,13 +332,13 @@ def test_weapon_loadout_standard_ammo_bonus() -> None:
 
 
 def test_absorb_contact_removes_hazard_without_damage() -> None:
-    player_rect = pygame.Rect(50, 100, 64, 64)
-    hit = Meteorite(player_rect.copy(), speed_x=0.0, hp=10, contact_damage=50)
+    player = solid(pygame.Rect(50, 100, 64, 64))
+    hit = Meteorite(player.rect.copy(), speed_x=0.0, hp=10, contact_damage=50)
     far = Meteorite(pygame.Rect(600, 100, 40, 40), speed_x=0.0, hp=10, contact_damage=50)
     entities: list[Entity] = [hit, far]
-    assert absorb_contact(player_rect, entities) is True
+    assert absorb_contact(player, entities) is True
     assert entities == [far]
-    assert absorb_contact(player_rect, entities) is False
+    assert absorb_contact(player, entities) is False
     assert entities == [far]
 
 

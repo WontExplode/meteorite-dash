@@ -31,6 +31,7 @@ from meteorite_dash.config import (
     CoinPatternSpec,
 )
 from meteorite_dash.entities import Entity
+from meteorite_dash.hitbox import HasHitbox, circle_mask, overlaps
 from meteorite_dash.mathutil import det_hypot, det_sin
 from meteorite_dash.render import RenderContext
 
@@ -74,6 +75,11 @@ class Coin(Entity):
     def damages_player(self) -> bool:
         """Münzen schaden nie; Berührung sammelt ein."""
         return False
+
+    @property
+    def mask(self) -> pygame.mask.Mask:
+        """Volle Scheibe — die Dreh-Animation schmälert nur das Bild, nie die Hitbox."""
+        return circle_mask(self.rect.size)
 
     def update(self, dt: float, player_y: int, speed_scale: float = 1.0) -> None:
         """Bewegt wie `Entity` und zählt die Zeit für die Dreh-Animation hoch."""
@@ -218,8 +224,8 @@ class CoinFormation:
             if det_hypot(target[0] - coin.rect.centerx, target[1] - coin.rect.centery) <= radius:
                 coin.pull_toward(target, step)
 
-    def collect(self, player_rect: pygame.Rect) -> Pickup:
-        """Sammelt Münzen ein, die `player_rect` berühren.
+    def collect(self, player: HasHitbox) -> Pickup:
+        """Sammelt Münzen ein, die der Spieler pixelgenau berührt.
 
         Der Bonus fällt genau einmal: beim letzten Einsammeln, wenn keine Münze
         verpasst wurde.
@@ -227,7 +233,7 @@ class CoinFormation:
         value = 0
         remaining: list[Coin] = []
         for coin in self.coins:
-            if player_rect.colliderect(coin.rect):
+            if overlaps(player, coin):
                 self.collected += 1
                 value += coin.value
             else:

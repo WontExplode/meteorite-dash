@@ -8,6 +8,7 @@ from meteorite_dash.audio import MusicPlayer
 from meteorite_dash.combat import apply_contact_damage, resolve_projectile_hits
 from meteorite_dash.config import (
     AMMO_PICKUP_SIZE,
+    DEATH_DELAY_SECONDS,
     DRAG,
     GAME_MUSIC_TRACKS,
     MENU_ITEMS,
@@ -28,6 +29,7 @@ from meteorite_dash.entities import (
     spawn_ammo_pickup,
     spawn_meteorite,
 )
+from meteorite_dash.hitbox import solid
 from meteorite_dash.inputs import InputFrame, from_pressed
 from meteorite_dash.player import Player
 from meteorite_dash.projectiles import Projectile, spawn_projectile
@@ -118,6 +120,20 @@ def test_main_menu_navigation_wraps(context: GameContext) -> None:
 
     menu.handle_event(_keydown(pygame.K_DOWN))
     assert menu.selected_index == 0
+
+
+def test_main_menu_remembers_cursor(context: GameContext) -> None:
+    menu = MainMenu(context)
+    menu.handle_event(_keydown(pygame.K_DOWN))
+    menu.handle_event(_keydown(pygame.K_DOWN))
+    assert context.state.menu_index == 2
+
+    # Rückkehr aus einer anderen Szene: der Cursor steht wieder auf demselben Punkt.
+    assert MainMenu(context).selected_index == 2
+
+    # Ein Speicherstand mit unmöglichem Index darf das Menü nicht zerlegen.
+    context.state.menu_index = len(MENU_ITEMS) + 5
+    assert MainMenu(context).selected_index == len(MENU_ITEMS) - 1
 
 
 def test_main_menu_actions_map_to_transitions(context: GameContext) -> None:
@@ -355,7 +371,7 @@ def test_hunter_enemy_does_not_overshoot() -> None:
 
 
 def test_collides_with_any() -> None:
-    player = pygame.Rect(50, 100, 64, 64)
+    player = solid(pygame.Rect(50, 100, 64, 64))
     hit = _meteorite(pygame.Rect(80, 120, 44, 44))
     miss = _meteorite(pygame.Rect(700, 500, 44, 44))
     assert collides_with_any(player, [miss, hit]) is True
@@ -426,6 +442,7 @@ def test_game_scene_collision_opens_death_screen(context: GameContext) -> None:
         _meteorite(scene.sim.player.rect.copy(), speed_x=0.0, contact_damage=999)
     )
     scene.step(InputFrame.NONE)
+    scene.update(DEATH_DELAY_SECONDS)  # Explosion läuft, dann erst der Wechsel
     assert scene._transition is Transition.DEATH_SCREEN
     assert context.state.final_light_years > 42.0
 
@@ -540,13 +557,13 @@ def test_ammo_pickup_does_not_damage_player() -> None:
 
 
 def test_collides_with_any_ignores_ammo_pickups() -> None:
-    player = pygame.Rect(50, 100, 64, 64)
+    player = solid(pygame.Rect(50, 100, 64, 64))
     pickup = AmmoPickup(pygame.Rect(60, 120, 24, 24), speed_x=100.0)
     assert collides_with_any(player, [pickup]) is False
 
 
 def test_collect_pickups() -> None:
-    player = pygame.Rect(50, 100, 64, 64)
+    player = solid(pygame.Rect(50, 100, 64, 64))
     pickup = AmmoPickup(pygame.Rect(60, 120, 24, 24), speed_x=100.0)
     meteorite = _meteorite(pygame.Rect(700, 500, 44, 44))
     entities: list[Entity] = [pickup, meteorite]
@@ -618,7 +635,8 @@ def test_resolve_projectile_hits() -> None:
 
 def test_resolve_projectile_hits_destroy_enemy() -> None:
     enemy = WaveEnemy(pygame.Rect(100, 100, 44, 44), speed_x=100.0)
-    projectile = Projectile(pygame.Rect(90, 110, 16, 8), speed_x=100.0, damage=20)
+    # Auf Höhe der Dreieck-Spitze: weiter oben deckt die Maske nichts ab.
+    projectile = Projectile(pygame.Rect(90, 118, 16, 8), speed_x=100.0, damage=20)
     projectiles = [projectile]
     entities: list[Entity] = [enemy]
     resolve_projectile_hits(projectiles, entities)
@@ -627,10 +645,10 @@ def test_resolve_projectile_hits_destroy_enemy() -> None:
 
 
 def test_apply_contact_damage() -> None:
-    player_rect = pygame.Rect(50, 100, 64, 64)
-    meteorite = _meteorite(player_rect.copy(), contact_damage=25)
+    player = solid(pygame.Rect(50, 100, 64, 64))
+    meteorite = _meteorite(player.rect.copy(), contact_damage=25)
     entities: list[Entity] = [meteorite]
-    hp = apply_contact_damage(player_rect, 100, entities)
+    hp = apply_contact_damage(player, 100, entities)
     assert hp == 75
     assert entities == []
 

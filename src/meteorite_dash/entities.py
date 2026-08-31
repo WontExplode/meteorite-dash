@@ -34,6 +34,14 @@ from meteorite_dash.config import (
     WAVE_FREQUENCY,
     Color,
 )
+from meteorite_dash.hitbox import (
+    HasHitbox,
+    circle_mask,
+    image_mask,
+    left_triangle_mask,
+    overlaps,
+    solid_mask,
+)
 from meteorite_dash.mathutil import det_sin
 from meteorite_dash.render import RenderContext
 
@@ -42,7 +50,9 @@ class Entity(ABC):
     """Basis für alles, was von rechts nach links fliegt. `rect` ist die Hitbox.
 
     Alle Koordinaten liegen im Referenzraum (`REFERENCE_SIZE`); erst `draw`
-    übersetzt über den `RenderContext` ins Fenster.
+    übersetzt über den `RenderContext` ins Fenster. `mask` verfeinert `rect`
+    zur pixelgenauen Silhouette (`hitbox.py`); Subklassen liefern die Form,
+    die sie auch zeichnen.
     """
 
     def __init__(self, rect: pygame.Rect, speed_x: float) -> None:
@@ -55,6 +65,11 @@ class Entity(ABC):
     def damages_player(self) -> bool:
         """Ob Berührung dem Spieler schadet; Pickups überschreiben mit False."""
         return True
+
+    @property
+    def mask(self) -> pygame.mask.Mask:
+        """Pixelgenaue Silhouette in `rect`-Größe; Standard ist die volle Fläche."""
+        return solid_mask(self.rect.size)
 
     @property
     def is_off_screen(self) -> bool:
@@ -140,6 +155,13 @@ class Meteorite(DamageableEntity):
         """Ergänzt den Zustand um die Bildvariante."""
         return (*super().state_key(), self.image_name)
 
+    @property
+    def mask(self) -> pygame.mask.Mask:
+        """Alphamaske des Sprites; ohne Bild der eingeschriebene Kreis (wie gezeichnet)."""
+        if self.image_name is None:
+            return circle_mask(self.rect.size)
+        return image_mask(self.image_name, self.rect.size)
+
     def draw(self, ctx: RenderContext) -> None:
         """Blittet das Sprite in Fenstergröße; Fallback: Kreis in `METEORITE_COLOR`."""
         target = ctx.rect(self.rect)
@@ -182,6 +204,11 @@ class WaveEnemy(DamageableEntity):
         """Ergänzt den Zustand um die verstrichene Zeit (Phase der Bahn)."""
         return (*super().state_key(), self._elapsed.hex())
 
+    @property
+    def mask(self) -> pygame.mask.Mask:
+        """Dreieck-Silhouette, deckungsgleich mit `draw`."""
+        return left_triangle_mask(self.rect.size)
+
     def draw(self, ctx: RenderContext) -> None:
         """Zeichnet ein nach links zeigendes Dreieck in `WAVE_ENEMY_COLOR`."""
         _draw_left_triangle(ctx.surface, ctx.rect(self.rect), WAVE_ENEMY_COLOR)
@@ -213,6 +240,11 @@ class HunterEnemy(DamageableEntity):
         else:
             self._y -= step
 
+    @property
+    def mask(self) -> pygame.mask.Mask:
+        """Dreieck-Silhouette, deckungsgleich mit `draw`."""
+        return left_triangle_mask(self.rect.size)
+
     def draw(self, ctx: RenderContext) -> None:
         """Zeichnet ein nach links zeigendes Dreieck in `HUNTER_ENEMY_COLOR`."""
         _draw_left_triangle(ctx.surface, ctx.rect(self.rect), HUNTER_ENEMY_COLOR)
@@ -243,19 +275,17 @@ def _draw_left_triangle(surface: pygame.Surface, rect: pygame.Rect, color: Color
     pygame.draw.polygon(surface, color, points)
 
 
-def collides_with_any(player_rect: pygame.Rect, entities: Iterable[Entity]) -> bool:
-    """True, wenn der Spieler eine schädliche Entity berührt."""
-    return any(
-        entity.damages_player and player_rect.colliderect(entity.rect) for entity in entities
-    )
+def collides_with_any(player: HasHitbox, entities: Iterable[Entity]) -> bool:
+    """True, wenn der Spieler eine schädliche Entity pixelgenau berührt."""
+    return any(entity.damages_player and overlaps(player, entity) for entity in entities)
 
 
-def collect_pickups(player_rect: pygame.Rect, entities: list[Entity]) -> list[Entity]:
+def collect_pickups(player: HasHitbox, entities: list[Entity]) -> list[Entity]:
     """Entfernt eingesammelte Munitions-Pickups und gibt sie zurück."""
     collected: list[Entity] = []
     remaining: list[Entity] = []
     for entity in entities:
-        if isinstance(entity, AmmoPickup) and player_rect.colliderect(entity.rect):
+        if isinstance(entity, AmmoPickup) and overlaps(player, entity):
             collected.append(entity)
         else:
             remaining.append(entity)

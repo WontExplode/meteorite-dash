@@ -57,6 +57,16 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Kampf / HP:** Spieler-HP aus `ShipSpec.hull`; zerstörbare Meteoriten und
   Gegner mit größenabhängigen HP; Projektil- und Kollisionsschaden über
   `combat.py`.
+- **Pixelgenaue Hitboxen** (`hitbox.py`): jedes kollidierende Objekt trägt neben
+  `rect` eine `mask` in Referenzgröße — Sprite-Alphakanal bei Schiff und
+  Meteoriten, gezeichnete Grundform bei Gegnern, Münzen und Projektilen.
+  `overlaps` prüft erst das Rechteck, dann die Masken. Ecken zweier Boxen
+  kosten damit kein Leben mehr.
+- **Treffer-Feedback** (`effects.py`, `sfx.py`): aus jedem `SimEvent` entstehen
+  Funken/Explosionen an `event.position`, roter Blitz und Erschütterung bei
+  Schaden, ein blauer Ring beim Schild und ein kurzes Aufleuchten der passenden
+  HUD-Zeile. Die Sounds sind prozedural synthetisiert (keine Audiodateien im
+  Repo); der Tod wartet `DEATH_DELAY_SECONDS` auf seine Explosion.
 - Schiffssystem (`ships.py`, Issue #11): `ShipSpec`-Datenblätter mit
   physikalischen Grundwerten (mass/thrust/hull, Slot-Zahlen) und abgeleiteten
   Spielwerten; 4 Schiffe mit Tint-Farbvarianten und Stat-Balken in der Auswahl.
@@ -216,6 +226,7 @@ main.main()                 Entry-Point, ruft App().run()
       ├─ LeaderboardScene   Daily-Bestenliste aus dem ReplayStore
       ├─ CodeEntryScene     Drei-Wort-Code tippen -> Lauf holen -> Rennen/Ansehen
       ├─ GameScene          Fixstep-Loop um `Simulation` (simulation.py) + Rendering
+      │                     plus Feedback (effects.py, sfx.py) aus den SimEvents
       └─ DeathScene         Game-Over-Screen mit finalem Lightyears-Score
 ```
 
@@ -239,7 +250,8 @@ Ein `@dataclass`, der alle geteilten Ressourcen hält und **Fenster-Resize +
 Vollbild** besitzt (`apply_resize`, `toggle_fullscreen`). Beim Resize aktualisiert
 er Screen, `Viewport` und `StarField` gemeinsam — Größenlogik lebt hier, nicht in
 den Szenen. `GameState` hält den eigentlichen Spielzustand (aktuell
-`selected_ship_index`, `final_light_years`, `final_coins` und den persistenten
+`selected_ship_index`, `menu_index` — der Menü-Cursor überlebt den
+Szenenwechsel —, `final_light_years`, `final_coins` und den persistenten
 `progress`); neue Session-Felder (Leben, Munition …) kommen hierher, alles, was
 über den Neustart hinaus gelten soll, in `Progress`. `GameContext.store`
 (`SaveStore | None`) schreibt den Fortschritt; `save_progress()` ist ohne Store
@@ -266,8 +278,10 @@ fenster-unabhängig bleibt.
 **ausschließlich im Referenzraum** — Hitboxen, Geschwindigkeiten, Spawn-Fläche
 (`REFERENCE_SIZE`). Die Fenstergröße erreicht die Logik nie. Beim Zeichnen bekommt
 jedes Objekt einen `RenderContext` (`render.py`: Surface, Viewport, optionaler
-`AssetLoader`); `ctx.rect(ref_rect)` liefert das Fenster-Rechteck, `ctx.image`
-das Sprite in genau dieser Größe aus dem Cache. Resize/Vollbild ändern damit nur
+`AssetLoader`); `ctx.rect(ref_rect)` liefert das Fenster-Rechteck, `ctx.point(x, y)` den
+Punkt, `ctx.image` das Sprite in genau dieser Größe aus dem Cache. `offset`
+ist die Erschütterung aus `effects.Effects` — sie verschiebt alles, was durch
+den Kontext gezeichnet wird; HUD-Code geht bewusst direkt über den `Viewport`. Resize/Vollbild ändern damit nur
 das Bild, nie den Spielzustand — Grundlage für Determinismus und Replays.
 
 ### Simulation & Determinismus (Issue #34)
@@ -569,6 +583,49 @@ Relay der Briefkasten, die Simulation der Richter.
 - Spieler startet mit `ShipSpec.hp`; bei 0 HP → Death-Screen. Kollision
   entfernt das Hindernis und zieht `contact_damage` ab.
 
+### Hitboxen (pixelgenau)
+
+- `hitbox.py` ist die einzige Stelle, die Masken baut und cacht. Alles läuft in
+  **Referenz-px** (`REFERENCE_SIZE`), nie in Fenstergröße — dieselbe Asset-Datei
+  plus dieselbe Zielgröße ergibt auf jedem Rechner dieselbe Maske.
+- `HasHitbox` = `rect` + gleich große `mask`. Wer kollidiert, liefert beides:
+  `Player` (`ship_mask`), `Meteorite` (`image_mask`, ohne Bild `circle_mask`),
+  `WaveEnemy`/`HunterEnemy` (`left_triangle_mask` — dieselbe Silhouette, die sie
+  zeichnen), `Coin` (`circle_mask`, unabhängig von der Dreh-Animation),
+  `AmmoPickup`/`Projectile` (`solid_mask`).
+- `overlaps(a, b)` prüft erst `colliderect` (sortiert fast alle Paare aus), dann
+  `Mask.overlap`. Alle Berührungen gehen darüber: `combat.py`,
+  `entities.collides_with_any` / `collect_pickups`, `CoinFormation.collect`.
+  `coins.is_clear` (Spawn-Abstand) bleibt bewusst grob auf Rechtecken.
+- `hitbox.solid(rect)` liefert eine `Box` mit voller Maske — für Tests, die sich
+  wie die alte Rechteck-Kollision verhalten sollen.
+- Neue Entity: `mask` überschreiben, sobald die gezeichnete Form ihr Rechteck
+  nicht füllt. Maskengröße **muss** `rect.size` entsprechen.
+- Die Masken sind Teil der Spielregeln: `pygame.image.load` +
+  `transform.scale` + `mask.from_surface` müssen bit-gleich bleiben, sonst
+  laufen Replays auseinander. Sprite-Datei oder Referenzgröße ändern heißt
+  `SIM_VERSION` erhöhen und Golden-Replays neu erzeugen.
+
+### Treffer-Feedback (Optik & Sound)
+
+- `SimEvent` trägt neben `sound` ein `position` (Referenzraum) — beides reine
+  Render-Hinweise, nicht Teil des Zustands und nicht im Hash. `HIT`/`DESTROYED`
+  bekommen den Aufschlagpunkt aus `combat.Impact`, alles andere die
+  Schiffsmitte.
+- `effects.Effects` ist die Deko-Schicht der `GameScene`: Wandzeit,
+  ungeseedeter Zufall, Referenzraum — dieselben Regeln wie `StarField` und
+  `menu_fx`. `hit`/`explosion`/`pickup`/`damage`/`shield`/`death` bündeln die
+  `config`-Werte; `offset` ist die Erschütterung für den `RenderContext`,
+  `draw_overlay` der Vollbild-Blitz (unter dem HUD).
+- `sfx.py` synthetisiert die Effekte aus Rezepten (`Segment`-Folgen je Stimme,
+  Stimmen werden gemischt) und packt sie ins Format des laufenden Mixers.
+  Ohne Mixer oder bei exotischer Bittiefe bleibt alles still. Neuer Effekt =
+  `Sfx`-Wert + Eintrag in `RECIPES`; `MusicPlayer.play_effect` spielt ihn.
+- `GameScene._feedback` ist die einzige Übersetzung Event -> Ausgabe;
+  `_flash_hud`/`_hud_color` lassen die betroffene HUD-Zeile kurz aufleuchten.
+  Bei `DEATH` steht der Endstand sofort, der Szenenwechsel wartet
+  `DEATH_DELAY_SECONDS`.
+
 ### Münzen (Collectibles)
 
 - `coins.py`: `Coin(Entity)` (prozedural gezeichnete Gold-Scheibe mit
@@ -682,10 +739,10 @@ Relay der Briefkasten, die Simulation der Richter.
 
 ### Neues Feature — typische Schritte
 
-- **Gegner/Hindernis:** `Entity`-Subklasse mit `draw(ctx)` und ggf.
-  `state_key()` → `spawn_*`-Fabrik `(rng, area)` → Gewicht in
-  `simulation.SPAWN_TABLE` → Logik-Test mit gesetztem Seed → `SIM_VERSION`
-  erhöhen.
+- **Gegner/Hindernis:** `Entity`-Subklasse mit `draw(ctx)`, passender `mask`
+  (siehe Hitboxen) und ggf. `state_key()` → `spawn_*`-Fabrik `(rng, area)` →
+  Gewicht in `simulation.SPAWN_TABLE` → Logik-Test mit gesetztem Seed →
+  `SIM_VERSION` erhöhen.
 - **Waffe/Pickup:** Konstanten in `config.py`, Logik in `weapons.py` /
   `projectiles.py`, Integration in `Simulation.step` (+ passender `EventKind`),
   Sound/HUD in `GameScene._on_event`.
@@ -736,6 +793,7 @@ Relay der Briefkasten, die Simulation der Richter.
   (`test_progress.py`, mit `tmp_path`), Replays (`test_replay.py`, Golden in
   `tests/replays/`), Ghost (`test_ghost.py`), Daily (`test_daily.py`),
   Shop/Zubehör (`test_shop.py`), Skalierung/Resize (`test_viewport.py`),
+  Hitboxen (`test_hitbox.py`), Feedback/Sound (`test_feedback.py`),
   Share-Code (`test_sharecode.py`), Nostr (`test_nostr.py`), Bestenliste
   (`test_leaderboard.py`), Phrase (`test_phrase.py`) und Code-Weitergabe
   (`test_share.py`) sind getrennt. Der `FakeRelay` liegt in
@@ -814,6 +872,19 @@ demselben defensiven Muster.
   ungeseedeter `random` und Set-Iteration haben in `simulation.py`,
   `entities.py`, `coins.py`, `player.py`, `spawner.py`, `combat.py` nichts
   verloren — sonst laufen Replays auseinander. Regeländerung → `SIM_VERSION`.
+- **Masken gehören zu den Regeln.** `hitbox.py` liest Sprites (ohne Display,
+  ohne `convert_alpha`) und baut daraus Kollisionsmasken in Referenzgröße. Wer
+  eine Sprite-Datei austauscht oder `PLAYER_SIZE`/`METEORITE_VARIANTS`-Radien
+  ändert, ändert die Kollision — `SIM_VERSION` erhöhen und
+  `UPDATE_GOLDEN=1 uv run pytest tests/test_replay.py -k golden` laufen lassen.
+- **Leertaste bestätigt auch das Menü.** `GameScene` gibt `FIRE` erst frei,
+  nachdem die Taste einmal los war (`_fire_armed`) — sonst kostet der Start
+  sofort einen Schuss. Direkte `scene.step(InputFrame.FIRE)`-Aufrufe (Tests,
+  Replay, Ghost) umgehen die Sperre bewusst.
+- **Tod ist verzögert.** `_on_event` schreibt bei `DEATH` sofort Endstand und
+  Replay, wechselt aber erst nach `DEATH_DELAY_SECONDS` zum Death-Screen.
+  Tests, die den `Transition` prüfen, brauchen danach ein
+  `scene.update(DEATH_DELAY_SECONDS)`.
 - **Exakte Tick-Vielfache im Test:** `scene.update(3 * SIM_DT)` liefert dank
   `_STEP_EPSILON` drei Ticks; ohne den Epsilon frisst Float-Rundung einen.
 - **Threads nur im Exchange.** `RunExchange` ist der einzige Ort mit Threads;

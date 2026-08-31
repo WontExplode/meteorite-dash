@@ -54,11 +54,15 @@ _TITLE_TEXT = "METEORITE DASH"
 
 
 class MainMenu(Scene):
-    """Hauptmenü mit Cursor über `MENU_ITEMS`; Enter löst den passenden `Transition` aus."""
+    """Hauptmenü mit Cursor über `MENU_ITEMS`; Enter löst den passenden `Transition` aus.
+
+    Der Cursor lebt in `GameState.menu_index`: wer aus Shop, Bestenliste oder
+    einem Lauf zurückkommt, steht wieder auf seinem Menüpunkt.
+    """
 
     def __init__(self, context: GameContext) -> None:
         super().__init__(context)
-        self.selected_index = 0
+        self.selected_index = min(max(context.state.menu_index, 0), len(MENU_ITEMS) - 1)
         # Ziel-Rechtecke (Titel + Menüpunkte) im Referenzraum für die Abpraller.
         self.fx = MenuFX(self._collision_targets())
 
@@ -100,12 +104,17 @@ class MainMenu(Scene):
         if event.type != pygame.KEYDOWN:
             return
         if event.key == pygame.K_UP:
-            self.selected_index = (self.selected_index - 1) % len(MENU_ITEMS)
+            self._select((self.selected_index - 1) % len(MENU_ITEMS))
         elif event.key == pygame.K_DOWN:
-            self.selected_index = (self.selected_index + 1) % len(MENU_ITEMS)
+            self._select((self.selected_index + 1) % len(MENU_ITEMS))
         elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
             action = MENU_ITEMS[self.selected_index][1]
             self.finish(_ACTION_TRANSITIONS[action])
+
+    def _select(self, index: int) -> None:
+        """Setzt den Cursor und merkt ihn für die nächste Rückkehr ins Menü."""
+        self.selected_index = index
+        self.context.state.menu_index = index
 
     def update(self, dt: float) -> None:
         """Rückt Sternenfeld und Deko mit Wandzeit vor (reines Rendering)."""

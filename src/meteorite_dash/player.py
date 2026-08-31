@@ -3,6 +3,7 @@
 import pygame
 
 from meteorite_dash.config import DRAG, PLAYER_SIZE, REFERENCE_SIZE
+from meteorite_dash.hitbox import ship_mask
 from meteorite_dash.inputs import InputFrame
 from meteorite_dash.ships import ShipSpec
 
@@ -11,7 +12,9 @@ class Player:
     """Spielerschiff — reine Logik im Referenzraum, hält keine Surface.
 
     Gezeichnet wird es von der Szene über den `RenderContext`; so bleibt die
-    Bewegung fenster-unabhängig und ohne Display testbar.
+    Bewegung fenster-unabhängig und ohne Display testbar. `mask` ist die
+    Silhouette des Schiffssprites — die Box ist deutlich größer als das Schiff,
+    Kollision läuft deshalb pixelgenau (`hitbox.py`).
     """
 
     def __init__(
@@ -30,6 +33,11 @@ class Player:
         self.hp = self.max_hp
         self.velocity = 0.0  # px/s, vertikal; negativ = aufwärts
         self._y = float(position[1])  # Float-Position für verlustfreies Integrieren
+
+    @property
+    def mask(self) -> pygame.mask.Mask:
+        """Alphamaske des Schiffssprites in `PLAYER_SIZE` (gecacht in `hitbox.py`)."""
+        return ship_mask(self.spec.sprite, PLAYER_SIZE)
 
     def update(self, dt: float, inputs: InputFrame) -> None:
         """Integriert einen Tick: Schub aus `UP`/`DOWN`, linearer Widerstand, Rand-Clamp.
