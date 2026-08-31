@@ -136,7 +136,7 @@ def test_decode_rejects_unknown_catalog_ids_and_versions() -> None:
         + len(replay.recorded_at)
     )
     assert body[director_start] == 0  # golden-a: konstanter Director
-    body[director_start] = 2  # Director-Byte (0/1 gültig)
+    body[director_start] = 3  # Director-Byte (0/1/2 gültig)
     assert sharecode.decode(_with_crc(bytes(body))) is None
 
 

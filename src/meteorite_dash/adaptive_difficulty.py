@@ -11,6 +11,8 @@ from dataclasses import dataclass
 import pygame
 
 from meteorite_dash.config import (
+    DIFFICULTY_ADAPTIVE_SPAWN_INTERVAL_MULTIPLIER_MIN,
+    DIFFICULTY_ADAPTIVE_SPEED_MULTIPLIER_MAX,
     DIFFICULTY_AMMO_RELIEF_MAX,
     DIFFICULTY_COMFORT_MASTERY_PER_SECOND,
     DIFFICULTY_COMFORT_STREAK_SECONDS,
@@ -28,8 +30,6 @@ from meteorite_dash.config import (
     DIFFICULTY_RISE_PER_SECOND_MAX,
     DIFFICULTY_RISE_PER_SECOND_MIN,
     DIFFICULTY_SAFE_PASS_MASTERY_GAIN,
-    DIFFICULTY_SPAWN_INTERVAL_MULTIPLIER_MIN,
-    DIFFICULTY_SPEED_MULTIPLIER_MAX,
     DIFFICULTY_START_GRACE_SECONDS,
     DIFFICULTY_STRESS_DECAY_PER_SECOND,
     DIFFICULTY_SURVIVAL_MASTERY_PER_SECOND,
@@ -264,8 +264,8 @@ class AdaptiveDirector:
         )
 
     def _map_params(self) -> DifficultyParams:
-        speed_range = DIFFICULTY_SPEED_MULTIPLIER_MAX - 1.0
-        interval_range = 1.0 - DIFFICULTY_SPAWN_INTERVAL_MULTIPLIER_MIN
+        speed_range = DIFFICULTY_ADAPTIVE_SPEED_MULTIPLIER_MAX - 1.0
+        interval_range = 1.0 - DIFFICULTY_ADAPTIVE_SPAWN_INTERVAL_MULTIPLIER_MIN
         return DifficultyParams(
             speed_multiplier=1.0 + speed_range * self._intensity,
             spawn_interval_multiplier=1.0 - interval_range * self._intensity,

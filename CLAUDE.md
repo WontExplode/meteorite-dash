@@ -87,12 +87,20 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
   (HP/Munition/Score/Münzen). `headless.run` spielt Eingabefolgen ohne Fenster
   ab, `state_hash()` beweist Gleichheit. Director-Vertrag (`difficulty.py`) für
   #32/#33 steht.
+- **Zeitrampe** (`ramp_difficulty.py`, Issue #32): das Welttempo steigt in
+  **jedem** Modus mit der Laufzeit — nach einer kurzen Schonzeit linear von
+  `1.0` bis `DIFFICULTY_RAMP_SPEED_MULTIPLIER_MAX` (10.0) über
+  `DIFFICULTY_RAMP_FULL_SECONDS` (30 Minuten), also rund +0.3 je Minute. Die
+  Rampe verkürzt die Spawn-Intervalle um denselben Faktor, damit der räumliche
+  Abstand der Gefahren gleich bleibt: schneller, nicht leerer. Der Daily Run
+  fährt sie pur — gleiche Laufzeit heißt für alle dasselbe Tempo.
 - **Adaptiver Director-Regelkern** (Issue #33): `AdaptiveDirector`
   (`adaptive_difficulty.py`) schätzt aus sicheren Passagen, schadensfreier Zeit,
   Schaden, Near Misses, HP und Munition eine individuelle Belastungsgrenze.
   Sein vollständiger Zustand fließt über `state_key()` in den Simulationshash.
-  `mode_directors.py` liefert für Free eine frische adaptive, für Daily weiterhin
-  eine konstante Instanz. Replays speichern Director-Art und getrennte
+  `mode_directors.py` liefert für Free die Rampe **mal** eine frische adaptive
+  Instanz (`CompositeDirector`, gedeckelt bei `DIFFICULTY_SPEED_MULTIPLIER_CAP`
+  = 10.0), für Daily die pure Rampe. Replays speichern Director-Art und getrennte
   Regelversion, sodass Headless-Prüfungen dieselbe Strategie rekonstruieren.
   Speed, Gefahrenintervall und Lightyears-Rate reagieren auf die Intensität;
   `F3` blendet ein rein visuelles Diagnose-HUD ein.
@@ -145,21 +153,11 @@ Implementieren neuer Features: prüfen, ob ein Baustein schon existiert.
 - **Sammelbare Sterne** für Punkte (`StarField` ist nur Deko, nicht einsammelbar).
 - **Spezialwaffen-Pickups** (Loadout und Slot-Limit sind vorbereitet).
 - **Unzerstörbare Meteoriten** (zerstörbare Varianten mit HP sind implementiert).
-- **Steigende Schwierigkeit** über die Zeit (Vertrag in `difficulty.py`,
-  Umsetzung Issues #32/#33 — nicht Teil von #34).
 - Freunde-Filter nach Pubkey in der Bestenliste; QR-Anzeige des Share-Codes
   (Format steht in `sharecode.py`).
-- **Produktive Schwierigkeitssteuerung:** Der adaptive Regelkern ist vorhanden,
-  wird aber noch nicht in den Free Mode injiziert. Die feste Daily-Zeitrampe
-  bleibt eine getrennte Aufgabe des zweiten Modus.
-- **Weitere adaptive Stellgrößen und Diagnose-HUD:** Free nutzt bereits Speed-
-  und Spawnintervallfaktor. Gegnermix, Größenbias und das geplante verborgene
-  Debug-HUD sind noch nicht umgesetzt; die feste Daily-Zeitrampe bleibt eine
-  getrennte Aufgabe des zweiten Modus.
-- **Weitere adaptive Stellgrößen:** Free nutzt Speed-, Gefahrenintervall- und
-  Score-Faktor. Gegnermix, Größenbias und Schwarm-Events sind noch nicht
-  umgesetzt; die feste Daily-Zeitrampe bleibt eine getrennte Aufgabe des
-  zweiten Modus.
+- **Weitere Stellgrößen des Directors:** Speed, Gefahrenintervall und
+  Score-Faktor stehen. Gegnermix, Größenbias und Schwarm-Events sind noch nicht
+  umgesetzt.
 - Server-Anbindung für Daily-Bestenlisten (Issue #34 „+ Server funktion“):
   Replay-Datei ist die Upload-Einheit, `headless.verify` die Prüfung.
 - Highscore-Persistenz, Power-ups/Waffen-Upgrades (Issue #12), Endbosse/Level
@@ -338,20 +336,36 @@ Replays zu brechen:
   einen kanonischen `StatefulDirector.state_key()`; `Simulation.state_key()`
   nimmt ihn in den Hash auf. Zustandslose Directors verändern bestehende Hashes
   dadurch nicht.
-- `ConstantDirector` bleibt der unveränderte Daily-Standard; der adaptive Free-
-  Teil wird über `Simulation(director=…)` injiziert.
+- `RampDirector` (`ramp_difficulty.py`) ist die Zeitachse: zustandslos, rein aus
+  `sim.tick`, linear von `1.0` bis `DIFFICULTY_RAMP_SPEED_MULTIPLIER_MAX` über
+  `DIFFICULTY_RAMP_FULL_SECONDS` nach `DIFFICULTY_RAMP_GRACE_SECONDS` Schonzeit.
+  Er setzt `spawn_interval_multiplier = 1 / speed`, hält die Gefahren-Dichte
+  also räumlich konstant — genau wie `Simulation._update_coins` es für Münzen
+  tut. Weil er keinen Zustand hat, taucht er nicht im Hash auf.
 - `AdaptiveDirector` lebt bewusst separat in `adaptive_difficulty.py`: sichere
   Passagen und schadensfreies Spielen erhöhen `mastery`; Schaden und gehäufte
   Near Misses erhöhen `stress`. Die Intensität steigt geglättet und fällt
-  schneller, mit Start-Schonzeit, Damage-Hold und Low-HP-Cap. Seine Parameter
-  stehen als `DIFFICULTY_*`-Konstanten in `config.py`.
+  schneller, mit Start-Schonzeit, Damage-Hold und Low-HP-Cap. Sein Band ist
+  bewusst schmal (`DIFFICULTY_ADAPTIVE_SPEED_MULTIPLIER_MAX` = 1.75): er
+  moduliert um die Rampe herum, er ersetzt sie nicht. Seine Parameter stehen als
+  `DIFFICULTY_*`-Konstanten in `config.py`.
+- `CompositeDirector` (`difficulty.py`) multipliziert die Stellgrößen mehrerer
+  Directors und deckelt erst das **Produkt**
+  (`DIFFICULTY_SPEED_MULTIPLIER_CAP` = 10.0,
+  `DIFFICULTY_SPAWN_INTERVAL_MULTIPLIER_FLOOR`). Sein `state_key()` sammelt nur
+  die zustandsbehafteten Teile.
+- `ConstantDirector` ist nur noch der feste Testfall und die Strategie älterer
+  Replays (`DirectorKind.CONSTANT`) — kein Modus benutzt ihn mehr.
 - `mode_directors.py` ist die einzige Modusgrenze: Free wird auf
-  `DirectorKind.ADAPTIVE`, Daily auf `DirectorKind.CONSTANT` abgebildet.
-  Factory und getrennte Regelversionen werden von `GameScene`, Ghost und
-  Headless-Replay gemeinsam genutzt. Änderungen nur am Tuning erhöhen die
-  betreffende Director-Version, nicht die gemeinsame `SIM_VERSION`.
-  `ADAPTIVE_DIRECTOR_VERSION` wurde für die Score-/Münzkopplung auf 2 erhöht;
-  die konstante Daily-Version und ihre Golden-Replays bleiben unverändert.
+  `DirectorKind.ADAPTIVE` (Rampe × adaptiv), Daily auf `DirectorKind.RAMP`
+  (pure Rampe) abgebildet. Factory und getrennte Regelversionen werden von
+  `GameScene`, Ghost und Headless-Replay gemeinsam genutzt. Änderungen nur am
+  Tuning erhöhen die betreffende Director-Version, nicht die gemeinsame
+  `SIM_VERSION` — die Simulation selbst bleibt unberührt, deshalb gelten die
+  Golden-Replays (konstanter Director) unverändert weiter.
+  `ADAPTIVE_DIRECTOR_VERSION` steht wegen der Rampe auf 3,
+  `RAMP_DIRECTOR_VERSION` auf 1. Ältere Daily-Rekorde tragen noch
+  `DirectorKind.CONSTANT` und fliegen deshalb nicht mehr als Ghost mit.
 
 ### Replays (Issue #34)
 
@@ -448,6 +462,9 @@ Briefkasten, die Simulation ist der Richter.
   Wire-Format — auch für späteres QR/Tippen. Format-Änderung →
   `SHARECODE_VERSION` erhöhen (2 seit den Director-Feldern; ohne sie käme ein
   adaptiver Free-Lauf als „konstant“ an und fiele bei `headless.verify` durch).
+  Eine neue `DirectorKind` braucht nur einen freien Code in `_DIRECTOR_CODES`
+  (0 = konstant, 1 = adaptiv, 2 = Rampe); ältere Clients lehnen unbekannte
+  Codes sauber ab, statt den Lauf falsch zu deuten.
 - `identity.py`: `Identity` = 32 Byte Zufall (`secrets`), Pubkey x-only,
   BIP-340-Schnorr über `coincurve`. `IdentityStore` speichert
   `identity.json` neben `progress.json` (0600, atomar); fehlend/kaputt →
@@ -748,9 +765,11 @@ Relay der Briefkasten, die Simulation der Richter.
   Sound/HUD in `GameScene._on_event`.
 - **Director (#32/#33):** Klasse mit `params(sim, rng) -> DifficultyParams`
   (Protokoll in `difficulty.py`), bei internem Zustand zusätzlich
-  `StatefulDirector.state_key()`, über `Simulation(director=…)` einhängen,
-  Replay-/Versionsauswirkung prüfen und mit einem Headless-Test nach dem Muster
-  `test_director_keeps_replays_bit_identical`.
+  `StatefulDirector.state_key()`. Einhängen über `mode_directors` — entweder
+  als eigene `DirectorKind` (dann auch Code in `sharecode._DIRECTOR_CODES` und
+  eigene `*_DIRECTOR_VERSION`) oder als weiterer Teil im `CompositeDirector`.
+  Danach Replay-/Versionsauswirkung prüfen und einen Headless-Test nach dem
+  Muster `test_director_keeps_replays_bit_identical` schreiben.
 - **Szene/Screen** (z. B. Game-Over, Issue #15): `Scene`-Subklasse +
   `Transition` + Verdrahtung in `App._create_scene`; Menüpunkte in
   `MENU_ITEMS` + `_ACTION_TRANSITIONS` (`scenes/main_menu.py`).
@@ -794,6 +813,7 @@ Relay der Briefkasten, die Simulation der Richter.
   `tests/replays/`), Ghost (`test_ghost.py`), Daily (`test_daily.py`),
   Shop/Zubehör (`test_shop.py`), Skalierung/Resize (`test_viewport.py`),
   Hitboxen (`test_hitbox.py`), Feedback/Sound (`test_feedback.py`),
+  Zeitrampe (`test_ramp_difficulty.py`),
   Share-Code (`test_sharecode.py`), Nostr (`test_nostr.py`), Bestenliste
   (`test_leaderboard.py`), Phrase (`test_phrase.py`) und Code-Weitergabe
   (`test_share.py`) sind getrennt. Der `FakeRelay` liegt in

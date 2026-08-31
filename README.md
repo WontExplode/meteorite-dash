@@ -26,9 +26,13 @@ immer mehr zurückgelegte Lichtjahre.
 - dynamische Fenstergröße und Vollbild über einen gemeinsamen `Viewport`
 - deterministische Simulation: fester Zeitschritt, Seed pro Lauf
   (`METEORITE_DASH_SEED` erzwingt einen), headless nachspielbar
+- Zeitrampe in beiden Modi: das Welttempo steigt mit der Laufzeit langsam an
+  (rund +0.3 je Minute, theoretisches Maximum 10x nach 30 Minuten); die
+  Spawn-Intervalle schrumpfen mit, das Bild wird also schneller statt leerer
 - adaptiver Free Mode: schadensfreie Passagen erhöhen Welttempo, Gefahren-Dichte
-  und Lightyears-Fortschritt schrittweise; Schaden, niedrige HP und gehäufte
-  Near Misses sorgen für Entlastung
+  und Lightyears-Fortschritt zusätzlich zur Rampe; Schaden, niedrige HP und
+  gehäufte Near Misses sorgen für Entlastung. Free und Daily teilen dieselbe
+  Obergrenze
 - Replays: jeder Lauf wird als `last.json` und modusspezifischer Rekord aufgezeichnet;
   Director-Art und Regelversion werden mitgespeichert, damit
   `uv run meteorite-dash --verify datei.json` ihn korrekt nachspielt
@@ -94,6 +98,7 @@ src/meteorite_dash/
   inputs.py            InputFrame: Eingaben als Bitmaske pro Tick
   difficulty.py        Director-Vertrag (DifficultyParams) für den Schwierigkeitsgrad
   adaptive_difficulty.py  Adaptiver Schwierigkeits-Director des Free Mode
+  ramp_difficulty.py   Zeitrampe: Welttempo steigt mit der Laufzeit
   mode_directors.py    Getrennte Director-Auswahl und Regelversion je Spielmodus
   headless.py          Simulation ohne Fenster abspielen (Tests, Replay-Prüfung)
   replay.py            Replay-Format, Recorder und Ablage (JSON)

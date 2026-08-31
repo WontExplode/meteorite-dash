@@ -280,7 +280,9 @@ SEED_ENV = "METEORITE_DASH_SEED"
 # Alle Zeiten werden vom Director mit SIM_TICKS_PER_SECOND in feste Ticks
 # übersetzt. Die Werte beschreiben den Regelkern; Balancing erfolgt hier.
 CONSTANT_DIRECTOR_VERSION = 1
-ADAPTIVE_DIRECTOR_VERSION = 2
+# 3: adaptiver Free Mode läuft jetzt zusätzlich auf der Zeitrampe.
+ADAPTIVE_DIRECTOR_VERSION = 3
+RAMP_DIRECTOR_VERSION = 1
 
 DIFFICULTY_START_GRACE_SECONDS = 8.0
 DIFFICULTY_DAMAGE_HOLD_SECONDS = 6.0
@@ -305,8 +307,23 @@ DIFFICULTY_LOW_HP_INTENSITY_CAP = 0.35
 DIFFICULTY_RISE_PER_SECOND_MIN = 0.04
 DIFFICULTY_RISE_PER_SECOND_MAX = 0.16
 DIFFICULTY_FALL_PER_SECOND = 0.35
-DIFFICULTY_SPEED_MULTIPLIER_MAX = 1.75
-DIFFICULTY_SPAWN_INTERVAL_MULTIPLIER_MIN = 0.58
+# Band, in dem der adaptive Director um die Zeitrampe herum moduliert.
+DIFFICULTY_ADAPTIVE_SPEED_MULTIPLIER_MAX = 1.75
+DIFFICULTY_ADAPTIVE_SPAWN_INTERVAL_MULTIPLIER_MIN = 0.58
+
+# --- Zeitrampe (Issue #32): das Welttempo steigt in jedem Modus mit der Laufzeit ---
+# Theoretische Obergrenze — realistisch stirbt man lange vorher. Die Rampe
+# verkürzt zugleich die Spawn-Intervalle um denselben Faktor, damit der
+# räumliche Abstand der Gefahren gleich bleibt: schneller, nicht leerer.
+DIFFICULTY_RAMP_SPEED_MULTIPLIER_MAX = 10.0
+# Sekunden bis zur Obergrenze, linear — also rund +0.3 Tempo je Minute.
+DIFFICULTY_RAMP_FULL_SECONDS = 1800.0
+# Schonzeit am Start: davor bleibt die Rampe bei 1.0.
+DIFFICULTY_RAMP_GRACE_SECONDS = 10.0
+
+# Gemeinsamer Deckel über alle Directors zusammen (Rampe x adaptiv).
+DIFFICULTY_SPEED_MULTIPLIER_CAP = 10.0
+DIFFICULTY_SPAWN_INTERVAL_MULTIPLIER_FLOOR = 0.05
 
 # --- Replays (Issue #34) ---
 # Replays liegen neben `progress.json`; `last` ist immer der letzte, `best` der
